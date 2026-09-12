@@ -1,11 +1,11 @@
-import { httpClient } from '../http.js';
+import { httpClient, isLocalWeb } from '../http.js';
 
 const PIN_ID_PATTERN = /(?:https?:\/\/)?(?:[\w-]+\.)?pinterest\.[a-z.]+\/(?:amp\/)?pin\/(\d+)/i;
 const PIN_IT_PATTERN = /pin\.it\/[a-zA-Z0-9_-]+/i;
 
 function normalizePinterestAssetUrl(url) {
   if (!url || typeof window === 'undefined') return url;
-  if (!['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)) return url;
+  if (!isLocalWeb()) return url;
 
   try {
     const parsed = new URL(url);
@@ -17,11 +17,7 @@ function normalizePinterestAssetUrl(url) {
 }
 
 export function getPinterestPinPageUrl(pinId) {
-  // A website in production needs a server-side proxy with this same route.
-  // Capacitor uses its native HTTP client, so it requests Pinterest directly.
-  const hostname = typeof window === 'undefined' ? '' : window.location.hostname;
-  const isLocalWeb = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-  if (isLocalWeb) return `/__pinterest/pin/${pinId}/`;
+  if (isLocalWeb()) return `/__pinterest/pin/${pinId}/`;
   return `https://www.pinterest.com/pin/${pinId}/`;
 }
 

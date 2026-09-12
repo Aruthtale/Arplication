@@ -1,14 +1,7 @@
-import { httpClient } from '../http.js';
+import { httpClient, isLocalWeb } from '../http.js';
 
 const IG_URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i;
 const IG_SHARE_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/share\/(?:reel|p)\/([A-Za-z0-9_-]+)/i;
-
-/**
- * Checks if current environment is local web browser (Vite dev server)
- */
-function isLocalWeb() {
-  return typeof window !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-}
 
 /**
  * Gets the proxy or direct URL for an Instagram path

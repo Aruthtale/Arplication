@@ -1,9 +1,4 @@
-import { httpClient } from '../http.js';
-
-function isLocalWebRuntime() {
-  if (typeof window === 'undefined') return false;
-  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-}
+import { httpClient, isLocalWeb } from '../http.js';
 
 function createLocalDownloadUrl(url, format) {
   const params = new URLSearchParams({ url, format });
@@ -43,7 +38,7 @@ export async function scrapeYouTube(url) {
   // During local development, use the user's own yt-dlp process instead of
   // an unauthorised third-party conversion site. The Vite proxy keeps this
   // request same-origin for the browser.
-  if (isLocalWebRuntime()) {
+  if (isLocalWeb()) {
     return {
       platform: 'youtube',
       id: videoId,

@@ -1,14 +1,7 @@
-import { httpClient } from '../http.js';
+import { httpClient, isLocalWeb } from '../http.js';
 
 const SPOTIFY_URL_PATTERN = /(?:https?:\/\/)?open\.spotify\.com\/(track|album|playlist|artist|episode|show)\/([a-zA-Z0-9]+)/i;
 const SPOTIFY_LINK_PATTERN = /(?:https?:\/\/)?spotify\.link\/([a-zA-Z0-9]+)/i;
-
-/**
- * Checks if current environment is local web browser (Vite dev server)
- */
-function isLocalWeb() {
-  return typeof window !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-}
 
 /**
  * Gets the proxy or direct URL for Spotify embed page

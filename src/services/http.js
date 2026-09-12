@@ -4,7 +4,27 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core';
  * Checks if current runtime is running inside native mobile container (Android/iOS)
  */
 export function isNative() {
-  return Capacitor.isNativePlatform();
+  try {
+    if (Capacitor?.isNativePlatform?.()) return true;
+  } catch {}
+  // fallback for test mocks via globalThis/window
+  if (typeof globalThis !== 'undefined' && globalThis.Capacitor?.isNativePlatform?.()) return true;
+  if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) return true;
+  return false;
+}
+
+/**
+ * Checks if current environment is local web browser (Vite dev server)
+ * Returns false on native Android/iOS even if hostname is localhost.
+ */
+export function isLocalWeb() {
+  if (isNative()) return false;
+  if (typeof window === 'undefined') return false;
+  if (typeof globalThis !== 'undefined' && globalThis.window !== window && globalThis.window?.location?.hostname) {
+    // In tests globalThis.window may be mocked separately
+    return ['localhost', '127.0.0.1', '::1'].includes(globalThis.window.location.hostname);
+  }
+  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
 }
 
 /**
@@ -48,9 +68,18 @@ export async function httpClient({
   const upperMethod = method.toUpperCase();
   let fullUrl = url;
 
-  if (params && Object.keys(params).length > 0) {
-    const query = new URLSearchParams(params).toString();
-    fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
+  // Append query params if present
+  if (params && typeof params === 'object') {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, val]) => {
+      if (val !== undefined && val !== null) {
+        searchParams.append(key, String(val));
+      }
+    });
+    const qs = searchParams.toString();
+    if (qs) {
+      fullUrl += (fullUrl.includes('?') ? '&' : '?') + qs;
+    }
   }
 
   const reqHeaders = {
@@ -58,7 +87,7 @@ export async function httpClient({
     ...headers,
   };
 
-  // 1. Native Mobile (CapacitorHttp — 100% CORS-Free via OkHttp)
+  // 1. Android Native Environment (CapacitorHttp with full SSL & bypass CORS)
   if (isNative()) {
     try {
       const options = {
@@ -71,6 +100,9 @@ export async function httpClient({
 
       if (data !== null) {
         options.data = typeof data === 'object' ? data : data;
+        if (!reqHeaders['Content-Type'] && typeof data === 'object') {
+          options.headers['Content-Type'] = 'application/json';
+        }
       }
 
       const res = await CapacitorHttp.request(options);

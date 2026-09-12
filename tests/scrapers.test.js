@@ -184,12 +184,27 @@ test('extractPinterestCanonicalUrl supports canonical and Open Graph tag attribu
 
 test('getPinterestPinPageUrl uses the local Vite proxy on localhost', () => {
   const originalWindow = globalThis.window;
+  const originalCapacitor = globalThis.Capacitor;
   globalThis.window = { location: { hostname: 'localhost' } };
+  globalThis.Capacitor = { isNativePlatform: () => false };
   assert.equal(getPinterestPinPageUrl('443112050847584837'), '/__pinterest/pin/443112050847584837/');
   globalThis.window = originalWindow;
+  globalThis.Capacitor = originalCapacitor;
+});
+
+test('getPinterestPinPageUrl uses direct URL on native even with localhost hostname', () => {
+  const originalWindow = globalThis.window;
+  const originalCapacitor = globalThis.Capacitor;
+  globalThis.window = { location: { hostname: 'localhost' } };
+  globalThis.Capacitor = { isNativePlatform: () => true };
+  assert.equal(getPinterestPinPageUrl('443112050847584837'), 'https://www.pinterest.com/pin/443112050847584837/');
+  globalThis.window = originalWindow;
+  globalThis.Capacitor = originalCapacitor;
 });
 
 test('parsePinterestRelayHtml extracts original image and metadata', () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { location: { hostname: 'example.com' } };
   const result = parsePinterestRelayHtml(pinHtml, 'https://www.pinterest.com/pin/443112050847584837/');
   assert.equal(result.platform, 'pinterest');
   assert.equal(result.id, '443112050847584837');
@@ -198,6 +213,7 @@ test('parsePinterestRelayHtml extracts original image and metadata', () => {
   assert.equal(result.author.username, 'pincreator');
   assert.equal(result.options.length, 1);
   assert.equal(result.options[0].url, 'https://i.pinimg.com/originals/f5/ca/e8/f5cae8498992e9c9759abb4997b7a9e7.jpg');
+  globalThis.window = originalWindow;
 });
 
 test('isInstagramUrl recognizes post, reel, tv and share links', () => {
