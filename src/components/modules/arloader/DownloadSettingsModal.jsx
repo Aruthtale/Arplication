@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Folder, Check, RotateCcw, X, Sliders, ShieldCheck } from 'lucide-react';
+import { Settings, Folder, Check, RotateCcw, X, Key, Eye, EyeOff } from 'lucide-react';
 import { getDownloadSettings, saveDownloadSettings, DEFAULT_DOWNLOAD_SETTINGS } from '../../../utils/download.js';
 
 export default function DownloadSettingsModal({ isOpen, onClose }) {
   const [settings, setSettings] = useState(DEFAULT_DOWNLOAD_SETTINGS);
   const [savedStatus, setSavedStatus] = useState(false);
+  const [showSessionId, setShowSessionId] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -38,7 +39,7 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
       <div 
-        className="w-full max-w-md rounded-2xl border border-[#262B3B] bg-[#111319] text-white p-5 sm:p-6 shadow-2xl relative space-y-5"
+        className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-[#262B3B] bg-[#111319] text-white p-5 sm:p-6 shadow-2xl relative space-y-5 scrollbar-thin scrollbar-thumb-gray-800"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -49,10 +50,10 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                Pengaturan Penyimpanan
+                Pengaturan Penyimpanan & Fitur
               </h3>
               <p className="text-[11px] text-gray-400">
-                Pilih lokasi folder unduhan di perangkat
+                Lokasi folder unduhan & opsi Instagram Session
               </p>
             </div>
           </div>
@@ -156,6 +157,37 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
           <p className="text-xs font-mono text-[#05C46B] break-all">
             📁 /storage/emulated/0/{previewPath}nama_file
           </p>
+        </div>
+
+        {/* Instagram Session ID Section */}
+        <div className="p-3.5 rounded-xl bg-[#181B24] border border-[#262B3B] space-y-2">
+          <div className="flex items-center gap-2">
+            <Key className="w-4 h-4 text-purple-400 shrink-0" />
+            <div>
+              <span className="text-xs font-semibold text-white block">
+                Instagram Session ID (Opsional)
+              </span>
+              <p className="text-[10px] text-gray-400 leading-relaxed">
+                Kosongkan untuk mengunduh Highlight/Story publik secara otomatis. Isi sessionid cookie akun Anda jika ingin kecepatan lebih tinggi atau unduh dari akun privat yang Anda ikuti.
+              </p>
+            </div>
+          </div>
+          <div className="relative flex items-center">
+            <input
+              type={showSessionId ? 'text' : 'password'}
+              value={settings.igSessionId || ''}
+              onChange={(e) => setSettings((s) => ({ ...s, igSessionId: e.target.value }))}
+              placeholder="sessionid=12345... (Opsional)"
+              className="w-full pl-3 pr-9 py-2 rounded-xl bg-[#0C0E13] border border-[#262B3B] text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSessionId((v) => !v)}
+              className="absolute right-2.5 text-gray-400 hover:text-white"
+            >
+              {showSessionId ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
 
         {/* Auto Share Toggle */}

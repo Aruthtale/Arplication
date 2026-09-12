@@ -1,7 +1,78 @@
 import { httpClient, isLocalWeb } from '../http.js';
+import { getDownloadSettings } from '../../utils/download.js';
 
 const IG_URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i;
 const IG_SHARE_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/share\/(?:reel|p)\/([A-Za-z0-9_-]+)/i;
+const IG_HIGHLIGHT_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/stories\/highlights\/([0-9]+)/i;
+const IG_SHORT_HIGHLIGHT_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/s\/([A-Za-z0-9_=-]+)/i;
+const IG_STORY_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/stories\/([A-Za-z0-9_.-]+)\/([0-9]+)/i;
+
+/**
+ * Checks if a string is a valid Instagram URL (Post, Reel, Story, Highlight)
+ */
+export function isInstagramUrl(url = '') {
+  const clean = String(url).trim();
+  return (
+    IG_URL_PATTERN.test(clean) ||
+    IG_SHARE_PATTERN.test(clean) ||
+    IG_HIGHLIGHT_PATTERN.test(clean) ||
+    IG_SHORT_HIGHLIGHT_PATTERN.test(clean) ||
+    IG_STORY_PATTERN.test(clean)
+  );
+}
+
+/**
+ * Extracts Instagram link details (type, id, username)
+ */
+export function extractInstagramDetails(url = '') {
+  const clean = String(url).trim();
+
+  // 1. Highlight standard URL
+  const highlightMatch = clean.match(IG_HIGHLIGHT_PATTERN);
+  if (highlightMatch) {
+    return { type: 'highlight', id: highlightMatch[1], shortcode: highlightMatch[1] };
+  }
+
+  // 2. Shortened highlight URL (/s/aGlnaGxpZ2h0OjE3OT...)
+  const shortHighlightMatch = clean.match(IG_SHORT_HIGHLIGHT_PATTERN);
+  if (shortHighlightMatch) {
+    const rawCode = shortHighlightMatch[1];
+    try {
+      if (typeof atob === 'function') {
+        const decoded = atob(rawCode.replace(/-/g, '+').replace(/_/g, '/'));
+        const subMatch = decoded.match(/highlight:([0-9]+)/);
+        if (subMatch) {
+          return { type: 'highlight', id: subMatch[1], shortcode: subMatch[1] };
+        }
+      }
+    } catch {
+      // Ignore base64 decode failure
+    }
+    return { type: 'highlight', id: rawCode, shortcode: rawCode };
+  }
+
+  // 3. User Story URL
+  const storyMatch = clean.match(IG_STORY_PATTERN);
+  if (storyMatch) {
+    return { type: 'story', username: storyMatch[1], id: storyMatch[2], shortcode: storyMatch[2] };
+  }
+
+  // 4. Standard Post / Reel / Share URL
+  const postMatch = clean.match(IG_URL_PATTERN) || clean.match(IG_SHARE_PATTERN);
+  if (postMatch) {
+    return { type: 'post', id: postMatch[1], shortcode: postMatch[1] };
+  }
+
+  return { type: 'unknown', id: null, shortcode: null };
+}
+
+/**
+ * Extracts the shortcode identifier from an Instagram URL
+ */
+export function extractInstagramShortcode(url = '') {
+  const details = extractInstagramDetails(url);
+  return details.shortcode || null;
+}
 
 /**
  * Gets the proxy or direct URL for an Instagram path
@@ -22,23 +93,6 @@ export function getFastDlApiUrl() {
     return '/__fastdl/api/convert';
   }
   return 'https://api-wh.fastdl.app/api/convert';
-}
-
-/**
- * Checks if a string is a valid Instagram URL (Post, Reel, TV)
- */
-export function isInstagramUrl(url = '') {
-  const clean = String(url).trim();
-  return IG_URL_PATTERN.test(clean) || IG_SHARE_PATTERN.test(clean);
-}
-
-/**
- * Extracts the shortcode identifier from an Instagram URL
- */
-export function extractInstagramShortcode(url = '') {
-  const clean = String(url).trim();
-  const match = clean.match(IG_URL_PATTERN) || clean.match(IG_SHARE_PATTERN);
-  return match ? match[1] : null;
 }
 
 /**
@@ -72,7 +126,7 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
   const source = String(html);
   const shortcode = extractInstagramShortcode(originalUrl) || 'instagram_media';
 
-  // 1. OpenGraph and Meta tags (supporting both property="..." and content="..." order)
+  // 1. OpenGraph and Meta tags
   const extractMeta = (propName) => {
     const patterns = [
       new RegExp(`<meta\\b[^>]*\\bproperty=["']${propName}["'][^>]*\\bcontent=["']([^"']*)["']`, 'i'),
@@ -98,7 +152,6 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
   let username = `@${shortcode}`;
   let caption = ogTitle;
 
-  // Title pattern usually is: "Author on Instagram: \"Caption\"" or "Author (@username) on Instagram"
   const titleAuthorMatch = ogTitle.match(/^(.*?)\s+on\s+Instagram:\s*(?:&quot;|")?(.*)/is);
   if (titleAuthorMatch) {
     authorName = titleAuthorMatch[1].trim();
@@ -106,20 +159,18 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
     caption = titleAuthorMatch[2].replace(/(?:&quot;|")\s*$/g, '').trim();
   }
 
-  // Check description for likes/comments and author: e.g. "2M likes, 12K comments - apple on September 9, 2026..."
   const descAuthorMatch = ogDescription.match(/-\s*([a-zA-Z0-9._]+)\s+on\s+/i);
   if (descAuthorMatch && !authorName) {
     authorName = descAuthorMatch[1];
     username = `@${authorName}`;
   }
 
-  // 3. Collect Unique Images (Cover & Carousel Slides)
+  // 3. Collect Unique Images
   const images = [];
   if (ogImage) {
     images.push(ogImage);
   }
 
-  // Scan for CDN images in source for Carousel support
   const imgRegex = /https:\/\/[^"'\s<>]*(?:scontent|cdninstagram)[^"'\s<>]+\.(?:jpg|jpeg|webp|png)[^"'\s<>]*/gi;
   let imgMatch;
   while ((imgMatch = imgRegex.exec(source)) !== null) {
@@ -147,7 +198,6 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
   // 5. Construct Download Options
   const options = [];
 
-  // Video options for Reels / Video Posts
   if (videos.length > 0) {
     videos.forEach((videoUrl, idx) => {
       options.push({
@@ -160,7 +210,6 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
       });
     });
   } else if (isVideoPage) {
-    // If video stream URL is obfuscated by Meta, direct to web stream with cover
     options.push({
       id: 'ig-video-web',
       label: 'Watch / Stream Reel (MP4)',
@@ -171,9 +220,7 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
     });
   }
 
-  // Carousel or Photo options
   if (images.length > 1) {
-    // Carousel post: include individual slide images
     images.slice(0, 10).forEach((imgUrl, idx) => {
       options.push({
         id: `ig-slide-${idx + 1}`,
@@ -185,7 +232,6 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
       });
     });
   } else if (images.length === 1 && !videos.length) {
-    // Single image post
     options.push({
       id: 'ig-photo-1',
       label: 'Photo Image (JPG)',
@@ -196,7 +242,6 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
     });
   }
 
-  // Always include high-res cover thumbnail option if available
   if (images.length > 0 && (videos.length > 0 || isVideoPage)) {
     options.push({
       id: 'ig-thumbnail',
@@ -233,16 +278,138 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
 }
 
 /**
- * Scrapes Instagram cookieless using Direct Meta tags / Embed -> FastDL fallback chain
+ * Scrapes Instagram Stories or Highlights using Session Cookie or Fallback Gateways
+ */
+export async function scrapeInstagramStoryOrHighlight(details, originalUrl) {
+  const settings = getDownloadSettings();
+  const sessionId = settings.igSessionId ? settings.igSessionId.trim() : '';
+
+  // 1. Authenticated Session ID Method (GraphQL / Reels Media API)
+  if (sessionId) {
+    try {
+      const reelId = details.type === 'highlight' ? `highlight:${details.id}` : details.id;
+      const apiEndpoint = `https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(reelId)}`;
+      
+      const res = await httpClient({
+        url: apiEndpoint,
+        headers: {
+          'Cookie': `sessionid=${sessionId};`,
+          'User-Agent': 'Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; Xiaomi; 455000000)',
+          'X-IG-App-ID': '936619743392459',
+          'Accept': '*/*',
+        },
+        timeout: 12000,
+      });
+
+      const reelData = res?.reels_media?.[0] || res?.reels?.[reelId];
+      if (reelData && Array.isArray(reelData.items) && reelData.items.length > 0) {
+        const userObj = reelData.user || {};
+        const options = [];
+
+        reelData.items.forEach((item, idx) => {
+          const isVideo = item.media_type === 2 || Boolean(item.video_versions?.length);
+          const mediaUrl = isVideo 
+            ? item.video_versions?.[0]?.url 
+            : item.image_versions2?.candidates?.[0]?.url;
+
+          if (mediaUrl) {
+            options.push({
+              id: `story-${idx + 1}`,
+              label: isVideo ? `Story ${idx + 1} (Video MP4)` : `Story ${idx + 1} (Foto JPG)`,
+              ext: isVideo ? 'mp4' : 'jpg',
+              type: isVideo ? 'video' : 'image',
+              url: mediaUrl,
+              quality: 'Original Quality',
+            });
+          }
+        });
+
+        if (options.length > 0) {
+          return {
+            platform: 'instagram',
+            id: details.id,
+            title: reelData.title ? `Highlight: ${reelData.title}` : `Instagram Stories (@${userObj.username || details.id})`,
+            cover: reelData.cover_media?.cropped_image_version?.url || options[0]?.url,
+            author: {
+              name: userObj.full_name || userObj.username || 'Instagram User',
+              username: `@${userObj.username || 'user'}`,
+              avatar: userObj.profile_pic_url || null,
+            },
+            duration: null,
+            options,
+          };
+        }
+      }
+    } catch (sessionErr) {
+      console.warn('Instagram session fetch failed, falling back to public gateways:', sessionErr);
+    }
+  }
+
+  // 2. Public Gateway Fallback (FastDL API for stories/highlights)
+  try {
+    const fastDlRes = await httpClient({
+      url: getFastDlApiUrl(),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: {
+        url: originalUrl,
+      },
+      timeout: 12000,
+    });
+
+    if (fastDlRes && (fastDlRes.url || (Array.isArray(fastDlRes.items) && fastDlRes.items.length > 0))) {
+      const items = Array.isArray(fastDlRes.items) ? fastDlRes.items : [fastDlRes];
+      const options = items.map((item, idx) => ({
+        id: `story-dl-${idx + 1}`,
+        label: item.type === 'video' ? `Story ${idx + 1} (Video MP4)` : `Story ${idx + 1} (Foto JPG)`,
+        ext: item.type === 'video' ? 'mp4' : 'jpg',
+        type: item.type === 'video' ? 'video' : 'image',
+        url: item.url || item.download_url,
+        quality: 'HD Quality',
+      }));
+
+      return {
+        platform: 'instagram',
+        id: details.id,
+        title: fastDlRes.title || `Instagram Highlight (${details.id})`,
+        cover: items[0]?.thumbnail || items[0]?.url,
+        author: {
+          name: fastDlRes.author || 'Instagram User',
+          username: `@${details.id}`,
+          avatar: null,
+        },
+        duration: null,
+        options,
+      };
+    }
+  } catch {
+    // Gateway fallback failed
+  }
+
+  throw new Error(
+    'Gagal mengambil Highlight/Story Instagram. Untuk Highlight atau akun privat, Anda bisa memasukkan Instagram Session ID di menu Pengaturan.'
+  );
+}
+
+/**
+ * Scrapes Instagram cookieless (Post/Reel/Carousel) or via Story Handler
  */
 export async function scrapeInstagram(url = '') {
   const cleanUrl = String(url).trim();
-  const shortcode = extractInstagramShortcode(cleanUrl);
+  const details = extractInstagramDetails(cleanUrl);
 
-  if (!shortcode) {
-    throw new Error('URL Instagram tidak valid. Pastikan link berupa Post, Reel, atau Carousel.');
+  if (!details.id) {
+    throw new Error('URL Instagram tidak valid. Pastikan link berupa Post, Reel, Carousel, atau Highlight.');
   }
 
+  // Handle Stories & Highlights
+  if (details.type === 'highlight' || details.type === 'story') {
+    return scrapeInstagramStoryOrHighlight(details, cleanUrl);
+  }
+
+  const shortcode = details.shortcode;
   const normalizedUrl = `https://www.instagram.com/p/${shortcode}/`;
 
   // Layer 1: Direct Instagram Embed page (Fast, cookieless, contains meta & CDN asset links)

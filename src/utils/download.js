@@ -7,6 +7,7 @@ export const DEFAULT_DOWNLOAD_SETTINGS = {
   directory: 'Downloads', // 'Downloads' | 'Documents'
   subfolder: 'Arloader',  // e.g. 'Arloader' or ''
   autoShare: false,       // whether to pop up "Buka dengan / Bagikan"
+  igSessionId: '',        // optional Instagram sessionid cookie
 };
 
 export function getDownloadSettings() {

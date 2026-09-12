@@ -17,6 +17,7 @@ import {
 import {
   isInstagramUrl,
   extractInstagramShortcode,
+  extractInstagramDetails,
   parseInstagramHtml,
 } from '../src/services/scrapers/instagram.js';
 import {
@@ -216,12 +217,34 @@ test('parsePinterestRelayHtml extracts original image and metadata', () => {
   globalThis.window = originalWindow;
 });
 
-test('isInstagramUrl recognizes post, reel, tv and share links', () => {
+test('isInstagramUrl recognizes post, reel, tv, share, story, and highlight links', () => {
   assert.equal(isInstagramUrl('https://www.instagram.com/reel/DVBukMrgPAk/'), true);
   assert.equal(isInstagramUrl('https://www.instagram.com/p/DZT71H-BJuK/'), true);
   assert.equal(isInstagramUrl('https://instagr.am/tv/DdFFK5vSwpG/'), true);
   assert.equal(isInstagramUrl('https://www.instagram.com/share/reel/DVBukMrgPAk'), true);
+  assert.equal(isInstagramUrl('https://www.instagram.com/stories/highlights/17926176319086111/'), true);
+  assert.equal(isInstagramUrl('https://www.instagram.com/stories/username/3145678901234567890/'), true);
+  assert.equal(isInstagramUrl('https://www.instagram.com/s/aGlnaGxpZ2h0OjE3OTI2MTc2MzE5MDg2MTEx'), true);
   assert.equal(isInstagramUrl('https://example.com/not-ig'), false);
+});
+
+test('extractInstagramDetails extracts details for posts, stories, and highlights', () => {
+  assert.deepEqual(
+    extractInstagramDetails('https://www.instagram.com/p/DZT71H-BJuK/'),
+    { type: 'post', id: 'DZT71H-BJuK', shortcode: 'DZT71H-BJuK' }
+  );
+  assert.deepEqual(
+    extractInstagramDetails('https://www.instagram.com/stories/highlights/17926176319086111/'),
+    { type: 'highlight', id: '17926176319086111', shortcode: '17926176319086111' }
+  );
+  assert.deepEqual(
+    extractInstagramDetails('https://www.instagram.com/stories/username/3145678901234567890/'),
+    { type: 'story', username: 'username', id: '3145678901234567890', shortcode: '3145678901234567890' }
+  );
+  assert.deepEqual(
+    extractInstagramDetails('https://www.instagram.com/s/aGlnaGxpZ2h0OjE3OTI2MTc2MzE5MDg2MTEx'),
+    { type: 'highlight', id: '17926176319086111', shortcode: '17926176319086111' }
+  );
 });
 
 test('extractInstagramShortcode extracts correct code', () => {
@@ -280,6 +303,7 @@ test('detectPlatform correctly detects all supported platforms', () => {
   assert.equal(detectPlatform('https://www.tiktok.com/@user/video/123'), 'tiktok');
   assert.equal(detectPlatform('https://www.youtube.com/watch?v=123'), 'youtube');
   assert.equal(detectPlatform('https://www.instagram.com/reel/123/'), 'instagram');
+  assert.equal(detectPlatform('https://www.instagram.com/stories/highlights/123/'), 'instagram');
   assert.equal(detectPlatform('https://open.spotify.com/track/123'), 'spotify');
   assert.equal(detectPlatform('https://x.com/user/status/123'), 'x');
   assert.equal(detectPlatform('https://www.pinterest.com/pin/123/'), 'pinterest');
