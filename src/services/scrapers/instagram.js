@@ -240,7 +240,7 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
 }
 
 /**
- * Scrapes Instagram cookieless using FastDL -> SnapInsta -> Direct Meta tags fallback chain
+ * Scrapes Instagram cookieless using Direct Meta tags / Embed -> FastDL fallback chain
  */
 export async function scrapeInstagram(url = '') {
   const cleanUrl = String(url).trim();
@@ -252,7 +252,47 @@ export async function scrapeInstagram(url = '') {
 
   const normalizedUrl = `https://www.instagram.com/p/${shortcode}/`;
 
-  // Fallback 1: FastDL API Convert Engine
+  // Layer 1: Direct Instagram Embed page (Fast, cookieless, contains meta & CDN asset links)
+  try {
+    const embedUrl = getInstagramPageUrl(shortcode, true);
+    const embedRes = await httpClient({
+      url: embedUrl,
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      raw: true,
+      timeout: 12000,
+    });
+
+    const embedHtml = embedRes?.data || '';
+    if (embedHtml && embedHtml.length > 200) {
+      return parseInstagramHtml(embedHtml, normalizedUrl);
+    }
+  } catch {
+    // Embed fetch failed, try main page or fallback
+  }
+
+  // Layer 2: Direct main page fetch
+  try {
+    const directUrl = getInstagramPageUrl(shortcode, false);
+    const directRes = await httpClient({
+      url: directUrl,
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      raw: true,
+      timeout: 12000,
+    });
+
+    const directHtml = directRes?.data || '';
+    if (directHtml && directHtml.length > 200) {
+      return parseInstagramHtml(directHtml, normalizedUrl);
+    }
+  } catch {
+    // Main page fetch failed, proceed to fallback
+  }
+
+  // Layer 3: FastDL API Convert Engine Fallback
   try {
     const fastDlRes = await httpClient({
       url: getFastDlApiUrl(),
@@ -292,45 +332,8 @@ export async function scrapeInstagram(url = '') {
       };
     }
   } catch {
-    // FastDL fallback failed, proceed to next fallback
+    // FastDL fallback failed
   }
 
-  // Fallback 2: Direct Meta Tags / Public Instagram Page / Embed parser
-  try {
-    // Try embed page first (fewer bot challenges)
-    const embedUrl = getInstagramPageUrl(shortcode, true);
-    const embedRes = await httpClient({
-      url: embedUrl,
-      headers: {
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-      raw: true,
-      timeout: 15000,
-    });
-
-    const embedHtml = embedRes?.data || '';
-    if (embedHtml && embedHtml.length > 200) {
-      return parseInstagramHtml(embedHtml, normalizedUrl);
-    }
-  } catch {
-    // Embed fetch failed, fallback to main page URL
-  }
-
-  // Fallback 3: Direct main page fetch
-  const directUrl = getInstagramPageUrl(shortcode, false);
-  const directRes = await httpClient({
-    url: directUrl,
-    headers: {
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-    raw: true,
-    timeout: 15000,
-  });
-
-  const directHtml = directRes?.data || '';
-  if (!directHtml || directHtml.length < 200) {
-    throw new Error('Gagal mengambil konten Instagram. Pastikan akun bersifat publik.');
-  }
-
-  return parseInstagramHtml(directHtml, normalizedUrl);
+  throw new Error('Gagal mengambil konten Instagram. Pastikan akun atau postingan bersifat publik.');
 }
