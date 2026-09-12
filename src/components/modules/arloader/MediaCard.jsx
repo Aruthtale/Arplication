@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Download, Music, Video, Image as ImageIcon, Loader2, ExternalLink } from 'lucide-react';
+import { Download, Music, Video, Image as ImageIcon, Loader2, ExternalLink, Share2 } from 'lucide-react';
+import { Share } from '@capacitor/share';
+import { isNative } from '../../../services/http.js';
 import { downloadMedia } from '../../../utils/download.js';
 
 export default function MediaCard({ media }) {
@@ -17,7 +19,7 @@ export default function MediaCard({ media }) {
       const sanitizedTitle = (media.title || 'media').slice(0, 40).replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `${sanitizedTitle}_${option.id}.${option.ext}`;
 
-      await downloadMedia({
+      const res = await downloadMedia({
         url: option.url,
         filename,
         onProgress: (pct, msg) => {
@@ -30,11 +32,16 @@ export default function MediaCard({ media }) {
 
       setDownloadState((prev) => ({
         ...prev,
-        [option.id]: { progress: 100, message: 'Selesai.' },
+        [option.id]: { 
+          progress: 100, 
+          message: res?.location ? `Tersimpan di ${res.location}` : 'Selesai.',
+          filePath: res?.path,
+          filename,
+        },
       }));
       setTimeout(() => {
         setDownloadingId((curr) => (curr === option.id ? null : curr));
-      }, 3000);
+      }, 4000);
     } catch (err) {
       console.error('Download error:', err);
       setDownloadState((prev) => ({
@@ -43,6 +50,20 @@ export default function MediaCard({ media }) {
       }));
       window.open(option.url, '_blank');
       setDownloadingId(null);
+    }
+  };
+
+  const handleManualShare = async (state) => {
+    if (!state?.filePath || !isNative()) return;
+    try {
+      await Share.share({
+        title: state.filename || 'Media',
+        text: `Arloader Media: ${state.filename || 'Media'}`,
+        url: state.filePath,
+        dialogTitle: 'Buka atau Bagikan Media',
+      });
+    } catch (e) {
+      console.warn('Share cancelled or failed:', e);
     }
   };
 
@@ -181,6 +202,16 @@ export default function MediaCard({ media }) {
                     )}
                     <span>Download</span>
                   </button>
+
+                  {currentDownload?.filePath && isNative() && (
+                    <button
+                      onClick={() => handleManualShare(currentDownload)}
+                      className="p-1.5 rounded-lg bg-[#111319] hover:bg-[#222634] border border-[#262B3B] text-gray-400 hover:text-[#05C46B] transition-colors"
+                      title="Bagikan / Buka Berkas"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
 
                   <a
                     href={option.url}

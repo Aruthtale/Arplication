@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Download, AlertCircle, History, Sparkles, ArrowLeft, Trash2 } from 'lucide-react';
+import { Download, AlertCircle, History, ArrowLeft, Trash2, Settings, Folder } from 'lucide-react';
 import UrlInput from './UrlInput.jsx';
 import MediaCard from './MediaCard.jsx';
+import DownloadSettingsModal from './DownloadSettingsModal.jsx';
+import { getDownloadSettings } from '../../../utils/download.js';
 import { resolveMediaUrl } from '../../../services/scrapers/index.js';
 
 export default function ArloaderModule({ setActiveTab }) {
@@ -10,6 +12,8 @@ export default function ArloaderModule({ setActiveTab }) {
   const [error, setError] = useState(null);
   const [mediaResult, setMediaResult] = useState(null);
   const [history, setHistory] = useState([]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentSettings, setCurrentSettings] = useState(getDownloadSettings());
 
   // Load history from localStorage
   useEffect(() => {
@@ -22,6 +26,11 @@ export default function ArloaderModule({ setActiveTab }) {
       console.warn('Failed to load history:', e);
     }
   }, []);
+
+  const handleSettingsClose = () => {
+    setIsSettingsOpen(false);
+    setCurrentSettings(getDownloadSettings());
+  };
 
   const saveToHistory = (item) => {
     try {
@@ -64,6 +73,10 @@ export default function ArloaderModule({ setActiveTab }) {
     }
   };
 
+  const sub = String(currentSettings.subfolder || '').trim().replace(/^\/+|\/+$/g, '');
+  const dirLabel = currentSettings.directory === 'Documents' ? 'Documents' : 'Download';
+  const folderBadgeText = sub ? `${dirLabel}/${sub}` : dirLabel;
+
   return (
     <div className="space-y-6 pb-24 pt-2">
       {/* Module Top Bar */}
@@ -77,7 +90,25 @@ export default function ArloaderModule({ setActiveTab }) {
         </button>
 
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full border bg-[#05C46B]/10 text-[#05C46B] border-[#05C46B]/30">
+          {/* Storage folder badge & button */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-lg bg-[#181B24] hover:bg-[#202430] border border-[#262B3B] text-gray-300 hover:text-[#05C46B] transition-colors"
+            title="Ubah Folder Penyimpanan"
+          >
+            <Folder className="w-3.5 h-3.5 text-[#05C46B]" />
+            <span>{folderBadgeText}</span>
+          </button>
+
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-1.5 rounded-lg bg-[#111319] hover:bg-[#181B24] border border-[#262B3B] text-gray-400 hover:text-white transition-colors"
+            title="Pengaturan Download"
+          >
+            <Settings className="w-4 h-4 text-gray-400 hover:text-[#05C46B]" />
+          </button>
+
+          <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full border bg-[#05C46B]/10 text-[#05C46B] border-[#05C46B]/30 hidden sm:inline-block">
             Arloader Active
           </span>
         </div>
@@ -85,17 +116,19 @@ export default function ArloaderModule({ setActiveTab }) {
 
       {/* Input Section */}
       <div className="rounded-2xl border border-[#262B3B] bg-gradient-to-b from-[#181B24] to-[#111319] p-5 sm:p-6 shadow-xl">
-        <div className="flex items-center gap-2.5 mb-2">
-          <div className="w-8 h-8 rounded-lg bg-[#05C46B]/20 border border-[#05C46B]/40 flex items-center justify-center">
-            <Download className="w-4 h-4 text-[#05C46B]" />
-          </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              Arloader Media Downloader
-            </h2>
-            <p className="text-xs text-gray-400">
-              Download TikTok HD (no watermark), YouTube (MP4 & MP3), Instagram (Reels/Post/Carousel), Spotify, X posts, and Pinterest Pins
-            </p>
+        <div className="flex items-center justify-between gap-2.5 mb-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#05C46B]/20 border border-[#05C46B]/40 flex items-center justify-center">
+              <Download className="w-4 h-4 text-[#05C46B]" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                Arloader Media Downloader
+              </h2>
+              <p className="text-xs text-gray-400">
+                Download TikTok HD, YouTube, Instagram Reels/Post/Carousel, Spotify, X, dan Pinterest
+              </p>
+            </div>
           </div>
         </div>
 
@@ -136,40 +169,54 @@ export default function ArloaderModule({ setActiveTab }) {
             </div>
             <button
               onClick={clearHistory}
-              className="text-xs text-gray-500 hover:text-[#FF525E] flex items-center gap-1 transition-colors"
+              className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-[#FF525E] transition-colors"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3.5 h-3.5" />
               <span>Clear</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {history.map((item) => (
               <div
                 key={item.id}
-                onClick={() => setMediaResult(item.data)}
-                className="flex items-center gap-3 p-2.5 rounded-lg bg-[#181B24]/70 hover:bg-[#181B24] border border-[#262B3B] hover:border-[#05C46B]/40 cursor-pointer transition-all"
+                onClick={() => {
+                  setMediaResult(item.data);
+                  setError(null);
+                }}
+                className="flex items-center gap-3 p-3 rounded-xl bg-[#181B24] border border-[#262B3B] hover:border-[#05C46B]/50 cursor-pointer transition-all hover:scale-[1.01]"
               >
-                {item.cover && (
+                {item.cover ? (
                   <img
                     src={item.cover}
                     alt={item.title}
-                    className="w-12 h-12 rounded-lg object-cover bg-black shrink-0 border border-[#262B3B]"
+                    className="w-12 h-12 rounded-lg object-cover bg-[#0C0E13] shrink-0 border border-[#262B3B]"
                   />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-[#0C0E13] text-[#05C46B] border border-[#262B3B]">
-                      {item.platform}
-                    </span>
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-[#0C0E13] flex items-center justify-center shrink-0 border border-[#262B3B]">
+                    <Download className="w-5 h-5 text-gray-500" />
                   </div>
-                  <p className="text-xs text-white truncate font-medium">{item.title}</p>
+                )}
+                <div className="overflow-hidden">
+                  <span className="text-[10px] font-mono uppercase text-[#05C46B] block">
+                    {item.platform}
+                  </span>
+                  <p className="text-xs font-medium text-white truncate">{item.title}</p>
+                  <span className="text-[10px] text-gray-400">
+                    {new Date(item.timestamp).toLocaleDateString()}
+                  </span>
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* Storage Settings Modal */}
+      <DownloadSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={handleSettingsClose}
+      />
     </div>
   );
 }
