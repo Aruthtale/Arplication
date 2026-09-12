@@ -1,7 +1,8 @@
 import { httpClient, isNative } from './http.js';
 import { downloadMedia } from '../utils/download.js';
+import { openApkInstaller } from './apkInstaller.js';
 
-export const APP_VERSION = '0.2.1';
+export const APP_VERSION = '0.2.2';
 export const GITHUB_REPO = 'Aruthtale/Arplication';
 export const GITHUB_RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 export const GITHUB_RAW_PACKAGE = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/package.json`;
@@ -110,7 +111,23 @@ export async function startApkUpdateDownload({ downloadUrl, version, onProgress 
           if (onProgress) onProgress(pct, msg);
         },
       });
-      return { success: true, native: true, location: res.location, path: res.path };
+      // Auto-open the Android package installer so the user can tap
+      // "Install" directly — no need to hunt the APK in File Manager.
+      let installer = { available: false };
+      if (onProgress) onProgress(96, 'Membuka layar Install...');
+      try {
+        installer = await openApkInstaller(res.path);
+      } catch (installErr) {
+        console.warn('Auto-open installer failed:', installErr?.message || installErr);
+      }
+      return {
+        success: true,
+        native: true,
+        location: res.location,
+        path: res.path,
+        installerOpened: installer.available && (installer.opened || installer.openedSettings),
+        installerNeedsPermission: installer.available && !!installer.openedSettings,
+      };
     } catch (e) {
       console.warn('Native APK download failed, opening browser:', e);
       window.open(downloadUrl, '_system');

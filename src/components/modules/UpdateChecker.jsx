@@ -38,12 +38,24 @@ export default function UpdateChecker({ autoCheck = true }) {
         version: info.latestVersion,
         onProgress: (pct, msg) => setProgress({ pct, msg }),
       });
-      setProgress({
-        pct: 100,
-        msg: res?.location
-          ? `APK tersimpan di ${res.location}. Buka file untuk Install.`
-          : 'APK dibuka di browser. Install untuk update.',
-      });
+      if (res?.installerNeedsPermission) {
+        setProgress({
+          pct: 100,
+          msg: 'Izin "Install unknown apps" dibutuhkan sekali saja. Aktifkan di layar Pengaturan yang terbuka, lalu kembali dan ketuk Update lagi.',
+        });
+      } else if (res?.installerOpened) {
+        setProgress({
+          pct: 100,
+          msg: 'Layar Install sudah terbuka. Ketuk Install untuk update — tanpa perlu buka File Manager.',
+        });
+      } else {
+        setProgress({
+          pct: 100,
+          msg: res?.location
+            ? `APK tersimpan di ${res.location}. Buka file untuk Install.`
+            : 'APK dibuka di browser. Install untuk update.',
+        });
+      }
     } catch (e) {
       setProgress({ pct: 0, msg: `Gagal: ${e?.message || 'error'}` });
     } finally {
