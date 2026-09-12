@@ -4,31 +4,43 @@ import { downloadMedia } from '../../../utils/download.js';
 
 export default function MediaCard({ media }) {
   const [downloadingId, setDownloadingId] = useState(null);
-  const [statusMsg, setStatusMsg] = useState({});
+  const [downloadState, setDownloadState] = useState({});
 
   const handleDownload = async (option) => {
     setDownloadingId(option.id);
-    setStatusMsg((prev) => ({ ...prev, [option.id]: 'Starting download...' }));
+    setDownloadState((prev) => ({
+      ...prev,
+      [option.id]: { progress: 12, message: 'Menyiapkan unduhan...' },
+    }));
 
     try {
-      const sanitizedTitle = media.title.slice(0, 40).replace(/[^a-zA-Z0-9]/g, '_');
+      const sanitizedTitle = (media.title || 'media').slice(0, 40).replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `${sanitizedTitle}_${option.id}.${option.ext}`;
 
       await downloadMedia({
         url: option.url,
         filename,
         onProgress: (pct, msg) => {
-          setStatusMsg((prev) => ({ ...prev, [option.id]: msg }));
+          setDownloadState((prev) => ({
+            ...prev,
+            [option.id]: { progress: pct, message: msg },
+          }));
         },
       });
 
-      setStatusMsg((prev) => ({ ...prev, [option.id]: 'Saved!' }));
+      setDownloadState((prev) => ({
+        ...prev,
+        [option.id]: { progress: 100, message: 'Selesai.' },
+      }));
       setTimeout(() => {
         setDownloadingId((curr) => (curr === option.id ? null : curr));
       }, 3000);
     } catch (err) {
       console.error('Download error:', err);
-      setStatusMsg((prev) => ({ ...prev, [option.id]: 'Download failed. Click to open.' }));
+      setDownloadState((prev) => ({
+        ...prev,
+        [option.id]: { progress: 0, message: 'Unduhan gagal. Membuka tautan...' },
+      }));
       window.open(option.url, '_blank');
       setDownloadingId(null);
     }
@@ -51,6 +63,10 @@ export default function MediaCard({ media }) {
         return 'bg-black/80 text-[#05C46B] border border-[#05C46B]/40';
       case 'youtube':
         return 'bg-black/80 text-[#FF525E] border border-[#FF525E]/40';
+      case 'instagram':
+        return 'bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#FCB045] text-white border border-white/20';
+      case 'spotify':
+        return 'bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40';
       case 'x':
         return 'bg-black/80 text-[#38BDF8] border border-[#38BDF8]/40';
       case 'pinterest':
@@ -70,7 +86,6 @@ export default function MediaCard({ media }) {
               src={media.cover}
               alt={media.title}
               className="w-full h-full object-cover"
-              crossOrigin="anonymous"
               loading="lazy"
             />
             <span
@@ -129,12 +144,12 @@ export default function MediaCard({ media }) {
         <div className="space-y-2.5">
           {media.options.map((option) => {
             const isCurrent = downloadingId === option.id;
-            const currentStatus = statusMsg[option.id];
+            const currentDownload = downloadState[option.id];
 
             return (
               <div
                 key={option.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-[#181B24] border border-[#262B3B] hover:border-gray-600 transition-colors"
+                className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 p-3 rounded-xl bg-[#181B24] border border-[#262B3B] hover:border-gray-600 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-[#111319] border border-[#262B3B] flex items-center justify-center shrink-0">
@@ -154,12 +169,6 @@ export default function MediaCard({ media }) {
                 </div>
 
                 <div className="flex items-center gap-2 self-end sm:self-auto">
-                  {currentStatus && (
-                    <span className="text-[11px] font-mono text-[#05C46B]">
-                      {currentStatus}
-                    </span>
-                  )}
-
                   <button
                     onClick={() => handleDownload(option)}
                     disabled={isCurrent}
@@ -183,6 +192,29 @@ export default function MediaCard({ media }) {
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
+                {currentDownload && (
+                  <div className="space-y-1.5 sm:basis-full" role="status" aria-live="polite">
+                    <div className="flex items-center justify-between gap-3 text-[11px] font-mono text-[#05C46B]">
+                      <span>{currentDownload.message}</span>
+                      <span>{currentDownload.progress}%</span>
+                    </div>
+                    <div
+                      className="h-1.5 overflow-hidden rounded-full bg-[#0C0E13] border border-[#262B3B]"
+                      role="progressbar"
+                      aria-label="Progress unduhan"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow={currentDownload.progress}
+                    >
+                      <div
+                        className={`h-full rounded-full bg-[#05C46B] transition-all duration-500 ${
+                          isCurrent && currentDownload.progress < 72 ? 'animate-pulse' : ''
+                        }`}
+                        style={{ width: `${Math.max(currentDownload.progress, isCurrent ? 18 : 0)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "downloader": "node scripts/downloader-server.js",
     "build": "vite build",
     "lint": "oxlint",
     "test": "node --test tests/*.test.js",

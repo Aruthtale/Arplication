@@ -42,9 +42,16 @@ npm install
 # Run Vite dev server
 npm run dev
 
+# In another terminal, start the local YouTube download service
+npm run downloader
+
 # Build for Web production
 npm run build
 ```
+
+### Local YouTube downloads
+
+For local development, Arloader uses the `yt-dlp` and `ffmpeg` programs installed on your computer. Start `npm run downloader` before using a YouTube link; it only listens on `127.0.0.1:8787` and accepts HTTPS YouTube URLs. The Vite development server proxies browser requests to it, so both commands must remain running while downloading.
 
 ---
 

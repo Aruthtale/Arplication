@@ -24,7 +24,7 @@ export default function UrlInput({ url, setUrl, onFetch, loading }) {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Paste TikTok, YouTube, X, or Pinterest link here..."
+          placeholder="Paste TikTok, YouTube, Instagram, Spotify, X, or Pinterest link..."
           className="w-full bg-[#111319] border border-[#262B3B] focus:border-[#05C46B] focus:ring-2 focus:ring-[#05C46B]/20 text-white placeholder-gray-500 rounded-xl py-3.5 pl-4 pr-28 text-sm outline-none transition-all font-sans"
         />
 
@@ -57,6 +57,10 @@ export default function UrlInput({ url, setUrl, onFetch, loading }) {
           <span className="font-mono text-gray-400">TikTok</span>
           <span>•</span>
           <span className="font-mono text-gray-400">YouTube</span>
+          <span>•</span>
+          <span className="font-mono text-gray-400">Instagram</span>
+          <span>•</span>
+          <span className="font-mono text-gray-400">Spotify</span>
           <span>•</span>
           <span className="font-mono text-gray-400">X (Twitter)</span>
           <span>•</span>

@@ -26,7 +26,7 @@ export function safeJsonParse(data) {
     }
     try {
       return JSON.parse(trimmed);
-    } catch (e) {
+    } catch {
       throw new Error('Failed to parse server response as JSON.');
     }
   }
@@ -99,7 +99,9 @@ export async function httpClient({
 
     const response = await fetch(fullUrl, fetchOptions);
     const textData = await response.text();
-    if (raw) return { status: response.status, data: textData };
+    // Keep the final URL after redirects. Short links (such as pin.it) need
+    // this value to determine which platform resource was ultimately opened.
+    if (raw) return { status: response.status, ok: response.ok, url: response.url, data: textData };
     return safeJsonParse(textData);
   } catch (webErr) {
     // If browser CORS error, attempt with public CORS gateway for Web dev
@@ -108,7 +110,7 @@ export async function httpClient({
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(fullUrl)}`;
       const proxyRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(timeout) });
       const proxyText = await proxyRes.text();
-      if (raw) return { status: proxyRes.status, data: proxyText };
+      if (raw) return { status: proxyRes.status, ok: proxyRes.ok, url: proxyRes.url, data: proxyText };
       return safeJsonParse(proxyText);
     } catch (fallbackErr) {
       throw new Error(`Web request failed: ${fallbackErr.message || 'Network blocked by CORS'}`);

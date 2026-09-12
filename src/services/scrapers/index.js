@@ -2,10 +2,14 @@ import { isTikTokUrl, scrapeTikTok } from './tiktok.js';
 import { isYouTubeUrl, scrapeYouTube } from './youtube.js';
 import { isXUrl, scrapeX } from './x.js';
 import { isPinterestUrl, scrapePinterest } from './pinterest.js';
+import { isInstagramUrl, scrapeInstagram } from './instagram.js';
+import { isSpotifyUrl, scrapeSpotify } from './spotify.js';
 
 export function detectPlatform(url) {
   if (isTikTokUrl(url)) return 'tiktok';
   if (isYouTubeUrl(url)) return 'youtube';
+  if (isInstagramUrl(url)) return 'instagram';
+  if (isSpotifyUrl(url)) return 'spotify';
   if (isXUrl(url)) return 'x';
   if (isPinterestUrl(url)) return 'pinterest';
   return null;
@@ -27,6 +31,14 @@ export async function resolveMediaUrl(url) {
     return await scrapeYouTube(cleanUrl);
   }
 
+  if (platform === 'instagram') {
+    return await scrapeInstagram(cleanUrl);
+  }
+
+  if (platform === 'spotify') {
+    return await scrapeSpotify(cleanUrl);
+  }
+
   if (platform === 'x') {
     return await scrapeX(cleanUrl);
   }
@@ -36,6 +48,6 @@ export async function resolveMediaUrl(url) {
   }
 
   throw new Error(
-    'Unsupported platform URL. Currently Arloader supports TikTok, YouTube, X (Twitter), and Pinterest links.'
+    'Unsupported platform URL. Currently Arloader supports TikTok, YouTube, Instagram, Spotify, X (Twitter), and Pinterest links.'
   );
 }

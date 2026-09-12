@@ -1,7 +1,29 @@
 import { httpClient } from '../http.js';
 
-const PIN_ID_PATTERN = /pinterest\.(?:[a-z.]+)\/pin\/(\d+)/i;
+const PIN_ID_PATTERN = /(?:https?:\/\/)?(?:[\w-]+\.)?pinterest\.[a-z.]+\/(?:amp\/)?pin\/(\d+)/i;
 const PIN_IT_PATTERN = /pin\.it\/[a-zA-Z0-9_-]+/i;
+
+function normalizePinterestAssetUrl(url) {
+  if (!url || typeof window === 'undefined') return url;
+  if (!['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)) return url;
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== 'i.pinimg.com') return url;
+    return `/__pinimg/${encodeURIComponent(parsed.toString())}`;
+  } catch {
+    return url;
+  }
+}
+
+export function getPinterestPinPageUrl(pinId) {
+  // A website in production needs a server-side proxy with this same route.
+  // Capacitor uses its native HTTP client, so it requests Pinterest directly.
+  const hostname = typeof window === 'undefined' ? '' : window.location.hostname;
+  const isLocalWeb = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  if (isLocalWeb) return `/__pinterest/pin/${pinId}/`;
+  return `https://www.pinterest.com/pin/${pinId}/`;
+}
 
 export function isPinterestUrl(url = '') {
   const clean = String(url).trim();
@@ -11,6 +33,25 @@ export function isPinterestUrl(url = '') {
 export function extractPinterestPinId(url = '') {
   const match = String(url).trim().match(PIN_ID_PATTERN);
   return match ? match[1] : null;
+}
+
+export function extractPinterestCanonicalUrl(html = '') {
+  const source = String(html);
+  const tagPatterns = [
+    /<link\b[^>]*\brel=["']canonical["'][^>]*\bhref=["']([^"']+)["'][^>]*>/i,
+    /<link\b[^>]*\bhref=["']([^"']+)["'][^>]*\brel=["']canonical["'][^>]*>/i,
+    /<meta\b[^>]*\bproperty=["']og:url["'][^>]*\bcontent=["']([^"']+)["'][^>]*>/i,
+    /<meta\b[^>]*\bcontent=["']([^"']+)["'][^>]*\bproperty=["']og:url["'][^>]*>/i,
+  ];
+
+  for (const pattern of tagPatterns) {
+    const match = source.match(pattern);
+    if (match && extractPinterestPinId(decodeHtmlEntities(match[1]))) {
+      return decodeHtmlEntities(match[1]);
+    }
+  }
+
+  return null;
 }
 
 function decodeHtmlEntities(str = '') {
@@ -93,7 +134,7 @@ export function parsePinterestRelayHtml(html = '', fallbackUrl = '') {
   const pushOption = (option) => {
     if (!option?.url || seenUrls.has(option.url)) return;
     seenUrls.add(option.url);
-    options.push(option);
+    options.push({ ...option, url: normalizePinterestAssetUrl(option.url) });
   };
 
   if (pinData.videos) {
@@ -154,7 +195,7 @@ export function parsePinterestRelayHtml(html = '', fallbackUrl = '') {
     id: pinData.entityId || extractPinterestPinId(fallbackUrl) || 'pinterest-pin',
     title: cleanTitle,
     author,
-    cover,
+    cover: normalizePinterestAssetUrl(cover),
     duration: null,
     options,
     isImages: options.every((opt) => opt.type === 'image'),
@@ -179,15 +220,8 @@ export async function resolvePinterestUrl(url = '') {
     });
 
     const html = normalizeRawBody(res);
-    const canonicalMatch = html.match(/<link\s+rel="canonical"\s+href="([^"]+)"/i);
-    if (canonicalMatch && extractPinterestPinId(canonicalMatch[1])) {
-      return canonicalMatch[1];
-    }
-
-    const ogMatch = html.match(/<meta\s+property="og:url"\s+content="([^"]+)"/i);
-    if (ogMatch && extractPinterestPinId(ogMatch[1])) {
-      return ogMatch[1];
-    }
+    const canonicalUrl = extractPinterestCanonicalUrl(html);
+    if (canonicalUrl) return canonicalUrl;
 
     if (res?.url && extractPinterestPinId(res.url)) {
       return res.url;
@@ -205,7 +239,7 @@ export async function scrapePinterest(url) {
     throw new Error('URL Pinterest tidak valid atau bukan link pin yang didukung.');
   }
 
-  const targetUrl = `https://www.pinterest.com/pin/${pinId}/`;
+  const targetUrl = getPinterestPinPageUrl(pinId);
 
   const res = await httpClient({
     url: targetUrl,

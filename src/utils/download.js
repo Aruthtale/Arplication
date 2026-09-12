@@ -13,7 +13,7 @@ export async function downloadMedia({ url, filename, onProgress }) {
   // 1. Android Native Environment
   if (isNative()) {
     try {
-      if (onProgress) onProgress(20, 'Downloading media to device storage...');
+      if (onProgress) onProgress(12, 'Menyiapkan unduhan...');
       
       const res = await Filesystem.downloadFile({
         url,
@@ -23,7 +23,7 @@ export async function downloadMedia({ url, filename, onProgress }) {
         progress: true,
       });
 
-      if (onProgress) onProgress(100, 'Saved to Documents/Arplication!');
+      if (onProgress) onProgress(100, 'Tersimpan di Documents/Arplication.');
 
       // Offer quick share sheet
       try {
@@ -46,13 +46,16 @@ export async function downloadMedia({ url, filename, onProgress }) {
   }
 
   // 2. Web Browser Environment
-  if (onProgress) onProgress(40, 'Starting browser download...');
+  if (onProgress) onProgress(12, 'Menyiapkan unduhan...');
   
   try {
     // Attempt blob download to enforce file name
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    
+
+    // A local yt-dlp service begins its response only after it has prepared
+    // the media. This transition makes that wait visible in the UI.
+    if (onProgress) onProgress(72, 'Menyimpan file ke browser...');
     const blob = await response.blob();
     const blobUrl = window.URL.createObjectURL(blob);
     
@@ -67,7 +70,7 @@ export async function downloadMedia({ url, filename, onProgress }) {
       window.URL.revokeObjectURL(blobUrl);
     }, 1500);
 
-    if (onProgress) onProgress(100, 'Download complete!');
+    if (onProgress) onProgress(100, 'Unduhan selesai.');
     return { success: true };
   } catch (err) {
     console.warn('Blob fetch failed (likely CORS), falling back to direct anchor:', err);
@@ -81,7 +84,7 @@ export async function downloadMedia({ url, filename, onProgress }) {
     link.click();
     setTimeout(() => document.body.removeChild(link), 1000);
     
-    if (onProgress) onProgress(100, 'Download started in browser tab!');
+    if (onProgress) onProgress(100, 'Unduhan dibuka di tab baru.');
     return { success: true, direct: true };
   }
 }
