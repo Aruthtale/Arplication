@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Folder, Check, RotateCcw, X, Key, Eye, EyeOff } from 'lucide-react';
+import { Settings, Folder, Check, RotateCcw, X, Key, Eye, EyeOff, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { getDownloadSettings, saveDownloadSettings, DEFAULT_DOWNLOAD_SETTINGS } from '../../../utils/download.js';
 
 export default function DownloadSettingsModal({ isOpen, onClose }) {
   const [settings, setSettings] = useState(DEFAULT_DOWNLOAD_SETTINGS);
   const [savedStatus, setSavedStatus] = useState(false);
   const [showSessionId, setShowSessionId] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -160,25 +161,26 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
         </div>
 
         {/* Instagram Session ID Section */}
-        <div className="p-3.5 rounded-xl bg-[#181B24] border border-[#262B3B] space-y-2">
-          <div className="flex items-center gap-2">
-            <Key className="w-4 h-4 text-purple-400 shrink-0" />
-            <div>
+        <div className="p-3.5 rounded-xl bg-[#181B24] border border-[#262B3B] space-y-3.5">
+          <div className="flex items-start gap-2.5">
+            <Key className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
               <span className="text-xs font-semibold text-white block">
-                Instagram Session ID (Opsional)
+                Instagram Cookie / Session ID (Opsional)
               </span>
-              <p className="text-[10px] text-gray-400 leading-relaxed">
-                Kosongkan untuk mengunduh Highlight/Story publik secara otomatis. Isi sessionid cookie akun Anda jika ingin kecepatan lebih tinggi atau unduh dari akun privat yang Anda ikuti.
+              <p className="text-[10.5px] text-gray-400 leading-relaxed mt-0.5">
+                Aplikasi telah dilengkapi cookie bawaan otomatis. Anda hanya perlu mengisi kolom ini jika ingin kecepatan lebih tinggi, unduh dari akun privat yang diikuti, atau mengatasi kendala pembatasan limit.
               </p>
             </div>
           </div>
+
           <div className="relative flex items-center">
             <input
               type={showSessionId ? 'text' : 'password'}
               value={settings.igSessionId || ''}
               onChange={(e) => setSettings((s) => ({ ...s, igSessionId: e.target.value }))}
-              placeholder="sessionid=12345... (Opsional)"
-              className="w-full pl-3 pr-9 py-2 rounded-xl bg-[#0C0E13] border border-[#262B3B] text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 font-mono"
+              placeholder="sessionid=... atau format Netscape (Salin-Tempel)"
+              className="w-full pl-3 pr-9 py-2.5 rounded-xl bg-[#0C0E13] border border-[#262B3B] text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 font-mono"
             />
             <button
               type="button"
@@ -187,6 +189,40 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
             >
               {showSessionId ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
+          </div>
+
+          {/* Tutorial Accordion */}
+          <div className="border border-[#262B3B]/60 rounded-xl overflow-hidden bg-[#0C0E13]/50">
+            <button
+              type="button"
+              onClick={() => setShowTutorial(!showTutorial)}
+              className="w-full flex items-center justify-between p-2.5 text-left text-[11px] font-semibold text-purple-300 hover:text-purple-200 hover:bg-purple-500/5 transition-all"
+            >
+              <span className="flex items-center gap-1.5">
+                <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
+                Cara Mendapatkan Cookie / Session ID
+              </span>
+              {showTutorial ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+
+            {showTutorial && (
+              <div className="p-3 border-t border-[#262B3B]/40 text-[10px] text-gray-300 space-y-2 leading-relaxed bg-[#0C0E13]/80 animate-slideDown">
+                <p className="font-semibold text-white">Metode Kiwi Browser (Mudah di Android / HP):</p>
+                <ol className="list-decimal pl-4 space-y-1">
+                  <li>Unduh dan buka <span className="text-[#05C46B]">Kiwi Browser</span> di Play Store.</li>
+                  <li>Login akun Anda di <a href="https://instagram.com" target="_blank" rel="noreferrer" className="underline text-purple-400">instagram.com</a>.</li>
+                  <li>Klik <span className="font-semibold text-white">Titik Tiga</span> di kanan atas → klik <span className="font-semibold text-white">Developer Tools</span>.</li>
+                  <li>Pilih tab <span className="font-semibold text-white">Application</span> (atau <span className="font-semibold text-white">Storage</span>) di bilah atas Developer Tools.</li>
+                  <li>Buka bagian <span className="font-semibold text-white">Cookies</span> → pilih <span className="text-[#05C46B]">instagram.com</span>.</li>
+                  <li>Cari nama <span className="font-semibold text-white">sessionid</span> dan salin seluruh isinya.</li>
+                  <li>Tempelkan ke dalam kotak input di atas.</li>
+                </ol>
+                <div className="pt-1.5 border-t border-[#262B3B]/30">
+                  <p className="font-semibold text-white">💡 Tips Pintar:</p>
+                  <p className="text-gray-400 mt-0.5">Anda juga bisa langsung menyalin file Cookie format <span className="font-semibold text-gray-300">Netscape</span> (didapat dari ekstensi Get Cookie di Kiwi Browser/Chrome) dan langsung menempelkannya di sini!</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

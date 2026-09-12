@@ -12,9 +12,11 @@ export const DEFAULT_DOWNLOAD_SETTINGS = {
 
 export function getDownloadSettings() {
   try {
-    const saved = localStorage.getItem('arloader_settings');
-    if (saved) {
-      return { ...DEFAULT_DOWNLOAD_SETTINGS, ...JSON.parse(saved) };
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('arloader_settings');
+      if (saved) {
+        return { ...DEFAULT_DOWNLOAD_SETTINGS, ...JSON.parse(saved) };
+      }
     }
   } catch (e) {
     console.warn('Failed to read download settings:', e);
@@ -24,7 +26,9 @@ export function getDownloadSettings() {
 
 export function saveDownloadSettings(settings) {
   try {
-    localStorage.setItem('arloader_settings', JSON.stringify(settings));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('arloader_settings', JSON.stringify(settings));
+    }
   } catch (e) {
     console.warn('Failed to save download settings:', e);
   }

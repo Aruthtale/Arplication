@@ -8,6 +8,86 @@ const IG_SHORT_HIGHLIGHT_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|
 const IG_STORY_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/stories\/([A-Za-z0-9_.-]+)\/([0-9]+)/i;
 
 /**
+ * Normalizes user cookie inputs (Netscape HTTP Cookie format, Cookie header string, or bare sessionid)
+ */
+export function formatInstagramCookie(input = '') {
+  if (!input || !input.trim()) return '';
+  const raw = input.trim();
+
+  // 1. Netscape HTTP Cookie File format (tab separated or contains domain)
+  if (raw.includes('\t') || raw.includes('.instagram.com')) {
+    const lines = raw.split('\n');
+    const cookieMap = {};
+    for (const line of lines) {
+      if (!line.trim() || line.startsWith('#')) continue;
+      const parts = line.split('\t');
+      if (parts.length >= 7) {
+        const name = parts[5].trim();
+        const value = parts[6].trim();
+        if (name && value) {
+          cookieMap[name] = value;
+        }
+      }
+    }
+    if (Object.keys(cookieMap).length > 0) {
+      return Object.entries(cookieMap)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('; ');
+    }
+  }
+
+  // 2. Full cookie header string (e.g., sessionid=xxx; ds_user_id=yyy)
+  if (raw.includes('sessionid=')) {
+    return raw;
+  }
+
+  // 3. Bare sessionid string
+  return `sessionid=${raw.trim()};`;
+}
+
+/**
+ * Gets active Instagram cookie header (from user settings or environment fallback)
+ */
+export function getActiveInstagramCookie() {
+  const settings = getDownloadSettings();
+  const userSetting = settings.igSessionId ? settings.igSessionId.trim() : '';
+  if (userSetting) {
+    return formatInstagramCookie(userSetting);
+  }
+
+  const envObj = (typeof import.meta !== 'undefined' && import.meta.env)
+    ? import.meta.env
+    : (typeof process !== 'undefined' && process.env ? process.env : {});
+
+  const defaultCookie = envObj.VITE_DEFAULT_IG_COOKIE;
+  if (defaultCookie) {
+    return formatInstagramCookie(defaultCookie);
+  }
+
+  const defaultSessionId = envObj.VITE_DEFAULT_IG_SESSION_ID;
+  if (defaultSessionId) {
+    return formatInstagramCookie(defaultSessionId);
+  }
+
+  return '';
+}
+
+/**
+ * Converts Instagram shortcode to numeric Media ID
+ */
+export function shortcodeToMediaId(code = '') {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  let id = BigInt(0);
+  for (let i = 0; i < code.length; i++) {
+    const char = code[i];
+    const index = alphabet.indexOf(char);
+    if (index === -1) continue;
+    id = id * BigInt(64) + BigInt(index);
+  }
+  return id.toString();
+}
+
+/**
  * Checks if a string is a valid Instagram URL (Post, Reel, Story, Highlight)
  */
 export function isInstagramUrl(url = '') {
@@ -200,13 +280,24 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
 
   if (videos.length > 0) {
     videos.forEach((videoUrl, idx) => {
+      // MP4 HD Video
       options.push({
         id: `ig-video-${idx + 1}`,
-        label: videos.length > 1 ? `Video Part ${idx + 1} (MP4)` : 'Video (MP4 HD)',
+        label: videos.length > 1 ? `Video Part ${idx + 1} (MP4)` : 'Video Reel (MP4 HD)',
         ext: 'mp4',
         type: 'video',
         url: videoUrl,
         quality: 'Original HD',
+      });
+
+      // MP3 Audio
+      options.push({
+        id: `ig-audio-${idx + 1}`,
+        label: videos.length > 1 ? `Audio Part ${idx + 1} (MP3)` : 'Audio / Musik (MP3)',
+        ext: 'mp3',
+        type: 'audio',
+        url: videoUrl,
+        quality: 'Original Audio Stream',
       });
     });
   } else if (isVideoPage) {
@@ -245,7 +336,7 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
   if (images.length > 0 && (videos.length > 0 || isVideoPage)) {
     options.push({
       id: 'ig-thumbnail',
-      label: 'Cover Thumbnail',
+      label: 'Foto Cover (JPG)',
       ext: 'jpg',
       type: 'image',
       url: images[0],
@@ -281,11 +372,10 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
  * Scrapes Instagram Stories or Highlights using Session Cookie or Fallback Gateways
  */
 export async function scrapeInstagramStoryOrHighlight(details, originalUrl) {
-  const settings = getDownloadSettings();
-  const sessionId = settings.igSessionId ? settings.igSessionId.trim() : '';
+  const cookieHeader = getActiveInstagramCookie();
 
-  // 1. Authenticated Session ID Method (GraphQL / Reels Media API)
-  if (sessionId) {
+  // 1. Authenticated Session Cookie Method (GraphQL / Reels Media API)
+  if (cookieHeader) {
     try {
       const reelId = details.type === 'highlight' ? `highlight:${details.id}` : details.id;
       const apiEndpoint = `https://www.instagram.com/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(reelId)}`;
@@ -293,7 +383,7 @@ export async function scrapeInstagramStoryOrHighlight(details, originalUrl) {
       const res = await httpClient({
         url: apiEndpoint,
         headers: {
-          'Cookie': `sessionid=${sessionId};`,
+          'Cookie': cookieHeader,
           'User-Agent': 'Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; Xiaomi; 455000000)',
           'X-IG-App-ID': '936619743392459',
           'Accept': '*/*',
@@ -308,17 +398,34 @@ export async function scrapeInstagramStoryOrHighlight(details, originalUrl) {
 
         reelData.items.forEach((item, idx) => {
           const isVideo = item.media_type === 2 || Boolean(item.video_versions?.length);
-          const mediaUrl = isVideo 
-            ? item.video_versions?.[0]?.url 
-            : item.image_versions2?.candidates?.[0]?.url;
+          const videoUrl = item.video_versions?.[0]?.url;
+          const imageUrl = item.image_versions2?.candidates?.[0]?.url;
 
-          if (mediaUrl) {
+          if (isVideo && videoUrl) {
             options.push({
-              id: `story-${idx + 1}`,
-              label: isVideo ? `Story ${idx + 1} (Video MP4)` : `Story ${idx + 1} (Foto JPG)`,
-              ext: isVideo ? 'mp4' : 'jpg',
-              type: isVideo ? 'video' : 'image',
-              url: mediaUrl,
+              id: `story-v-${idx + 1}`,
+              label: `Story ${idx + 1} (Video MP4)`,
+              ext: 'mp4',
+              type: 'video',
+              url: videoUrl,
+              quality: 'Original Quality',
+            });
+
+            options.push({
+              id: `story-a-${idx + 1}`,
+              label: `Story ${idx + 1} (Audio MP3)`,
+              ext: 'mp3',
+              type: 'audio',
+              url: videoUrl,
+              quality: 'Audio Stream',
+            });
+          } else if (imageUrl) {
+            options.push({
+              id: `story-i-${idx + 1}`,
+              label: `Story ${idx + 1} (Foto JPG)`,
+              ext: 'jpg',
+              type: 'image',
+              url: imageUrl,
               quality: 'Original Quality',
             });
           }
@@ -361,14 +468,37 @@ export async function scrapeInstagramStoryOrHighlight(details, originalUrl) {
 
     if (fastDlRes && (fastDlRes.url || (Array.isArray(fastDlRes.items) && fastDlRes.items.length > 0))) {
       const items = Array.isArray(fastDlRes.items) ? fastDlRes.items : [fastDlRes];
-      const options = items.map((item, idx) => ({
-        id: `story-dl-${idx + 1}`,
-        label: item.type === 'video' ? `Story ${idx + 1} (Video MP4)` : `Story ${idx + 1} (Foto JPG)`,
-        ext: item.type === 'video' ? 'mp4' : 'jpg',
-        type: item.type === 'video' ? 'video' : 'image',
-        url: item.url || item.download_url,
-        quality: 'HD Quality',
-      }));
+      const options = [];
+      items.forEach((item, idx) => {
+        const itemUrl = item.url || item.download_url;
+        if (item.type === 'video') {
+          options.push({
+            id: `story-dl-v-${idx + 1}`,
+            label: `Story ${idx + 1} (Video MP4)`,
+            ext: 'mp4',
+            type: 'video',
+            url: itemUrl,
+            quality: 'HD Quality',
+          });
+          options.push({
+            id: `story-dl-a-${idx + 1}`,
+            label: `Story ${idx + 1} (Audio MP3)`,
+            ext: 'mp3',
+            type: 'audio',
+            url: itemUrl,
+            quality: 'HD Audio',
+          });
+        } else {
+          options.push({
+            id: `story-dl-i-${idx + 1}`,
+            label: `Story ${idx + 1} (Foto JPG)`,
+            ext: 'jpg',
+            type: 'image',
+            url: itemUrl,
+            quality: 'HD Quality',
+          });
+        }
+      });
 
       return {
         platform: 'instagram',
@@ -394,7 +524,7 @@ export async function scrapeInstagramStoryOrHighlight(details, originalUrl) {
 }
 
 /**
- * Scrapes Instagram cookieless (Post/Reel/Carousel) or via Story Handler
+ * Scrapes Instagram (Post/Reel/Carousel) with Cookie API & multi-layer Fallbacks
  */
 export async function scrapeInstagram(url = '') {
   const cleanUrl = String(url).trim();
@@ -411,8 +541,108 @@ export async function scrapeInstagram(url = '') {
 
   const shortcode = details.shortcode;
   const normalizedUrl = `https://www.instagram.com/p/${shortcode}/`;
+  const cookieHeader = getActiveInstagramCookie();
+  const mediaId = shortcodeToMediaId(shortcode);
 
-  // Layer 1: Direct Instagram Embed page (Fast, cookieless, contains meta & CDN asset links)
+  // Layer 1: Authenticated Media Info API (Highest accuracy & speed for Reels/Posts/Carousels)
+  if (cookieHeader && mediaId) {
+    try {
+      const apiEndpoint = `https://www.instagram.com/api/v1/media/${mediaId}/info/`;
+      const res = await httpClient({
+        url: apiEndpoint,
+        headers: {
+          'Cookie': cookieHeader,
+          'User-Agent': 'Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; Xiaomi; 455000000)',
+          'X-IG-App-ID': '936619743392459',
+          'Accept': '*/*',
+        },
+        timeout: 10000,
+      });
+
+      const item = res?.items?.[0];
+      if (item) {
+        const userObj = item.user || {};
+        const captionText = item.caption?.text || `Instagram Media (${shortcode})`;
+        const options = [];
+
+        // Single media or Carousel media items
+        const mediaItems = Array.isArray(item.carousel_media) && item.carousel_media.length > 0
+          ? item.carousel_media
+          : [item];
+
+        mediaItems.forEach((mItem, idx) => {
+          const videoVersions = mItem.video_versions || [];
+          const imageCandidates = mItem.image_versions2?.candidates || [];
+          const prefix = mediaItems.length > 1 ? `Slide ${idx + 1}` : 'Reel';
+
+          if (videoVersions.length > 0) {
+            const videoUrl = videoVersions[0].url;
+            // Video MP4 HD
+            options.push({
+              id: `ig-v-${idx + 1}`,
+              label: `${prefix} Video (MP4 HD)`,
+              ext: 'mp4',
+              type: 'video',
+              url: videoUrl,
+              quality: `${videoVersions[0].width || 1080}p HD`,
+            });
+
+            // Audio MP3
+            options.push({
+              id: `ig-a-${idx + 1}`,
+              label: `${prefix} Audio / Musik (MP3)`,
+              ext: 'mp3',
+              type: 'audio',
+              url: videoUrl,
+              quality: 'Original Audio Stream',
+            });
+
+            // Cover Photo
+            if (imageCandidates.length > 0) {
+              options.push({
+                id: `ig-c-${idx + 1}`,
+                label: `${prefix} Foto Cover (JPG)`,
+                ext: 'jpg',
+                type: 'image',
+                url: imageCandidates[0].url,
+                quality: 'High Resolution',
+              });
+            }
+          } else if (imageCandidates.length > 0) {
+            options.push({
+              id: `ig-img-${idx + 1}`,
+              label: mediaItems.length > 1 ? `Carousel Slide ${idx + 1} (JPG)` : 'Foto Post (JPG)',
+              ext: 'jpg',
+              type: 'image',
+              url: imageCandidates[0].url,
+              quality: 'High Resolution',
+            });
+          }
+        });
+
+        if (options.length > 0) {
+          const coverUrl = item.image_versions2?.candidates?.[0]?.url || options[0]?.url;
+          return {
+            platform: 'instagram',
+            id: shortcode,
+            title: captionText,
+            cover: coverUrl,
+            author: {
+              name: userObj.full_name || userObj.username || 'Instagram User',
+              username: `@${userObj.username || shortcode}`,
+              avatar: userObj.profile_pic_url || null,
+            },
+            duration: null,
+            options,
+          };
+        }
+      }
+    } catch (apiErr) {
+      console.warn('Instagram Media Info API fetch failed, falling back to public layers:', apiErr);
+    }
+  }
+
+  // Layer 2: Direct Instagram Embed page (Fast, cookieless)
   try {
     const embedUrl = getInstagramPageUrl(shortcode, true);
     const embedRes = await httpClient({
@@ -421,27 +651,31 @@ export async function scrapeInstagram(url = '') {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       raw: true,
-      timeout: 12000,
+      timeout: 10000,
     });
 
     const embedHtml = embedRes?.data || '';
     if (embedHtml && embedHtml.length > 200) {
-      return parseInstagramHtml(embedHtml, normalizedUrl);
+      const parsed = parseInstagramHtml(embedHtml, normalizedUrl);
+      if (parsed.options.some((o) => o.type === 'video')) {
+        return parsed;
+      }
     }
   } catch {
     // Embed fetch failed, try main page or fallback
   }
 
-  // Layer 2: Direct main page fetch
+  // Layer 3: Direct main page fetch with FB Bot User-Agent
   try {
     const directUrl = getInstagramPageUrl(shortcode, false);
     const directRes = await httpClient({
       url: directUrl,
       headers: {
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       raw: true,
-      timeout: 12000,
+      timeout: 10000,
     });
 
     const directHtml = directRes?.data || '';
@@ -452,7 +686,7 @@ export async function scrapeInstagram(url = '') {
     // Main page fetch failed, proceed to fallback
   }
 
-  // Layer 3: FastDL API Convert Engine Fallback
+  // Layer 4: FastDL API Convert Engine Fallback
   try {
     const fastDlRes = await httpClient({
       url: getFastDlApiUrl(),
@@ -468,14 +702,37 @@ export async function scrapeInstagram(url = '') {
 
     if (fastDlRes && (fastDlRes.url || (Array.isArray(fastDlRes.items) && fastDlRes.items.length > 0))) {
       const items = Array.isArray(fastDlRes.items) ? fastDlRes.items : [fastDlRes];
-      const options = items.map((item, idx) => ({
-        id: `fastdl-${idx + 1}`,
-        label: item.type === 'video' ? `Video MP4 (HD ${idx + 1})` : `Image JPG (${idx + 1})`,
-        ext: item.type === 'video' ? 'mp4' : 'jpg',
-        type: item.type === 'video' ? 'video' : 'image',
-        url: item.url || item.download_url,
-        quality: 'HD High Quality',
-      }));
+      const options = [];
+      items.forEach((item, idx) => {
+        const itemUrl = item.url || item.download_url;
+        if (item.type === 'video') {
+          options.push({
+            id: `fastdl-v-${idx + 1}`,
+            label: `Video Reel MP4 (${idx + 1})`,
+            ext: 'mp4',
+            type: 'video',
+            url: itemUrl,
+            quality: 'HD High Quality',
+          });
+          options.push({
+            id: `fastdl-a-${idx + 1}`,
+            label: `Audio Musik MP3 (${idx + 1})`,
+            ext: 'mp3',
+            type: 'audio',
+            url: itemUrl,
+            quality: 'HD Audio',
+          });
+        } else {
+          options.push({
+            id: `fastdl-i-${idx + 1}`,
+            label: `Image JPG (${idx + 1})`,
+            ext: 'jpg',
+            type: 'image',
+            url: itemUrl,
+            quality: 'HD Quality',
+          });
+        }
+      });
 
       return {
         platform: 'instagram',
@@ -495,5 +752,5 @@ export async function scrapeInstagram(url = '') {
     // FastDL fallback failed
   }
 
-  throw new Error('Gagal mengambil konten Instagram. Pastikan akun atau postingan bersifat publik.');
+  throw new Error('Gagal mengambil konten Instagram. Pastikan akun atau postingan bersifat publik atau periksa Instagram Session ID di Pengaturan.');
 }
