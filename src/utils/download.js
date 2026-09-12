@@ -1,5 +1,6 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { CapacitorHttp } from '@capacitor/core';
 import { isNative } from '../services/http.js';
 
 export const DEFAULT_DOWNLOAD_SETTINGS = {
@@ -29,6 +30,22 @@ export function saveDownloadSettings(settings) {
 }
 
 /**
+ * Helper to convert Blob to Base64
+ */
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const base64 = dataUrl.split(',')[1];
+      resolve(base64);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
  * Initiates file download across Web and Native Mobile
  */
 export async function downloadMedia({
@@ -53,29 +70,81 @@ export async function downloadMedia({
   // 1. Android Native Environment
   if (isNative()) {
     try {
-      if (onProgress) onProgress(12, 'Menyiapkan unduhan...');
+      if (onProgress) onProgress(10, 'Memeriksa izin penyimpanan...');
+      await Filesystem.requestPermissions().catch(() => {});
 
       const directoryEnum = dirChoice === 'Documents' ? Directory.Documents : Directory.Downloads;
       const targetLabel = dirChoice === 'Documents' ? 'Documents' : 'Download';
-
-      const res = await Filesystem.downloadFile({
-        url,
-        path: relativePath,
-        directory: directoryEnum,
-        recursive: true,
-        progress: true,
-      });
-
       const displayLocation = cleanSubfolder ? `${targetLabel}/${cleanSubfolder}` : targetLabel;
+
+      if (cleanSubfolder) {
+        await Filesystem.mkdir({
+          path: cleanSubfolder,
+          directory: directoryEnum,
+          recursive: true,
+        }).catch(() => {});
+      }
+
+      let resPath = null;
+
+      // Method A: Filesystem.downloadFile
+      try {
+        if (onProgress) onProgress(30, 'Mengunduh file ke penyimpanan...');
+        const res = await Filesystem.downloadFile({
+          url,
+          path: relativePath,
+          directory: directoryEnum,
+          recursive: true,
+          progress: true,
+        });
+        resPath = res.path;
+      } catch (dlErr) {
+        console.warn('downloadFile failed, attempting internal blob-write fallback:', dlErr);
+
+        if (onProgress) onProgress(45, 'Mengambil data media...');
+        
+        let blob = null;
+        try {
+          const capRes = await CapacitorHttp.get({
+            url,
+            responseType: 'blob',
+          });
+          if (capRes.data) {
+            // CapacitorHttp blob response is base64 string
+            const base64Data = typeof capRes.data === 'string' ? capRes.data.replace(/^data:[^;]+;base64,/, '') : capRes.data;
+            const writeRes = await Filesystem.writeFile({
+              path: relativePath,
+              data: base64Data,
+              directory: directoryEnum,
+              recursive: true,
+            });
+            resPath = writeRes.uri;
+          }
+        } catch (capErr) {
+          console.warn('CapacitorHttp fallback failed, trying fetch:', capErr);
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          blob = await response.blob();
+          const base64 = await blobToBase64(blob);
+          const writeRes = await Filesystem.writeFile({
+            path: relativePath,
+            data: base64,
+            directory: directoryEnum,
+            recursive: true,
+          });
+          resPath = writeRes.uri;
+        }
+      }
+
       if (onProgress) onProgress(100, `Tersimpan di ${displayLocation}`);
 
-      // Optional share/open dialog only if enabled by user
-      if (shouldShare) {
+      // Optional share/open dialog only if explicitly enabled by user
+      if (shouldShare && resPath) {
         try {
           await Share.share({
             title: safeFilename,
             text: `Downloaded with Arloader: ${safeFilename}`,
-            url: res.path,
+            url: resPath,
             dialogTitle: 'Buka atau Bagikan Media',
           });
         } catch (_) {
@@ -83,11 +152,11 @@ export async function downloadMedia({
         }
       }
 
-      return { success: true, path: res.path, location: displayLocation };
+      return { success: true, path: resPath, location: displayLocation };
     } catch (nativeErr) {
-      console.warn('Native Filesystem download failed, opening browser fallback:', nativeErr);
-      window.open(url, '_blank');
-      return { success: true, fallback: true };
+      console.error('All native download methods failed:', nativeErr);
+      if (onProgress) onProgress(0, 'Gagal menyimpan ke penyimpanan.');
+      throw nativeErr;
     }
   }
 
