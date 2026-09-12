@@ -1,51 +1,62 @@
 import React from 'react';
-import { Timer, Play, RotateCcw, Coffee, Bell, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Timer, Play, RotateCcw, Coffee, Bell, CheckCircle2, ArrowLeft, Flame } from 'lucide-react';
 
 export default function ArdoroPlaceholder({ setActiveTab }) {
   return (
-    <div className="space-y-6 pb-20 pt-2">
+    <div className="space-y-4 font-sans">
+      {/* Top Navigation */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => setActiveTab('home')}
-          className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-lg bg-[#111319] border border-[#262B3B] transition-colors"
+          className="nb-btn px-3 py-1.5 bg-white text-xs flex items-center gap-1.5"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Hub</span>
+          <ArrowLeft className="w-4 h-4 text-[#121212]" />
+          <span>Kembali ke Hub</span>
         </button>
 
-        <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full border bg-[#FF525E]/10 text-[#FF525E] border-[#FF525E]/30">
-          Module Ardoro
+        <span className="text-[10px] font-mono-code font-black px-2.5 py-1 rounded-full border-2 border-[#121212] bg-[#FF70A6] text-[#121212] shadow-[1.5px_1.5px_0px_#121212]">
+          MODUL ARDORO
         </span>
       </div>
 
-      {/* Header */}
-      <div className="rounded-2xl border border-[#262B3B] bg-[#111319] p-6 text-center relative overflow-hidden">
-        <div className="w-16 h-16 mx-auto rounded-2xl bg-[#FF525E]/15 border border-[#FF525E]/30 flex items-center justify-center mb-4">
-          <Timer className="w-8 h-8 text-[#FF525E]" />
+      {/* Main Focus Card */}
+      <div className="nb-card p-6 bg-[#FF70A6] space-y-4 shadow-[4px_4px_0px_#121212]">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white border-2 border-[#121212] flex items-center justify-center shadow-[2px_2px_0px_#121212] overflow-hidden p-2">
+            <img src="/ardoro.png" alt="Ardoro Emblem" className="w-full h-full object-contain" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-[#121212] uppercase tracking-tight">
+              Ardoro — Focus Engine
+            </h2>
+            <p className="text-xs font-bold text-gray-900">
+              Timer produktivitas Pomodoro dengan desain Neubrutalist tanpa distraksi.
+            </p>
+          </div>
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">Ardoro — Focus Engine</h2>
-        <p className="text-xs text-gray-400 max-w-md mx-auto">
-          Minimalist, distraction-free Pomodoro technique companion designed to cultivate flow states without interruptions.
-        </p>
 
-        {/* Conceptual Timer Display */}
-        <div className="my-8 flex flex-col items-center justify-center">
-          <div className="w-48 h-48 rounded-full border-4 border-[#262B3B] border-t-[#FF525E] flex flex-col items-center justify-center bg-[#0C0E13]">
-            <span className="text-4xl font-mono font-bold text-white tracking-wider">25:00</span>
-            <span className="text-xs text-gray-400 mt-1 uppercase tracking-widest font-mono">Focus Mode</span>
+        {/* Neubrutalist Timer Display */}
+        <div className="nb-card p-6 bg-white flex flex-col items-center justify-center space-y-4 shadow-[3px_3px_0px_#121212]">
+          <div className="w-48 h-48 rounded-full border-[4px] border-[#121212] bg-[#FFE600] flex flex-col items-center justify-center shadow-[4px_4px_0px_#121212]">
+            <span className="text-4xl font-mono-code font-black text-[#121212] tracking-wider">
+              25:00
+            </span>
+            <span className="text-[10px] font-mono-code font-black bg-white text-[#121212] px-2 py-0.5 rounded border border-[#121212] mt-2 shadow-[1px_1px_0px_#121212]">
+              DEEP FOCUS MODE
+            </span>
           </div>
 
-          <div className="flex items-center gap-3 mt-6">
+          <div className="flex items-center gap-3 pt-2">
             <button
               disabled
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#FF525E]/80 text-white font-medium text-xs opacity-60 cursor-not-allowed"
+              className="nb-btn px-5 py-2.5 bg-[#38E54D] text-[#121212] text-xs flex items-center gap-2 opacity-70 cursor-not-allowed"
             >
               <Play className="w-4 h-4" />
-              Start Session
+              <span>Mulai Sesi (Segera)</span>
             </button>
             <button
               disabled
-              className="p-2.5 rounded-xl bg-[#181B24] border border-[#262B3B] text-gray-400 opacity-60 cursor-not-allowed"
+              className="nb-btn p-2.5 bg-white text-[#121212] opacity-70 cursor-not-allowed"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -53,36 +64,42 @@ export default function ArdoroPlaceholder({ setActiveTab }) {
         </div>
       </div>
 
-      {/* Roadmap List */}
-      <div className="rounded-xl border border-[#262B3B] bg-[#111319] p-5">
-        <h3 className="text-sm font-semibold text-white mb-3">Planned Capabilities</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-300">
-          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-[#181B24]/60 border border-[#262B3B]/60">
-            <CheckCircle2 className="w-4 h-4 text-[#05C46B] shrink-0 mt-0.5" />
+      {/* Planned Capabilities Grid */}
+      <div className="nb-card p-4 bg-white space-y-3 shadow-[3.5px_3.5px_0px_#121212]">
+        <h3 className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider border-b-2 border-[#121212] pb-2">
+          FITUR DALAM PENGEMBANGAN
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+          <div className="nb-card p-3 bg-[#F8F5EE] flex items-start gap-2.5 shadow-[2px_2px_0px_#121212]">
+            <CheckCircle2 className="w-4 h-4 text-[#38E54D] shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-white">Custom Interval Loops</p>
-              <p className="text-gray-400 text-[11px]">25/5 Classic, 50/10 Deep, or user-defined cycles.</p>
+              <p className="font-black text-[#121212]">Loop Interval Custom</p>
+              <p className="text-[11px] font-semibold text-gray-600">Cycle 25/5 Klasik, 50/10 Deep, atau siklus kustom.</p>
             </div>
           </div>
-          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-[#181B24]/60 border border-[#262B3B]/60">
-            <Coffee className="w-4 h-4 text-[#FF525E] shrink-0 mt-0.5" />
+
+          <div className="nb-card p-3 bg-[#F8F5EE] flex items-start gap-2.5 shadow-[2px_2px_0px_#121212]">
+            <Coffee className="w-4 h-4 text-[#FF70A6] shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-white">Ambient Sound Generator</p>
-              <p className="text-gray-400 text-[11px]">White noise, rainfall, and binaural soundscapes.</p>
+              <p className="font-black text-[#121212]">Ambient Soundscapes</p>
+              <p className="text-[11px] font-semibold text-gray-600">Suara hujan, cafe ambience, dan binaural beats.</p>
             </div>
           </div>
-          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-[#181B24]/60 border border-[#262B3B]/60">
+
+          <div className="nb-card p-3 bg-[#F8F5EE] flex items-start gap-2.5 shadow-[2px_2px_0px_#121212]">
             <Bell className="w-4 h-4 text-[#0FB9B1] shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-white">System Notifications</p>
-              <p className="text-gray-400 text-[11px]">Subtle chime and native mobile vibration alerts.</p>
+              <p className="font-black text-[#121212]">Notifikasi Sistem & Getar</p>
+              <p className="text-[11px] font-semibold text-gray-600">Peringatan chime dan getaran native Android.</p>
             </div>
           </div>
-          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-[#181B24]/60 border border-[#262B3B]/60">
-            <CheckCircle2 className="w-4 h-4 text-[#05C46B] shrink-0 mt-0.5" />
+
+          <div className="nb-card p-3 bg-[#F8F5EE] flex items-start gap-2.5 shadow-[2px_2px_0px_#121212]">
+            <Flame className="w-4 h-4 text-[#FFE600] shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-white">Session Analytics</p>
-              <p className="text-gray-400 text-[11px]">Daily focus hours logged locally without telemetry.</p>
+              <p className="font-black text-[#121212]">Analistik Sesi Lokal</p>
+              <p className="text-[11px] font-semibold text-gray-600">Catatan waktu fokus harian tanpa data telemetri.</p>
             </div>
           </div>
         </div>

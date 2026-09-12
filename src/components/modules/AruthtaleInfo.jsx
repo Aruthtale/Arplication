@@ -1,80 +1,143 @@
-import React from 'react';
-import { Sparkles, Shield, Cpu, ExternalLink, GitBranch, Terminal, ArrowLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { Shield, Cpu, ExternalLink, GitBranch, ArrowLeft, Check, Copy, Heart, Layers, Sparkles } from 'lucide-react';
+import UpdateChecker from './UpdateChecker';
 
 export default function AruthtaleInfo({ setActiveTab }) {
+  const [copied, setCopied] = useState(false);
+
   const envInfo = [
-    { label: 'Environment', value: 'Client-Side (PWA / Android Native)' },
-    { label: 'Core Version', value: 'v0.1.0' },
-    { label: 'Design System', value: 'Neon Protocol (#0C0E13 / Mint / Coral)' },
-    { label: 'Platform Bridge', value: 'CapacitorJS Native Bridge' },
-    { label: 'Telemetry & Ads', value: '0% — Fully telemetry-free' },
+    { label: 'Versi Aplikasi', value: 'v0.2.0' },
+    { label: 'Pengembang', value: 'Aruthtale Studio' },
+    { label: 'Dukungan Platform', value: 'Android & Web Browser' },
+    { label: 'Lisensi Perangkat Lunak', value: 'Sumber Terbuka (Open Source)' },
+    { label: 'Modul Aktif', value: 'Arloader (Media Downloader)' },
+    { label: 'Modul Mendatang', value: 'Ardoro & ArNote' },
   ];
 
+  const repoUrl = 'https://github.com/Aruthtale/Arplication';
+
+  const handleCopyRepo = () => {
+    navigator.clipboard.writeText(repoUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
-    <div className="space-y-6 pb-20 pt-2">
+    <div className="space-y-4 font-sans">
+      {/* Top Navigation */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => setActiveTab('home')}
-          className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-lg bg-[#111319] border border-[#262B3B] transition-colors"
+          className="nb-btn px-3 py-1.5 bg-white text-xs flex items-center gap-1.5"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Hub</span>
+          <ArrowLeft className="w-4 h-4 text-[#121212]" />
+          <span>Kembali ke Beranda</span>
         </button>
 
-        <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full border bg-purple-500/10 text-purple-400 border-purple-500/30">
-          Module Aruthtale
+        <span className="text-[10px] font-mono-code font-black px-2.5 py-1 rounded-full border-2 border-[#121212] bg-[#A076F9] text-[#121212] shadow-[1.5px_1.5px_0px_#121212]">
+          INFORMASI ARUTHTALE
         </span>
       </div>
 
-      <div className="rounded-2xl border border-[#262B3B] bg-gradient-to-br from-[#181B24] to-[#111319] p-6 text-center relative overflow-hidden">
-        <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-[#FF525E] to-[#05C46B] p-0.5 mb-4 shadow-xl">
-          <div className="w-full h-full bg-[#0C0E13] rounded-[14px] flex items-center justify-center">
-            <Sparkles className="w-8 h-8 text-[#05C46B]" />
+      {/* Main Header Card */}
+      <div className="nb-card p-6 bg-[#A076F9] space-y-3 shadow-[4px_4px_0px_#121212]">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-white border-2 border-[#121212] flex items-center justify-center shadow-[2px_2px_0px_#121212] overflow-hidden p-2 shrink-0">
+            <img src="/logo.png" alt="Aruthtale Logo" className="w-full h-full object-contain" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-[#121212] uppercase tracking-tight">
+              Tentang Aruthtale
+            </h2>
+            <p className="text-xs font-bold text-gray-900 leading-relaxed mt-0.5">
+              Ruang eksplorasi digital dan pengembang suite perangkat lunak harian.
+            </p>
           </div>
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">Aruthtale Ecosystem</h2>
-        <p className="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
-          Arplication is an integrated personal utility suite crafted by Aruthtale. Built for speed, privacy, and full offline resilience.
+      </div>
+
+      {/* Story & Vision Card */}
+      <div className="nb-card p-5 bg-white space-y-3 shadow-[3.5px_3.5px_0px_#121212]">
+        <h3 className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider flex items-center gap-2 border-b-2 border-[#121212] pb-2">
+          <Layers className="w-4 h-4 text-[#121212]" />
+          <span>TENTANG APLIKASI & VSI</span>
+        </h3>
+        <p className="text-xs font-semibold text-gray-700 leading-relaxed">
+          <strong>Arplication</strong> dirancang oleh Aruthtale sebagai pusat utilitas harian terpadu. Fokus utama aplikasi ini adalah menghadirkan alat-alat produktivitas personal yang cepat, intuitif, dan nyaman digunakan tanpa proses yang rumit.
+        </p>
+        <p className="text-xs font-semibold text-gray-700 leading-relaxed">
+          Setiap modul di dalam Arplication dikembangkan secara bertahap untuk memenuhi kebutuhan pengunduhan media, manajemen sesi fokus produktif, serta pencatatan ide harian.
         </p>
       </div>
 
-      {/* Diagnostics & Specs */}
-      <div className="rounded-xl border border-[#262B3B] bg-[#111319] p-5">
-        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-          <Cpu className="w-4 h-4 text-[#05C46B]" />
-          System Diagnostics
+      {/* System Specifications Table */}
+      <div className="nb-card p-4 bg-white space-y-3 shadow-[3.5px_3.5px_0px_#121212]">
+        <h3 className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider flex items-center gap-2 border-b-2 border-[#121212] pb-2">
+          <Cpu className="w-4 h-4 text-[#121212]" />
+          <span>INFORMASI TEKNIS & RILIS</span>
         </h3>
-        <div className="divide-y divide-[#262B3B]/60 text-xs">
+
+        <div className="divide-y-2 divide-[#121212]/10 text-xs font-mono-code">
           {envInfo.map((item, idx) => (
-            <div key={idx} className="py-2.5 flex items-center justify-between">
-              <span className="text-gray-400">{item.label}</span>
-              <span className="font-mono text-gray-200">{item.value}</span>
+            <div key={idx} className="py-2.5 flex items-center justify-between flex-wrap gap-2">
+              <span className="font-bold text-gray-700">{item.label}</span>
+              <span className="font-black text-[#121212] bg-[#F8F5EE] px-2.5 py-0.5 rounded border border-[#121212] shadow-[1px_1px_0px_#121212]">
+                {item.value}
+              </span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Repository Card */}
-      <div className="rounded-xl border border-[#262B3B] bg-[#111319] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-[#181B24] border border-[#262B3B]">
-            <GitBranch className="w-5 h-5 text-[#05C46B]" />
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold text-white">Aruthtale/Arplication</h4>
-            <p className="text-xs text-gray-400 font-mono">git@github.com:Aruthtale/Arplication.git</p>
-          </div>
-        </div>
+      {/* In-App Updater (Metode B: GitHub Release APK) */}
+      <UpdateChecker autoCheck={true} />
 
-        <a
-          href="https://github.com/Aruthtale/Arplication"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#181B24] hover:bg-[#222634] border border-[#262B3B] text-xs text-white font-medium transition-colors"
-        >
-          <span>View on GitHub</span>
-          <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
-        </a>
+      {/* Creator & Contact Socials */}
+      <div className="nb-card p-4 bg-white space-y-3 shadow-[3.5px_3.5px_0px_#121212]">
+        <h3 className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider flex items-center gap-2 border-b-2 border-[#121212] pb-2">
+          <Sparkles className="w-4 h-4 text-[#121212]" />
+          <span>INFORMASI PEMBUAT & KANAL RESMI</span>
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono-code">
+          <a
+            href="https://github.com/Aruthtale"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="nb-btn p-3 bg-[#FFE600] text-[#121212] flex items-center justify-between no-underline"
+          >
+            <span className="font-black">GitHub Profile</span>
+            <span className="font-bold">github.com/Aruthtale</span>
+          </a>
+
+          <a
+            href="https://instagram.com/aruthtale"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="nb-btn p-3 bg-[#FF70A6] text-[#121212] flex items-center justify-between no-underline"
+          >
+            <span className="font-black">Instagram</span>
+            <span className="font-bold">@aruthtale</span>
+          </a>
+
+          <a
+            href="https://www.tiktok.com/@aruthtale"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="nb-btn p-3 bg-[#C4FAF8] text-[#121212] flex items-center justify-between no-underline"
+          >
+            <span className="font-black">TikTok</span>
+            <span className="font-bold">@aruthtale</span>
+          </a>
+
+          <a
+            href="mailto:aruthtale@gmail.com"
+            className="nb-btn p-3 bg-[#38E54D] text-[#121212] flex items-center justify-between no-underline"
+          >
+            <span className="font-black">Email Kontak</span>
+            <span className="font-bold">aruthtale@gmail.com</span>
+          </a>
+        </div>
       </div>
     </div>
   );

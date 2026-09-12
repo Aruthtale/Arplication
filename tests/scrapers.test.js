@@ -6,7 +6,12 @@ import {
   getXSyndicationToken,
   parseXResponse,
 } from '../src/services/scrapers/x.js';
-import { extractYouTubeId, isYouTubeUrl } from '../src/services/scrapers/youtube.js';
+import {
+  isYouTubeUrl,
+  isYouTubePlaylistUrl,
+  extractYouTubePlaylistId,
+  extractYouTubeId,
+} from '../src/services/scrapers/youtube.js';
 import { isAllowedYouTubeUrl } from '../scripts/downloader-server.js';
 import {
   extractPinterestPinId,
@@ -27,6 +32,7 @@ import {
   parseSpotifyEmbedData,
 } from '../src/services/scrapers/spotify.js';
 import { detectPlatform } from '../src/services/scrapers/index.js';
+import { resolveSubfolderPath, formatPlatformFolderName } from '../src/utils/download.js';
 
 const xResponse = {
   id_str: '2097687546381713860',
@@ -135,7 +141,12 @@ test('extractXId accepts x.com and twitter.com status URLs', () => {
 test('YouTube URL recognition supports watch, Shorts, and short URLs', () => {
   assert.equal(isYouTubeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), true);
   assert.equal(isYouTubeUrl('https://www.youtube.com/shorts/dQw4w9WgXcQ'), true);
+  assert.equal(isYouTubeUrl('https://www.youtube.com/playlist?list=PLBCF2DAC6FFB574DE'), true);
   assert.equal(extractYouTubeId('https://youtu.be/dQw4w9WgXcQ?feature=share'), 'dQw4w9WgXcQ');
+  assert.equal(isYouTubePlaylistUrl('https://www.youtube.com/playlist?list=PLBCF2DAC6FFB574DE'), true);
+  assert.equal(isYouTubePlaylistUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLBCF2DAC6FFB574DE'), true);
+  assert.equal(isYouTubePlaylistUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), false);
+  assert.equal(extractYouTubePlaylistId('https://www.youtube.com/playlist?list=PLBCF2DAC6FFB574DE'), 'PLBCF2DAC6FFB574DE');
 });
 
 test('local downloader only accepts YouTube URLs', () => {
@@ -294,9 +305,25 @@ test('parseSpotifyEmbedData extracts audio preview and cover metadata', () => {
   assert.equal(result.title, 'Never Gonna Give You Up');
   assert.equal(result.author.name, 'Rick Astley');
   assert.equal(result.duration, '3:33');
-  const preview = result.options.find((opt) => opt.id === 'spotify-preview-mp3');
-  assert.ok(preview);
-  assert.equal(preview.url, 'https://p.scdn.co/mp3-preview/b4c682084c3fd05538726d0a126b7e14b6e92c83');
+  assert.equal(result.previewUrl, 'https://p.scdn.co/mp3-preview/b4c682084c3fd05538726d0a126b7e14b6e92c83');
+  const fullMp3 = result.options.find((opt) => opt.id === 'spotify-full-mp3');
+  assert.ok(fullMp3);
+  assert.equal(fullMp3.isFullAudio, true);
+});
+
+test('parseSpotifyEmbedData parses album and playlist trackLists', () => {
+  const albumHtml = `<html><head></head><body><script id="__NEXT_DATA__" type="application/json">
+  {"props":{"pageProps":{"state":{"data":{"entity":{"id":"2noRn2Aes5aoNVsU6iWThc","name":"Discovery","type":"album","artists":[{"name":"Daft Punk"}],"visualIdentity":{"image":[{"url":"https://i.scdn.co/image/album123"}]},"trackList":[{"uri":"spotify:track:0DiWol3AO6WpXZgp0goxAV","title":"One More Time","subtitle":"Daft Punk","duration":320000,"audioPreview":{"url":"https://p.scdn.co/preview1"}},{"uri":"spotify:track:3H3cOQ6LBLSvmcaV7QkZEu","title":"Aerodynamic","subtitle":"Daft Punk","duration":212000,"audioPreview":{"url":"https://p.scdn.co/preview2"}}]}}}}}}
+  </script></body></html>`;
+  const result = parseSpotifyEmbedData(albumHtml, 'https://open.spotify.com/album/2noRn2Aes5aoNVsU6iWThc');
+  assert.equal(result.platform, 'spotify');
+  assert.equal(result.isPlaylist, true);
+  assert.equal(result.title, 'Discovery');
+  assert.equal(result.trackCount, 2);
+  assert.equal(result.tracks[0].title, 'One More Time');
+  assert.equal(result.tracks[0].artist, 'Daft Punk');
+  assert.equal(result.tracks[0].duration, '5:20');
+  assert.equal(result.tracks[1].title, 'Aerodynamic');
 });
 
 test('detectPlatform correctly detects all supported platforms', () => {
@@ -308,4 +335,24 @@ test('detectPlatform correctly detects all supported platforms', () => {
   assert.equal(detectPlatform('https://x.com/user/status/123'), 'x');
   assert.equal(detectPlatform('https://www.pinterest.com/pin/123/'), 'pinterest');
   assert.equal(detectPlatform('https://example.com/'), null);
+});
+
+test('resolveSubfolderPath handles automatic platform folders and legacy presets', () => {
+  assert.equal(formatPlatformFolderName('youtube'), 'YouTube');
+  assert.equal(formatPlatformFolderName('tiktok'), 'TikTok');
+  assert.equal(formatPlatformFolderName('spotify'), 'Spotify');
+  assert.equal(formatPlatformFolderName('instagram'), 'Instagram');
+
+  // Placeholder format
+  assert.equal(resolveSubfolderPath('Arloader/{platform}', 'youtube'), 'Arloader/YouTube');
+  assert.equal(resolveSubfolderPath('Arloader/{platform}', 'tiktok'), 'Arloader/TikTok');
+  assert.equal(resolveSubfolderPath('Arloader/{platform}', 'spotify'), 'Arloader/Spotify');
+
+  // Legacy preset migration (e.g. Arloader/TikTok saved in localStorage)
+  assert.equal(resolveSubfolderPath('Arloader/TikTok', 'youtube'), 'Arloader/YouTube');
+  assert.equal(resolveSubfolderPath('Arloader/TikTok', 'tiktok'), 'Arloader/TikTok');
+  assert.equal(resolveSubfolderPath('Arloader', 'youtube'), 'Arloader/YouTube');
+
+  // Custom user subfolders
+  assert.equal(resolveSubfolderPath('MyVideos', 'youtube'), 'MyVideos');
 });

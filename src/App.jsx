@@ -11,12 +11,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
 
   return (
-    <div className="min-h-screen bg-[#0C0E13] text-[#F3F4F6] flex flex-col selection:bg-[#05C46B]/30 selection:text-white">
-      {/* Top Header */}
+    <div className="min-h-screen bg-[#F8F5EE] text-[#121212] flex flex-col selection:bg-[#FFE600] selection:text-[#121212]">
+      {/* Top Neubrutalist Header */}
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Main View Area */}
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 pt-4">
+      <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-4 pt-3 sm:pt-5 pb-24">
         {activeTab === 'home' && <HomeHub setActiveTab={setActiveTab} />}
         {activeTab === 'arloader' && <ArloaderModule setActiveTab={setActiveTab} />}
         {activeTab === 'ardoro' && <ArdoroPlaceholder setActiveTab={setActiveTab} />}
@@ -24,7 +24,7 @@ export default function App() {
         {activeTab === 'aruthtale' && <AruthtaleInfo setActiveTab={setActiveTab} />}
       </main>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Neubrutalist Navigation */}
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
   );

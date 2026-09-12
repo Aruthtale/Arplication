@@ -1,17 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Music, Video, Image as ImageIcon, Loader2, Share2, Eye, Layers, RotateCcw, FileText, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Download, Music, Video, Image as ImageIcon, Loader2, Share2, Eye, 
+  Layers, RotateCcw, FileText, Check, Play, Pause, ListMusic, Sparkles, 
+  ExternalLink, CheckCircle2, AlertCircle
+} from 'lucide-react';
 import { Share } from '@capacitor/share';
-import { isNative } from '../../../services/http.js';
-import { downloadMedia, buildFilename, formatDownloadError, getDownloadSettings, probeFileSize, formatFileSize, saveTextFile } from '../../../utils/download.js';
+import { isNative, isLocalWeb } from '../../../services/http.js';
+import { 
+  downloadMedia, buildFilename, formatDownloadError, getDownloadSettings, 
+  probeFileSize, formatFileSize, saveTextFile 
+} from '../../../utils/download.js';
+import { resolveSpotifyTrackAudio } from '../../../services/scrapers/spotify.js';
 import PreviewModal from './PreviewModal.jsx';
 
 export default function MediaCard({ media, onDownloadComplete }) {
   const [downloadingId, setDownloadingId] = useState(null);
   const [downloadState, setDownloadState] = useState({});
-  const [preview, setPreview] = useState(null); // { option, filePath, filename, url, ext, type }
-  const [batch, setBatch] = useState(null); // { done, total }
-  const [sizes, setSizes] = useState({}); // optionId -> bytes | null
+  const [preview, setPreview] = useState(null);
+  const [batch, setBatch] = useState(null); // { done, total, currentTitle }
+  const [sizes, setSizes] = useState({});
   const [captionSaved, setCaptionSaved] = useState(false);
+  
+  // Audio preview playback state for tracks
+  const [playingTrackId, setPlayingTrackId] = useState(null);
+  const audioRef = useRef(null);
 
   // Probe file sizes whenever a new media result arrives
   useEffect(() => {
@@ -22,6 +34,7 @@ export default function MediaCard({ media, onDownloadComplete }) {
     (async () => {
       const entries = await Promise.all(
         media.options.map(async (opt) => {
+          if (!opt.url) return [opt.id, null];
           try {
             const bytes = await probeFileSize(opt.url);
             return [opt.id, bytes];
@@ -39,23 +52,44 @@ export default function MediaCard({ media, onDownloadComplete }) {
     return () => { cancelled = true; };
   }, [media?.id]);
 
-  const makeFilename = (option) => {
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
+
+  const makeFilename = (option, customTitle = null) => {
     const settings = getDownloadSettings();
     return buildFilename({
-      title: media.title,
+      title: customTitle || media.title,
       author: media.author?.name || media.author?.username || '',
       platform: media.platform,
       optionId: option.id,
-      ext: option.ext,
+      ext: option.ext || 'mp3',
       pattern: settings.filenamePattern || 'title_id',
     });
   };
 
-  const runDownload = async (option) => {
-    const filename = makeFilename(option);
+  const runDownload = async (option, customTitle = null) => {
+    let targetUrl = option.url;
+
+    // Dynamically resolve audio URL if query is provided (Spotify full MP3 fallback)
+    if (!targetUrl && option.query) {
+      targetUrl = await resolveSpotifyTrackAudio({ query: option.query });
+    }
+
+    if (!targetUrl) {
+      throw new Error('URL download tidak dapat ditentukan.');
+    }
+
+    const filename = makeFilename(option, customTitle);
     const res = await downloadMedia({
-      url: option.url,
+      url: targetUrl,
       filename,
+      platform: media?.platform || '',
       onProgress: (pct, msg) => {
         setDownloadState((prev) => ({
           ...prev,
@@ -66,7 +100,7 @@ export default function MediaCard({ media, onDownloadComplete }) {
     return { res, filename };
   };
 
-  const handleDownload = async (option) => {
+  const handleDownload = async (option, customTitle = null) => {
     setDownloadingId(option.id);
     setDownloadState((prev) => ({
       ...prev,
@@ -74,7 +108,7 @@ export default function MediaCard({ media, onDownloadComplete }) {
     }));
 
     try {
-      const { res, filename } = await runDownload(option);
+      const { res, filename } = await runDownload(option, customTitle);
       setDownloadState((prev) => ({
         ...prev,
         [option.id]: {
@@ -87,13 +121,13 @@ export default function MediaCard({ media, onDownloadComplete }) {
       }));
       if (onDownloadComplete) {
         onDownloadComplete({
-          title: media.title,
+          title: customTitle || media.title,
           platform: media.platform,
           cover: media.cover,
           filename,
           filePath: res?.path || null,
-          ext: option.ext,
-          type: option.type,
+          ext: option.ext || 'mp3',
+          type: option.type || 'audio',
           url: option.url,
         });
       }
@@ -110,9 +144,10 @@ export default function MediaCard({ media, onDownloadComplete }) {
     }
   };
 
+  // Batch download for single media options (e.g. all formats)
   const handleDownloadAll = async () => {
     if (batch) return;
-    setBatch({ done: 0, total: media.options.length });
+    setBatch({ done: 0, total: media.options.length, currentTitle: media.title });
     for (const option of media.options) {
       setDownloadingId(option.id);
       setDownloadState((prev) => ({
@@ -156,12 +191,126 @@ export default function MediaCard({ media, onDownloadComplete }) {
     setBatch(null);
   };
 
-  const openPreview = (option, state) => {
+  // Batch download for Playlist/Album (all tracks sequentially)
+  const handleDownloadPlaylistBatch = async () => {
+    if (batch || !media.tracks?.length) return;
+    const tracksToDownload = media.tracks;
+    setBatch({ done: 0, total: tracksToDownload.length, currentTitle: tracksToDownload[0]?.title });
+
+    for (let i = 0; i < tracksToDownload.length; i += 1) {
+      const track = tracksToDownload[i];
+      const optId = `track-${track.id || i}`;
+      const opt = {
+        id: optId,
+        url: track.downloadUrl || null,
+        query: `${track.artist} - ${track.title}`,
+        ext: 'mp3',
+        type: 'audio',
+      };
+
+      setBatch({ done: i, total: tracksToDownload.length, currentTitle: track.title });
+      setDownloadingId(optId);
+      setDownloadState((prev) => ({
+        ...prev,
+        [optId]: { progress: 12, message: `Mengunduh track ${i + 1}/${tracksToDownload.length}...`, failed: false },
+      }));
+
+      try {
+        const { res, filename } = await runDownload(opt, `${track.artist} - ${track.title}`);
+        setDownloadState((prev) => ({
+          ...prev,
+          [optId]: {
+            progress: 100,
+            message: 'Tersimpan.',
+            filePath: res?.path,
+            filename,
+            failed: false,
+          },
+        }));
+        if (onDownloadComplete) {
+          onDownloadComplete({
+            title: `${track.artist} - ${track.title}`,
+            platform: media.platform,
+            cover: track.cover || media.cover,
+            filename,
+            filePath: res?.path || null,
+            ext: 'mp3',
+            type: 'audio',
+            url: track.url,
+          });
+        }
+      } catch (err) {
+        console.error(`Gagal download track ${track.title}:`, err);
+        setDownloadState((prev) => ({
+          ...prev,
+          [optId]: { progress: 0, message: formatDownloadError(err), failed: true },
+        }));
+      }
+    }
+
+    setBatch(null);
+    setDownloadingId(null);
+  };
+
+  const handleTrackDownload = (track, idx) => {
+    const optId = `track-${track.id || idx}`;
+    const opt = {
+      id: optId,
+      url: track.downloadUrl || null,
+      query: `${track.artist} - ${track.title}`,
+      ext: 'mp3',
+      type: 'audio',
+    };
+    handleDownload(opt, `${track.artist} - ${track.title}`);
+  };
+
+  const handleTogglePlay = async (track) => {
+    if (playingTrackId === track.id) {
+      audioRef.current?.pause();
+      setPlayingTrackId(null);
+      return;
+    }
+
+    setPlayingTrackId(track.id);
+    let audioSrc = track.downloadUrl;
+    if (!audioSrc && track.query) {
+      try {
+        audioSrc = await resolveSpotifyTrackAudio({ query: track.query });
+      } catch (err) {
+        console.warn('Failed to resolve full track audio, falling back to preview:', err);
+      }
+    }
+    if (!audioSrc && track.previewUrl) {
+      audioSrc = track.previewUrl;
+    }
+
+    if (audioRef.current && audioSrc) {
+      audioRef.current.src = audioSrc;
+      audioRef.current.play().catch((e) => {
+        console.warn('Playback error:', e);
+        if (track.previewUrl && audioSrc !== track.previewUrl) {
+          audioRef.current.src = track.previewUrl;
+          audioRef.current.play().catch(() => {});
+        }
+      });
+    }
+  };
+
+  const openPreview = async (option, state) => {
+    let playUrl = state?.filePath || option.url;
+    if (!playUrl && option.query) {
+      try {
+        playUrl = await resolveSpotifyTrackAudio({ query: option.query });
+      } catch (e) {
+        console.warn('Failed to resolve audio for preview modal:', e);
+      }
+    }
+
     setPreview({
       option,
       filePath: state?.filePath || null,
       filename: state?.filename || makeFilename(option),
-      url: option.url,
+      url: playUrl || option.url,
       ext: option.ext,
       type: option.type,
     });
@@ -204,7 +353,7 @@ export default function MediaCard({ media, onDownloadComplete }) {
       pattern: settings.filenamePattern || 'title_id',
     });
     try {
-      await saveTextFile({ text, filename: base });
+      await saveTextFile({ text, filename: base, platform: media?.platform || '' });
       setCaptionSaved(true);
       setTimeout(() => setCaptionSaved(false), 4000);
     } catch (e) {
@@ -215,257 +364,380 @@ export default function MediaCard({ media, onDownloadComplete }) {
   const getFormatIcon = (type) => {
     switch (type) {
       case 'audio':
-        return <Music className="w-4 h-4 text-[#0FB9B1]" />;
+        return <Music className="w-4 h-4 text-[#121212]" />;
       case 'image':
-        return <ImageIcon className="w-4 h-4 text-purple-400" />;
+        return <ImageIcon className="w-4 h-4 text-[#FF70A6]" />;
       default:
-        return <Video className="w-4 h-4 text-[#05C46B]" />;
+        return <Video className="w-4 h-4 text-[#121212]" />;
     }
   };
 
-  const getPlatformBadgeClass = (platform) => {
+  const getPlatformBadge = (platform) => {
     switch (platform) {
       case 'tiktok':
-        return 'bg-black/80 text-[#05C46B] border border-[#05C46B]/40';
+        return { bg: 'bg-[#121212]', text: 'text-[#38E54D]', label: 'TIKTOK HD' };
       case 'youtube':
-        return 'bg-black/80 text-[#FF525E] border border-[#FF525E]/40';
+        return { bg: 'bg-[#FF525E]', text: 'text-white', label: 'YOUTUBE' };
       case 'instagram':
-        return 'bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#FCB045] text-white border border-white/20';
+        return { bg: 'bg-[#FF70A6]', text: 'text-white', label: 'INSTAGRAM' };
       case 'spotify':
-        return 'bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40';
+        return { bg: 'bg-[#1DB954]', text: 'text-black', label: 'SPOTIFY' };
       case 'x':
-        return 'bg-black/80 text-[#38BDF8] border border-[#38BDF8]/40';
+        return { bg: 'bg-[#121212]', text: 'text-[#4DEEEA]', label: 'TWITTER / X' };
       case 'pinterest':
-        return 'bg-black/80 text-[#E11D48] border border-[#E11D48]/40';
+        return { bg: 'bg-[#E11D48]', text: 'text-white', label: 'PINTEREST' };
       default:
-        return 'bg-black/80 text-gray-300 border border-[#262B3B]';
+        return { bg: 'bg-[#121212]', text: 'text-white', label: (platform || 'MEDIA').toUpperCase() };
     }
   };
 
-  const activeOption = media.options.find((o) => o.id === downloadingId);
-  const activeState = activeOption ? downloadState[activeOption.id] : null;
-  const showGlobalBar = batch || downloadingId;
+  const badge = getPlatformBadge(media.platform);
 
   return (
-    <div className="rounded-2xl border border-[#262B3B] bg-[#111319] overflow-hidden shadow-xl shadow-black/50 transition-all">
-      {/* Global download manager bar */}
-      {showGlobalBar && (
-        <div className="px-4 py-2.5 bg-[#05C46B]/10 border-b border-[#05C46B]/25 flex items-center gap-3" role="status" aria-live="polite">
-          <Loader2 className="w-4 h-4 animate-spin text-[#05C46B] shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-mono text-[#05C46B] truncate">
-              {batch
-                ? `Unduh semua: ${batch.done}/${batch.total} selesai`
-                : `${activeOption?.label || 'Mengunduh...'} — ${activeState?.message || ''}`}
-            </p>
-            <div className="mt-1 h-1 overflow-hidden rounded-full bg-[#0C0E13] border border-[#05C46B]/20">
-              <div
-                className="h-full rounded-full bg-[#05C46B] transition-all duration-500"
-                style={{ width: batch ? `${Math.round((batch.done / Math.max(batch.total, 1)) * 100)}%` : `${Math.max(activeState?.progress || 12, 12)}%` }}
-              />
+    <div className="space-y-3 font-sans">
+      <audio ref={audioRef} onEnded={() => setPlayingTrackId(null)} className="hidden" />
+
+      {/* Global Batch Download Progress Card */}
+      {batch && (
+        <div className="nb-card p-3.5 bg-[#FFE600] space-y-2 animate-fadeIn" role="status" aria-live="polite">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-[#121212]" />
+              <span className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider">
+                BATCH DOWNLOADING
+              </span>
             </div>
+            <span className="font-mono-code font-black text-xs bg-black text-white px-2 py-0.5 rounded-md">
+              {batch.done} / {batch.total} SELESAI
+            </span>
+          </div>
+          <p className="text-[11px] font-bold text-[#121212] truncate">
+            {batch.currentTitle || 'Memproses antrean file...'}
+          </p>
+          <div className="h-2.5 rounded-full bg-white border-2 border-black overflow-hidden">
+            <div 
+              className="h-full bg-[#121212] transition-all duration-300"
+              style={{ width: `${Math.round((batch.done / Math.max(batch.total, 1)) * 100)}%` }}
+            />
           </div>
         </div>
       )}
 
-      {/* Header info & cover */}
-      <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4 border-b border-[#262B3B]/60">
-        {media.cover && (
-          <div className="relative w-full sm:w-44 h-44 sm:h-32 rounded-xl overflow-hidden bg-[#0C0E13] shrink-0 border border-[#262B3B]">
-            <img
-              src={media.cover}
-              alt={media.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-            <span
-              className={`absolute top-2 left-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${getPlatformBadgeClass(
-                media.platform
-              )}`}
-            >
-              {media.platform}
+      {/* Main Neubrutalist Bento Media Card */}
+      <div className="nb-card overflow-hidden bg-white">
+        {/* Header Bar with Platform Badge and Media Type */}
+        <div className="px-4 py-2.5 bg-[#F8F5EE] border-b-[2.5px] border-[#121212] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-mono-code font-black px-2 py-0.5 rounded border-2 border-black shadow-[1.5px_1.5px_0px_#121212] ${badge.bg} ${badge.text}`}>
+              {badge.label}
             </span>
-            {media.duration && (
-              <span className="absolute bottom-2 right-2 text-[10px] font-mono bg-black/80 text-gray-200 px-1.5 py-0.5 rounded">
-                {media.duration}
+            {media.isPlaylist && (
+              <span className="text-[10px] font-mono-code font-black bg-[#FFE600] text-black px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#121212]">
+                {media.type === 'album' ? 'ALBUM' : 'PLAYLIST'}
               </span>
             )}
           </div>
-        )}
 
-        <div className="flex-1 flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm sm:text-base font-semibold text-white line-clamp-2 mb-2 leading-snug">
-              {media.title}
-            </h3>
-
-            {media.author && (
-              <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
-                {media.author.avatar && (
-                  <img
-                    src={media.author.avatar}
-                    alt={media.author.name}
-                    className="w-5 h-5 rounded-full object-cover border border-[#262B3B]"
-                  />
-                )}
-                <span className="font-medium text-gray-300">{media.author.name}</span>
-                {media.author.username && (
-                  <span className="text-gray-500 font-mono text-[11px]">{media.author.username}</span>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 pt-2 text-[11px] font-mono text-gray-400">
-            <span className="px-2 py-0.5 rounded bg-[#181B24] border border-[#262B3B]">
-              ID: {media.id}
+          <div className="flex items-center gap-2">
+            <span className="font-mono-code text-[10px] font-extrabold text-emerald-800 bg-[#38E54D]/20 px-2 py-0.5 border border-black rounded">
+              ● READY
             </span>
-            <span className="text-[#05C46B]">● Ready to stream</span>
-          </div>
-
-          <div className="pt-2">
-            <button
-              onClick={handleSaveCaption}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all active:scale-95 border ${
-                captionSaved
-                  ? 'bg-[#05C46B]/15 border-[#05C46B]/40 text-[#05C46B]'
-                  : 'bg-[#181B24] hover:bg-[#222634] border-[#262B3B] text-gray-300 hover:text-white'
-              }`}
-              title="Simpan judul + info sebagai file .txt"
-            >
-              {captionSaved ? <Check className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
-              <span>{captionSaved ? 'Caption Tersimpan' : 'Simpan Caption (.txt)'}</span>
-            </button>
           </div>
         </div>
-      </div>
 
-      {/* Available Download Streams */}
-      <div className="p-4 sm:p-5 bg-[#0C0E13]/40">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            Available Formats ({media.options.length})
-          </h4>
-          {media.options.length > 1 && (
-            <button
-              onClick={handleDownloadAll}
-              disabled={!!batch || !!downloadingId}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0FB9B1]/15 hover:bg-[#0FB9B1]/25 border border-[#0FB9B1]/30 text-[#0FB9B1] text-xs font-medium transition-all active:scale-95 disabled:opacity-50"
-              title="Unduh semua format sekaligus"
-            >
-              {batch ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
-              <span>{batch ? `${batch.done}/${batch.total}` : 'Unduh Semua'}</span>
-            </button>
+        {/* Media Presentation Info */}
+        <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4 border-b-[2.5px] border-[#121212]">
+          {media.cover && (
+            <div className="relative w-full sm:w-44 h-44 sm:h-36 rounded-xl overflow-hidden bg-[#121212] shrink-0 border-2 border-black shadow-[3px_3px_0px_#121212]">
+              <img
+                src={media.cover}
+                alt={media.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+              {media.duration && (
+                <span className="absolute bottom-2 right-2 text-[10px] font-mono-code font-black bg-black text-white px-1.5 py-0.5 rounded border border-white">
+                  {media.duration}
+                </span>
+              )}
+              {media.isPlaylist && media.tracks && (
+                <span className="absolute top-2 left-2 text-[10px] font-mono-code font-black bg-[#FFE600] text-black px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#121212]">
+                  {media.tracks.length} LAGU
+                </span>
+              )}
+            </div>
           )}
+
+          <div className="flex-1 flex flex-col justify-between space-y-2">
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-[#121212] line-clamp-2 leading-snug">
+                {media.title}
+              </h3>
+
+              {media.author && (
+                <div className="flex items-center gap-2 text-xs text-gray-700 font-bold mt-1.5">
+                  {media.author.avatar && (
+                    <img
+                      src={media.author.avatar}
+                      alt={media.author.name}
+                      className="w-5 h-5 rounded-full object-cover border border-black"
+                    />
+                  )}
+                  <span>{media.author.name}</span>
+                  {media.author.username && (
+                    <span className="text-gray-500 font-mono-code text-[11px]">{media.author.username}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 flex-wrap">
+              <button
+                onClick={handleSaveCaption}
+                className={`nb-btn px-3 py-1.5 text-[11px] flex items-center gap-1.5 ${
+                  captionSaved ? 'bg-[#38E54D] text-black' : 'bg-white text-[#121212]'
+                }`}
+                title="Simpan judul dan info sebagai file teks"
+              >
+                {captionSaved ? <Check className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                <span>{captionSaved ? 'Tersimpan!' : 'Simpan Info (.txt)'}</span>
+              </button>
+
+              {media.isPlaylist && (
+                <button
+                  onClick={handleDownloadPlaylistBatch}
+                  disabled={!!batch}
+                  className="nb-btn px-3 py-1.5 bg-[#FFE600] hover:bg-yellow-400 text-[#121212] text-[11px] flex items-center gap-1.5 shadow-[2.5px_2.5px_0px_#121212]"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>UNDUH SEMUA LAGU ({media.tracks?.length || 0})</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-2.5">
-          {media.options.map((option) => {
-            const isCurrent = downloadingId === option.id;
-            const currentDownload = downloadState[option.id];
+        {/* CASE 1: PLAYLIST / ALBUM MULTI-TRACK VIEW */}
+        {media.isPlaylist && media.tracks?.length > 0 ? (
+          <div className="p-4 bg-[#F8F5EE] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ListMusic className="w-4 h-4 text-[#121212]" />
+                <h4 className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider">
+                  DAFTAR LAGU ({media.tracks.length} TRACKS)
+                </h4>
+              </div>
+              <span className="text-[10px] font-mono-code font-bold text-gray-600 bg-white px-2 py-0.5 border border-black rounded">
+                FULL MP3 320K
+              </span>
+            </div>
 
-            return (
-              <div
-                key={option.id}
-                className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 p-3 rounded-xl bg-[#181B24] border border-[#262B3B] hover:border-gray-600 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#111319] border border-[#262B3B] flex items-center justify-center shrink-0">
-                    {getFormatIcon(option.type)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium text-white">{option.label}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#0C0E13] text-gray-400 border border-[#262B3B] uppercase">
-                        {option.ext}
-                      </span>
-                      {sizes[option.id] ? (
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#05C46B]/10 text-[#05C46B] border border-[#05C46B]/25">
-                          {formatFileSize(sizes[option.id])}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-mono text-gray-600">…</span>
-                      )}
-                    </div>
-                    {option.quality && (
-                      <p className="text-[11px] text-gray-400">{option.quality}</p>
-                    )}
-                  </div>
-                </div>
+            <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+              {media.tracks.map((track, idx) => {
+                const optId = `track-${track.id || idx}`;
+                const isCurrent = downloadingId === optId;
+                const trackState = downloadState[optId];
+                const isPlaying = playingTrackId === track.id;
 
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <button
-                    onClick={() => openPreview(option, currentDownload)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/30 text-[#38BDF8] text-xs font-medium transition-all active:scale-95"
-                    title="Lihat / Putar di aplikasi"
+                return (
+                  <div
+                    key={track.id || idx}
+                    className="nb-card p-2.5 sm:p-3 bg-white hover:bg-yellow-50/50 flex flex-col gap-2 transition-all"
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Lihat</span>
-                  </button>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-6 h-6 rounded-md bg-[#F8F5EE] border border-black flex items-center justify-center font-mono-code text-[11px] font-black shrink-0">
+                          {track.index || idx + 1}
+                        </span>
 
-                  {currentDownload?.failed && !isCurrent ? (
-                    <button
-                      onClick={() => handleDownload(option)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#FF525E]/15 hover:bg-[#FF525E]/25 border border-[#FF525E]/30 text-[#FF525E] text-xs font-medium transition-all active:scale-95"
-                      title="Coba unduh lagi"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Coba Lagi</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleDownload(option)}
-                      disabled={isCurrent}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#05C46B]/15 hover:bg-[#05C46B]/25 border border-[#05C46B]/30 text-[#05C46B] text-xs font-medium transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      {isCurrent ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Download className="w-3.5 h-3.5" />
-                      )}
-                      <span>Download</span>
-                    </button>
-                  )}
+                        <div className="min-w-0">
+                          <h5 className="font-black text-xs text-[#121212] truncate">
+                            {track.title}
+                          </h5>
+                          <p className="text-[10px] font-bold text-gray-600 truncate">
+                            {track.artist || 'Artist'} {track.duration ? `• ${track.duration}` : ''}
+                          </p>
+                        </div>
+                      </div>
 
-                  {currentDownload?.filePath && isNative() && (
-                    <button
-                      onClick={() => handleManualShare(currentDownload)}
-                      className="p-1.5 rounded-lg bg-[#111319] hover:bg-[#222634] border border-[#262B3B] text-gray-400 hover:text-[#05C46B] transition-colors"
-                      title="Bagikan / Buka Berkas"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-                {currentDownload && (
-                  <div className={`space-y-1.5 sm:basis-full ${currentDownload.failed ? '' : ''}`} role="status" aria-live="polite">
-                    <div className={`flex items-center justify-between gap-3 text-[11px] font-mono ${currentDownload.failed ? 'text-[#FF525E]' : 'text-[#05C46B]'}`}>
-                      <span>{currentDownload.message}</span>
-                      {!currentDownload.failed && <span>{currentDownload.progress}%</span>}
-                    </div>
-                    {!currentDownload.failed && (
-                      <div
-                        className="h-1.5 overflow-hidden rounded-full bg-[#0C0E13] border border-[#262B3B]"
-                        role="progressbar"
-                        aria-label="Progress unduhan"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                        aria-valuenow={currentDownload.progress}
-                      >
-                        <div
-                          className={`h-full rounded-full bg-[#05C46B] transition-all duration-500 ${
-                            isCurrent && currentDownload.progress < 72 ? 'animate-pulse' : ''
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {(track.previewUrl || track.downloadUrl || track.query) && (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePlay(track)}
+                            className="w-7 h-7 rounded-lg bg-[#C4FAF8] border border-black flex items-center justify-center text-[#121212] shadow-[1px_1px_0px_#121212] hover:bg-cyan-200"
+                            title={isPlaying ? 'Pause' : 'Putar Lagu'}
+                          >
+                            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleTrackDownload(track, idx)}
+                          disabled={isCurrent}
+                          className={`nb-btn px-2.5 py-1 text-[10px] flex items-center gap-1 shadow-[1.5px_1.5px_0px_#121212] ${
+                            trackState?.progress === 100
+                              ? 'bg-[#38E54D] text-black'
+                              : 'bg-[#FFE600] text-black'
                           }`}
-                          style={{ width: `${Math.max(currentDownload.progress, isCurrent ? 18 : 0)}%` }}
-                        />
+                        >
+                          {isCurrent ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : trackState?.progress === 100 ? (
+                            <CheckCircle2 className="w-3 h-3" />
+                          ) : (
+                            <Download className="w-3 h-3" />
+                          )}
+                          <span>{trackState?.progress === 100 ? 'Selesai' : 'MP3'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {trackState && (
+                      <div className="space-y-1 pt-1 border-t border-gray-200">
+                        <div className="flex items-center justify-between text-[10px] font-mono-code font-bold">
+                          <span className={trackState.failed ? 'text-red-600' : 'text-emerald-700'}>
+                            {trackState.message}
+                          </span>
+                          {!trackState.failed && <span>{trackState.progress}%</span>}
+                        </div>
+                        {!trackState.failed && (
+                          <div className="h-1.5 bg-gray-200 border border-black rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#38E54D] transition-all duration-300"
+                              style={{ width: `${trackState.progress}%` }}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* CASE 2: SINGLE MEDIA AVAILABLE FORMATS */
+          <div className="p-4 sm:p-5 bg-[#F8F5EE] space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider">
+                PILIHAN FORMAT ({media.options?.length || 0})
+              </h4>
+              {media.options?.length > 1 && (
+                <button
+                  onClick={handleDownloadAll}
+                  disabled={!!batch || !!downloadingId}
+                  className="nb-btn px-3 py-1 bg-[#FFE600] text-black text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_#121212]"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Unduh Semua Format</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2.5">
+              {media.options?.map((option) => {
+                const isCurrent = downloadingId === option.id;
+                const currentDownload = downloadState[option.id];
+
+                return (
+                  <div
+                    key={option.id}
+                    className="nb-card p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[2.5px_2.5px_0px_#121212]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#FFE600] border-2 border-black flex items-center justify-center shrink-0 shadow-[1px_1px_0px_#121212]">
+                        {getFormatIcon(option.type)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-black text-[#121212]">{option.label}</span>
+                          <span className="text-[10px] font-mono-code font-bold px-1.5 py-0.2 rounded bg-[#F8F5EE] text-black border border-black uppercase">
+                            {option.ext}
+                          </span>
+                          {sizes[option.id] ? (
+                            <span className="text-[10px] font-mono-code font-black px-1.5 py-0.2 rounded bg-[#38E54D]/30 text-emerald-800 border border-black">
+                              {formatFileSize(sizes[option.id])}
+                            </span>
+                          ) : null}
+                        </div>
+                        {option.quality && (
+                          <p className="text-[11px] font-bold text-gray-500 mt-0.5">{option.quality}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                      {option.url && (
+                        <button
+                          onClick={() => openPreview(option, currentDownload)}
+                          className="nb-btn px-3 py-1.5 bg-[#C4FAF8] text-black text-xs flex items-center gap-1 shadow-[1.5px_1.5px_0px_#121212]"
+                          title="Lihat / Putar di aplikasi"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Lihat</span>
+                        </button>
+                      )}
+
+                      {currentDownload?.failed && !isCurrent ? (
+                        <button
+                          onClick={() => handleDownload(option)}
+                          className="nb-btn px-3 py-1.5 bg-[#FF6B6B] text-white text-xs flex items-center gap-1 shadow-[1.5px_1.5px_0px_#121212]"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Coba Lagi</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleDownload(option)}
+                          disabled={isCurrent}
+                          className="nb-btn px-3.5 py-1.5 bg-[#38E54D] text-black text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_#121212] disabled:opacity-50"
+                        >
+                          {isCurrent ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Download className="w-3.5 h-3.5" />
+                          )}
+                          <span>Download</span>
+                        </button>
+                      )}
+
+                      {currentDownload?.filePath && isNative() && (
+                        <button
+                          onClick={() => handleManualShare(currentDownload)}
+                          className="nb-btn p-1.5 bg-white text-black shadow-[1.5px_1.5px_0px_#121212]"
+                          title="Bagikan / Buka Berkas"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {currentDownload && (
+                      <div className="space-y-1 sm:basis-full pt-1 border-t border-gray-100" role="status" aria-live="polite">
+                        <div className="flex items-center justify-between gap-3 text-[11px] font-mono-code font-bold">
+                          <span className={currentDownload.failed ? 'text-red-600' : 'text-emerald-800'}>
+                            {currentDownload.message}
+                          </span>
+                          {!currentDownload.failed && <span>{currentDownload.progress}%</span>}
+                        </div>
+                        {!currentDownload.failed && (
+                          <div className="h-2 overflow-hidden rounded-full bg-white border border-black">
+                            <div
+                              className="h-full bg-[#38E54D] transition-all duration-300"
+                              style={{ width: `${Math.max(currentDownload.progress, isCurrent ? 18 : 0)}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <PreviewModal preview={preview} onClose={() => setPreview(null)} />

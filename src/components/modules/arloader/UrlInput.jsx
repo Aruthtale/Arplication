@@ -1,10 +1,9 @@
 import React from 'react';
-import { Clipboard, ArrowRight, X, Loader2, ListVideo } from 'lucide-react';
+import { Clipboard, ArrowRight, X, Loader2, ListVideo, Link2 } from 'lucide-react';
 import { readClipboard } from '../../../utils/clipboard.js';
 
 export function extractLinks(text = '') {
   const matches = String(text).match(/https?:\/\/[^\s,;|]+/gi) || [];
-  // Trim trailing punctuation like ) ] . ,
   const cleaned = matches.map((m) => m.replace(/[)\].,;!]+$/g, ''));
   return Array.from(new Set(cleaned.filter(Boolean)));
 }
@@ -27,87 +26,75 @@ export default function UrlInput({ url, setUrl, onFetch, loading }) {
   };
 
   return (
-    <div className="space-y-2">
-      <div className="relative">
+    <div className="space-y-2.5 font-sans">
+      {/* Neubrutalist Input Container */}
+      <div className="bg-white border-2 border-[#121212] rounded-2xl p-2.5 px-3 shadow-[2.5px_2.5px_0px_#121212] flex items-start sm:items-center gap-2 transition-all">
+        <div className="pt-1 sm:pt-0">
+          <Link2 className="w-4 h-4 text-[#121212] shrink-0" />
+        </div>
+
         <textarea
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Paste TikTok, YouTube, Instagram, Spotify, X, or Pinterest link... (bisa banyak link, satu per baris — Ctrl+Enter untuk proses)"
-          rows={isMulti ? 4 : 2}
-          className="w-full bg-[#111319] border border-[#262B3B] focus:border-[#05C46B] focus:ring-2 focus:ring-[#05C46B]/20 text-white placeholder-gray-500 rounded-xl py-3.5 pl-4 pr-12 text-sm outline-none transition-all font-sans resize-y min-h-[56px]"
+          placeholder="Paste tautan Spotify, YouTube, TikTok, Instagram, X, Pinterest... (bisa multi-link)"
+          rows={isMulti ? 3 : 1}
+          className="w-full text-xs font-bold text-[#121212] placeholder-gray-400 bg-transparent focus:outline-none resize-none min-h-[28px] max-h-[120px] py-1"
         />
 
-        {url && (
-          <button
-            onClick={() => setUrl('')}
-            className="absolute top-2.5 right-2.5 p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-[#181B24] transition-colors"
-            title="Clear input"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] text-gray-500">
-          {isMulti ? (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[#0FB9B1]/10 border border-[#0FB9B1]/30 text-[#0FB9B1] font-mono">
-              <ListVideo className="w-3.5 h-3.5" />
-              {links.length} link terdeteksi — diproses antre satu per satu
-            </span>
-          ) : (
-            <>
-              <span>Supported:</span>
-              <span className="font-mono text-gray-400">TikTok</span>
-              <span>•</span>
-              <span className="font-mono text-gray-400">YouTube</span>
-              <span>•</span>
-              <span className="font-mono text-gray-400">Instagram</span>
-              <span>•</span>
-              <span className="font-mono text-gray-400">Spotify</span>
-              <span>•</span>
-              <span className="font-mono text-gray-400">X (Twitter)</span>
-              <span>•</span>
-              <span className="font-mono text-gray-400">Pinterest</span>
-            </>
+        <div className="flex items-center gap-1 shrink-0 pt-0.5 sm:pt-0">
+          {url && (
+            <button
+              type="button"
+              onClick={() => setUrl('')}
+              className="w-7 h-7 bg-white hover:bg-gray-100 border border-black rounded-lg flex items-center justify-center text-gray-700 transition-all shadow-[1px_1px_0px_#121212]"
+              title="Hapus tautan"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           )}
-        </div>
 
-        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handlePaste}
-            className="flex items-center gap-1 px-2.5 py-2 rounded-xl bg-[#181B24] hover:bg-[#222634] border border-[#262B3B] text-xs font-medium text-gray-300 hover:text-white transition-colors"
-            title="Paste from clipboard"
+            className="w-7 h-7 bg-[#FFE600] hover:bg-yellow-300 border border-black rounded-lg flex items-center justify-center text-[#121212] transition-all shadow-[1px_1px_0px_#121212]"
+            title="Paste dari clipboard"
           >
-            <Clipboard className="w-3.5 h-3.5 text-[#05C46B]" />
-            <span className="hidden sm:inline">Paste</span>
-          </button>
-
-          <button
-            onClick={onFetch}
-            disabled={loading || !url.trim()}
-            className={`inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all shadow-lg ${
-              loading || !url.trim()
-                ? 'bg-[#181B24] text-gray-500 border border-[#262B3B] cursor-not-allowed'
-                : 'bg-[#05C46B] hover:bg-[#0BE881] text-[#0C0E13] shadow-[#05C46B]/20 active:scale-95'
-            }`}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Analyzing...</span>
-              </>
-            ) : (
-              <>
-                <span>{isMulti ? `Fetch ${links.length} Media` : 'Fetch Media'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
+            <Clipboard className="w-3.5 h-3.5 text-[#121212]" />
           </button>
         </div>
       </div>
+
+      {/* Multi-link Indicator Chip */}
+      {isMulti && (
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#FFE600] border-2 border-black shadow-[1.5px_1.5px_0px_#121212] text-[#121212] text-[11px] font-mono-code font-bold">
+          <ListVideo className="w-3.5 h-3.5" />
+          <span>{links.length} tautan terdeteksi — diproses berurutan dalam antrean</span>
+        </div>
+      )}
+
+      {/* Big Neubrutalist Action Button */}
+      <button
+        onClick={onFetch}
+        disabled={loading || !url.trim()}
+        className={`w-full font-mono-code font-black text-xs py-3 rounded-xl border-2 border-black transition-all flex items-center justify-center gap-2 uppercase tracking-wider ${
+          loading || !url.trim()
+            ? 'bg-gray-200 text-gray-500 border-gray-400 cursor-not-allowed shadow-none'
+            : 'bg-[#121212] hover:bg-black text-white shadow-[3px_3px_0px_#FFE600] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none cursor-pointer'
+        }`}
+      >
+        {loading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin text-[#FFE600]" />
+            <span>MENGANALISIS MEDIA...</span>
+          </>
+        ) : (
+          <>
+            <ArrowRight className="w-4 h-4 text-[#38E54D]" />
+            <span>{isMulti ? `PROSES ${links.length} MEDIA` : 'ANALYZE & DOWNLOAD'}</span>
+          </>
+        )}
+      </button>
     </div>
   );
 }

@@ -61,12 +61,19 @@ function runYtDlp(args) {
 
 async function download(requestUrl, response) {
   const sourceUrl = requestUrl.searchParams.get('url') || '';
+  const query = requestUrl.searchParams.get('query') || '';
   const format = requestUrl.searchParams.get('format');
 
-  if (!isAllowedYouTubeUrl(sourceUrl)) {
-    sendJson(response, 400, { error: 'Hanya URL YouTube HTTPS yang diizinkan.' });
+  let target = '';
+  if (query.trim()) {
+    target = `ytsearch1:${query.trim()}`;
+  } else if (isAllowedYouTubeUrl(sourceUrl)) {
+    target = sourceUrl;
+  } else {
+    sendJson(response, 400, { error: 'Hanya URL YouTube HTTPS atau query pencarian yang diizinkan.' });
     return;
   }
+
   if (!['video', 'audio'].includes(format)) {
     sendJson(response, 400, { error: 'Format unduhan harus video atau audio.' });
     return;
@@ -81,7 +88,7 @@ async function download(requestUrl, response) {
       : ['-f', 'bv*+ba/b', '--merge-output-format', 'mp4'];
 
   try {
-    await runYtDlp([...commonArgs, ...formatArgs, sourceUrl]);
+    await runYtDlp([...commonArgs, ...formatArgs, target]);
     const files = await readdir(jobDir);
     const filename = files.find((file) => !file.endsWith('.part'));
     if (!filename) throw new Error('yt-dlp tidak menghasilkan berkas unduhan.');
@@ -99,6 +106,50 @@ async function download(requestUrl, response) {
   }
 }
 
+async function inspectPlaylist(requestUrl, response) {
+  const url = requestUrl.searchParams.get('url') || '';
+  if (!isAllowedYouTubeUrl(url)) {
+    sendJson(response, 400, { error: 'Hanya URL YouTube HTTPS yang diizinkan.' });
+    return;
+  }
+
+  const child = spawn('yt-dlp', ['--flat-playlist', '--dump-single-json', '--no-warnings', url], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  child.once('close', (code) => {
+    if (code === 0) {
+      try {
+        const data = JSON.parse(stdout);
+        const entries = (data.entries || []).map((e, idx) => ({
+          id: e.id,
+          index: idx + 1,
+          title: e.title || `Track ${idx + 1}`,
+          duration: e.duration,
+          uploader: e.uploader || e.channel || data.uploader || 'YouTube',
+          url: `https://www.youtube.com/watch?v=${e.id}`,
+          cover: e.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`,
+        }));
+        sendJson(response, 200, {
+          ok: true,
+          id: data.id,
+          title: data.title || 'YouTube Playlist',
+          author: data.uploader || data.channel || 'YouTube',
+          trackCount: entries.length,
+          entries,
+        });
+      } catch (err) {
+        sendJson(response, 502, { error: 'Gagal memproses data playlist yt-dlp.' });
+      }
+    } else {
+      sendJson(response, 502, { error: stderr.slice(-500) || `yt-dlp error ${code}` });
+    }
+  });
+}
+
 export function createDownloaderServer() {
   return createServer(async (request, response) => {
     setCorsHeaders(response);
@@ -108,11 +159,24 @@ export function createDownloaderServer() {
       return;
     }
     const requestUrl = new URL(request.url || '/', `http://${HOST}:${PORT}`);
-    if (request.method === 'GET' && requestUrl.pathname === '/health') {
+    const pathname = requestUrl.pathname.replace(/^\/api\/yt-dlp/, '');
+    if (request.method === 'GET' && pathname === '/health') {
       sendJson(response, 200, { ok: true, service: 'arplication-yt-dlp' });
       return;
     }
-    if (request.method === 'GET' && requestUrl.pathname === '/download') {
+    if (request.method === 'GET' && pathname === '/playlist-inspect') {
+      try {
+        await inspectPlaylist(requestUrl, response);
+      } catch (error) {
+        if (!response.headersSent) {
+          sendJson(response, 502, { error: error.message || 'Gagal inspeksi playlist.' });
+        } else {
+          response.destroy(error);
+        }
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/download') {
       try {
         await download(requestUrl, response);
       } catch (error) {

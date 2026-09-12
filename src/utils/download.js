@@ -2,21 +2,47 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { CapacitorHttp, Capacitor } from '@capacitor/core';
 import { isNative } from '../services/http.js';
+import { sendDownloadCompleteNotification, sendDownloadErrorNotification } from './notification.js';
 
 export const DEFAULT_DOWNLOAD_SETTINGS = {
   directory: 'Downloads', // 'Downloads' | 'Documents'
-  subfolder: 'Arloader',  // e.g. 'Arloader' or ''
+  subfolder: 'Arloader/{platform}',  // Default: Otomatis pisah folder per-platform (TikTok, Spotify, YouTube, etc)
   autoShare: false,       // whether to pop up "Buka dengan / Bagikan"
   igSessionId: '',        // optional Instagram sessionid cookie
-  filenamePattern: 'title_id', // 'title_id' | 'author_title' | 'platform_title_id'
+  filenamePattern: 'title_id', // 'title_id' | 'clean_title' | 'id_only'
 };
+
+export function formatPlatformFolderName(plat) {
+  const p = String(plat || '').toLowerCase().trim();
+  switch (p) {
+    case 'youtube': return 'YouTube';
+    case 'tiktok': return 'TikTok';
+    case 'spotify': return 'Spotify';
+    case 'instagram': return 'Instagram';
+    case 'twitter':
+    case 'x': return 'Twitter';
+    case 'pinterest': return 'Pinterest';
+    case 'soundcloud': return 'SoundCloud';
+    default:
+      return p ? (p.charAt(0).toUpperCase() + p.slice(1)) : 'General';
+  }
+}
 
 export function getDownloadSettings() {
   try {
     if (typeof localStorage !== 'undefined') {
       const saved = localStorage.getItem('arloader_settings');
       if (saved) {
-        return { ...DEFAULT_DOWNLOAD_SETTINGS, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        if (
+          !parsed.subfolder ||
+          parsed.subfolder === 'Arloader' ||
+          /^Arloader\/(TikTok|Spotify|YouTube|Instagram|Twitter|Pinterest)$/i.test(parsed.subfolder)
+        ) {
+          parsed.subfolder = 'Arloader/{platform}';
+          saveDownloadSettings(parsed);
+        }
+        return { ...DEFAULT_DOWNLOAD_SETTINGS, ...parsed };
       }
     }
   } catch (e) {
@@ -164,15 +190,37 @@ export async function probeFileSize(url) {
 }
 
 /**
+ * Resolve subfolder path with automatic platform placeholder support ({platform}).
+ */
+export function resolveSubfolderPath(rawFolder, platformName = '') {
+  let str = String(rawFolder || '').trim();
+  const safePlatform = formatPlatformFolderName(platformName);
+
+  if (!str) {
+    str = 'Arloader/{platform}';
+  }
+
+  if (str.includes('{platform}')) {
+    str = str.replace(/\{platform\}/gi, safePlatform || 'General');
+  } else if (
+    /^Arloader\/(TikTok|Spotify|YouTube|Instagram|Twitter|Pinterest|Media|General)$/i.test(str) ||
+    str.toLowerCase() === 'arloader'
+  ) {
+    str = `Arloader/${safePlatform || 'General'}`;
+  }
+  return str.replace(/^\/+|\/+$/g, '');
+}
+
+/**
  * Save a text file (caption/description) next to downloads.
  */
-export async function saveTextFile({ text, filename, targetDirectory = null, subfolder = null }) {
+export async function saveTextFile({ text, filename, platform = '', targetDirectory = null, subfolder = null }) {
   if (!text) throw new Error('Teks kosong.');
   const settings = getDownloadSettings();
   const dirChoice = targetDirectory || settings.directory || 'Downloads';
   const folderChoice = subfolder !== null ? subfolder : settings.subfolder;
   const safeFilename = String(filename || 'caption.txt').replace(/[^a-zA-Z0-9._-]/g, '_');
-  const cleanSubfolder = String(folderChoice || '').trim().replace(/^\/+|\/+$/g, '');
+  const cleanSubfolder = resolveSubfolderPath(folderChoice, platform);
 
   if (isNative()) {
     const base64 = typeof Buffer !== 'undefined'
@@ -235,6 +283,7 @@ function blobToBase64(blob) {
 export async function downloadMedia({
   url,
   filename,
+  platform = '',
   onProgress,
   targetDirectory = null,
   subfolder = null,
@@ -248,7 +297,7 @@ export async function downloadMedia({
   const shouldShare = autoShare !== null ? autoShare : (settings.autoShare ?? false);
 
   const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const cleanSubfolder = String(folderChoice || '').trim().replace(/^\/+|\/+$/g, '');
+  const cleanSubfolder = resolveSubfolderPath(folderChoice, platform);
 
   // 1. Android Native Environment
   if (isNative()) {
@@ -358,10 +407,22 @@ export async function downloadMedia({
         }
       }
 
+      // Send local notification on Android
+      sendDownloadCompleteNotification({
+        title: safeFilename,
+        platform,
+        path: displayLocation,
+      });
+
       return { success: true, path: viewUri || resPath, location: displayLocation };
     } catch (nativeErr) {
       console.error('All native download methods failed:', nativeErr);
       if (onProgress) onProgress(0, 'Gagal menyimpan ke penyimpanan.');
+      sendDownloadErrorNotification({
+        title: safeFilename,
+        platform,
+        error: nativeErr?.message || '',
+      });
       throw nativeErr;
     }
   }

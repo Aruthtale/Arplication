@@ -1,34 +1,125 @@
 @import "tailwindcss";
 
 @theme {
-  --color-canvas: #0C0E13;
-  --color-surface: #111319;
-  --color-surface-card: #181B24;
-  --color-surface-hover: #222634;
-  --color-border: #262B3B;
+  --color-canvas: #F8F5EE;
+  --color-surface: #FFFFFF;
+  --color-surface-card: #FFFFFF;
+  --color-surface-hover: #F1EFE9;
+  --color-border: #121212;
   --color-coral: #FF525E;
   --color-coral-hover: #FF6E78;
-  --color-mint: #05C46B;
-  --color-mint-hover: #0BE881;
+  --color-mint: #38E54D;
+  --color-mint-hover: #05C46B;
   --color-neon-blue: #0FB9B1;
+  --color-yellow: #FFE600;
+  --color-pink: #FF70A6;
+  --color-cyan: #C4FAF8;
+  --color-purple: #A076F9;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background-color: #0C0E13;
-  color: #F3F4F6;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", -apple-system, sans-serif;
+  background-color: #F8F5EE;
+  color: #121212;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   min-height: 100dvh;
 }
 
-code, pre, .font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+::selection {
+  background-color: #FFE600;
+  color: #121212;
+}
+
+code, pre, .font-mono, .font-mono-code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Neubrutalist Shadows & Utility Classes */
+.nb-card {
+  border: 2.5px solid #121212;
+  border-radius: 18px;
+  background: #FFFFFF;
+  color: #121212;
+  box-shadow: 3.5px 3.5px 0px #121212;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nb-card:hover {
+  box-shadow: 4.5px 4.5px 0px #121212;
+  transform: translate(-1px, -1px);
+}
+
+.nb-card-static {
+  border: 2.5px solid #121212;
+  border-radius: 18px;
+  background: #FFFFFF;
+  color: #121212;
+  box-shadow: 3.5px 3.5px 0px #121212;
+}
+
+.nb-card-lg {
+  border: 3px solid #121212;
+  border-radius: 20px;
+  box-shadow: 4px 4px 0px #121212;
+}
+
+.nb-btn {
+  border: 2px solid #121212;
+  border-radius: 12px;
+  box-shadow: 2.5px 2.5px 0px #121212;
+  font-weight: 800;
+  transition: all 0.1s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nb-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3.5px 3.5px 0px #121212;
+}
+
+.nb-btn:active {
+  transform: translate(1.5px, 1.5px);
+  box-shadow: 1px 1px 0px #121212;
+}
+
+.nb-pill {
+  border: 2px solid #121212;
+  border-radius: 999px;
+  box-shadow: 2px 2px 0px #121212;
+}
+
+.nb-badge {
+  border: 1.5px solid #121212;
+  border-radius: 8px;
+  box-shadow: 1.5px 1.5px 0px #121212;
+}
+
+.border-neo {
+  border: 2px solid #121212;
+}
+
+.shadow-neo {
+  box-shadow: 3px 3px 0px #121212;
+}
+
+.shadow-neo-sm {
+  box-shadow: 1.5px 1.5px 0px #121212;
+}
+
+.shadow-neo-lg {
+  box-shadow: 5px 5px 0px #121212;
+}
+
+.shadow-neo-pressed {
+  box-shadow: 1px 1px 0px #121212;
+  transform: translate(2px, 2px);
 }

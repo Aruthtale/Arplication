@@ -71,6 +71,7 @@ export default defineConfig({
       '/api/yt-dlp': {
         target: 'http://127.0.0.1:8787',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/yt-dlp/, ''),
       },
       '/__pinimg': {
         target: 'https://i.pinimg.com',

@@ -51,3 +51,6 @@ export async function resolveMediaUrl(url) {
     'Unsupported platform URL. Currently Arloader supports TikTok, YouTube, Instagram, Spotify, X (Twitter), and Pinterest links.'
   );
 }
+
+export const scrapeMedia = resolveMediaUrl;
+export default resolveMediaUrl;
