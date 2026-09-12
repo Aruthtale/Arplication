@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, CheckCircle2, Music, Video, Image as ImageIcon, Loader2, Share2, ExternalLink } from 'lucide-react';
+import { Download, Music, Video, Image as ImageIcon, Loader2, ExternalLink } from 'lucide-react';
 import { downloadMedia } from '../../../utils/download.js';
 
 export default function MediaCard({ media }) {
@@ -45,7 +45,20 @@ export default function MediaCard({ media }) {
     }
   };
 
-  const isTikTok = media.platform === 'tiktok';
+  const getPlatformBadgeClass = (platform) => {
+    switch (platform) {
+      case 'tiktok':
+        return 'bg-black/80 text-[#05C46B] border border-[#05C46B]/40';
+      case 'youtube':
+        return 'bg-black/80 text-[#FF525E] border border-[#FF525E]/40';
+      case 'x':
+        return 'bg-black/80 text-[#38BDF8] border border-[#38BDF8]/40';
+      case 'pinterest':
+        return 'bg-black/80 text-[#E11D48] border border-[#E11D48]/40';
+      default:
+        return 'bg-black/80 text-gray-300 border border-[#262B3B]';
+    }
+  };
 
   return (
     <div className="rounded-2xl border border-[#262B3B] bg-[#111319] overflow-hidden shadow-xl shadow-black/50 transition-all">
@@ -61,11 +74,9 @@ export default function MediaCard({ media }) {
               loading="lazy"
             />
             <span
-              className={`absolute top-2 left-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                isTikTok
-                  ? 'bg-black/80 text-[#05C46B] border border-[#05C46B]/40'
-                  : 'bg-black/80 text-[#FF525E] border border-[#FF525E]/40'
-              }`}
+              className={`absolute top-2 left-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${getPlatformBadgeClass(
+                media.platform
+              )}`}
             >
               {media.platform}
             </span>

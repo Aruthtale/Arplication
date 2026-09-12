@@ -24,7 +24,7 @@ export default function UrlInput({ url, setUrl, onFetch, loading }) {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Paste TikTok or YouTube video link here..."
+          placeholder="Paste TikTok, YouTube, X, or Pinterest link here..."
           className="w-full bg-[#111319] border border-[#262B3B] focus:border-[#05C46B] focus:ring-2 focus:ring-[#05C46B]/20 text-white placeholder-gray-500 rounded-xl py-3.5 pl-4 pr-28 text-sm outline-none transition-all font-sans"
         />
 
@@ -52,11 +52,15 @@ export default function UrlInput({ url, setUrl, onFetch, loading }) {
       </div>
 
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[11px] text-gray-500">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] text-gray-500">
           <span>Supported:</span>
           <span className="font-mono text-gray-400">TikTok</span>
           <span>•</span>
           <span className="font-mono text-gray-400">YouTube</span>
+          <span>•</span>
+          <span className="font-mono text-gray-400">X (Twitter)</span>
+          <span>•</span>
+          <span className="font-mono text-gray-400">Pinterest</span>
         </div>
 
         <button

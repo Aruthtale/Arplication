@@ -94,7 +94,7 @@ export default function ArloaderModule({ setActiveTab }) {
               Arloader Media Downloader
             </h2>
             <p className="text-xs text-gray-400">
-              Download TikTok HD (no watermark) and YouTube (MP4 & MP3)
+              Download TikTok HD (no watermark), YouTube (MP4 & MP3), X posts, and Pinterest Pins
             </p>
           </div>
         </div>
