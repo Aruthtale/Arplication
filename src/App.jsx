@@ -4,7 +4,7 @@ import BottomNav from './components/layout/BottomNav';
 import HomeHub from './components/modules/HomeHub';
 import ArloaderModule from './components/modules/arloader/ArloaderModule';
 import ArdoroPlaceholder from './components/modules/ArdoroPlaceholder';
-import ArNotePlaceholder from './components/modules/ArNotePlaceholder';
+import ArNoteModule from './components/modules/arnote/ArNoteModule';
 import AruthtaleInfo from './components/modules/AruthtaleInfo';
 
 export default function App() {
@@ -15,12 +15,12 @@ export default function App() {
       {/* Top Neubrutalist Header */}
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Main View Area */}
-      <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-4 pt-3 sm:pt-5 pb-24">
+      {/* Main View Area with comfortable safe margins from screen edge */}
+      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 pt-3.5 sm:pt-6 pb-28">
         {activeTab === 'home' && <HomeHub setActiveTab={setActiveTab} />}
         {activeTab === 'arloader' && <ArloaderModule setActiveTab={setActiveTab} />}
         {activeTab === 'ardoro' && <ArdoroPlaceholder setActiveTab={setActiveTab} />}
-        {activeTab === 'arnote' && <ArNotePlaceholder setActiveTab={setActiveTab} />}
+        {activeTab === 'arnote' && <ArNoteModule setActiveTab={setActiveTab} />}
         {activeTab === 'aruthtale' && <AruthtaleInfo setActiveTab={setActiveTab} />}
       </main>
 

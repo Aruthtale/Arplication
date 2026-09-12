@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
-  Download, Timer, FileText, Info, ArrowRight, Shield, Zap, Sparkles, 
-  CheckCircle2, Music, Video, HardDrive, Smartphone, Radio, Layers
+  Download, Timer, FileText, Info, ArrowRight, Zap, Sparkles, 
+  Layers, Smartphone, CheckCircle2
 } from 'lucide-react';
 
 export default function HomeHub({ setActiveTab }) {
@@ -9,180 +9,162 @@ export default function HomeHub({ setActiveTab }) {
     {
       id: 'arloader',
       title: 'Arloader',
-      subtitle: 'Universal Media Downloader',
-      description: 'Unduh video HD tanpa watermark & audio full MP3 dari YouTube, Spotify, TikTok, Instagram & SoundCloud.',
+      tagline: 'Media Downloader',
+      description: 'Unduh video & audio MP3 dari YouTube, Spotify, TikTok, & IG.',
       iconUrl: '/arloader.png',
       status: 'Aktif',
-      statusBg: 'bg-[#38E54D]',
-      cardBg: 'bg-white hover:bg-yellow-50/50',
-      iconBg: 'bg-[#38E54D]',
-      actionLabel: 'Buka Downloader',
+      statusColor: 'bg-[#38E54D]',
+      cardBg: 'bg-[#FFFFFF]',
+      accentColor: '#38E54D',
+      badgeBg: 'bg-[#38E54D]',
+      actionLabel: 'Buka',
+      isReady: true,
+    },
+    {
+      id: 'arnote',
+      title: 'ArNote',
+      tagline: 'Bento Notes & Widget',
+      description: 'Catatan offline-first, checklist interaktif, & widget homescreen.',
+      iconUrl: '/arnote.png',
+      status: 'Aktif',
+      statusColor: 'bg-[#FFE600]',
+      cardBg: 'bg-[#FFFFFF]',
+      accentColor: '#FFE600',
+      badgeBg: 'bg-[#FFE600]',
+      actionLabel: 'Buka',
       isReady: true,
     },
     {
       id: 'ardoro',
       title: 'Ardoro',
-      subtitle: 'Focus & Pomodoro Timer',
-      description: 'Timer produktivitas & Pomodoro untuk menemani sesi belajar dan kerja mendalam dengan interval fleksibel.',
+      tagline: 'Focus & Pomodoro',
+      description: 'Timer produktivitas untuk sesi belajar & kerja mendalam.',
       iconUrl: '/ardoro.png',
-      status: 'Segera Hadir',
-      statusBg: 'bg-[#FF70A6]',
-      cardBg: 'bg-white hover:bg-pink-50/50',
-      iconBg: 'bg-[#FF70A6]',
-      actionLabel: 'Lihat Konsep',
-      isReady: false,
-    },
-    {
-      id: 'arnote',
-      title: 'ArNote',
-      subtitle: 'Markdown Scratchpad',
-      description: 'Catatan cepat dengan format Markdown untuk merapikan ide, draf teks, dan daftar tugas harian.',
-      iconUrl: '/arnote.png',
-      status: 'Segera Hadir',
-      statusBg: 'bg-[#C4FAF8]',
-      cardBg: 'bg-white hover:bg-cyan-50/50',
-      iconBg: 'bg-[#C4FAF8]',
-      actionLabel: 'Lihat Konsep',
+      status: 'Segera',
+      statusColor: 'bg-[#FF70A6]',
+      cardBg: 'bg-[#FFFFFF]',
+      accentColor: '#FF70A6',
+      badgeBg: 'bg-[#FF70A6]',
+      actionLabel: 'Konsep',
       isReady: false,
     },
     {
       id: 'aruthtale',
       title: 'Aruthtale',
-      subtitle: 'Informasi & Pengembang',
-      description: 'Informasi rilis, profil pengembang Aruthtale, dan status modul di dalam aplikasi.',
+      tagline: 'Info & Diagnostik',
+      description: 'Status sistem, diagnostik perangkat, & info versi studio.',
       iconUrl: '/logo.png',
       status: 'Siap',
-      statusBg: 'bg-[#A076F9]',
-      cardBg: 'bg-white hover:bg-purple-50/50',
-      iconBg: 'bg-[#A076F9]',
-      actionLabel: 'Lihat Informasi',
+      statusColor: 'bg-[#A076F9]',
+      cardBg: 'bg-[#FFFFFF]',
+      accentColor: '#A076F9',
+      badgeBg: 'bg-[#A076F9]',
+      actionLabel: 'Lihat',
       isReady: true,
     },
   ];
 
   return (
-    <div className="space-y-4 font-sans">
-      {/* Hero Welcome Bento Banner */}
-      <div className="nb-card p-5 sm:p-6 bg-[#FFE600] space-y-4 shadow-[4px_4px_0px_#121212]">
+    <div className="space-y-3.5 sm:space-y-5 font-sans">
+      {/* Hero Welcome Banner */}
+      <div className="p-4 sm:p-5 bg-[#FFE600] rounded-2xl border-[2.5px] border-[#121212] shadow-[4px_4px_0px_#121212] space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border-2 border-[#121212] shadow-[1.5px_1.5px_0px_#121212]">
-            <img src="/logo.png" alt="Aruthtale Emblem" className="w-4 h-4 rounded-full object-contain" />
-            <span className="text-[11px] font-mono-code font-black uppercase tracking-wider text-[#121212]">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border-2 border-[#121212] shadow-[1.5px_1.5px_0px_#121212]">
+            <img src="/logo.png" alt="Aruthtale Emblem" className="w-3.5 h-3.5 object-contain" />
+            <span className="text-[10px] font-mono-code font-black uppercase tracking-wider text-[#121212]">
               ARUTHTALE STUDIO
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 font-mono-code text-[10px] font-black bg-white px-2.5 py-0.5 rounded-md border border-[#121212] shadow-[1px_1px_0px_#121212]">
-            <span className="w-2 h-2 rounded-full bg-[#38E54D] border border-black animate-pulse" />
-            <span>VERSI v0.2.0</span>
+          <div className="flex items-center gap-1.5 font-mono-code text-[10px] font-black bg-white px-2 py-0.5 rounded-md border border-[#121212] shadow-[1px_1px_0px_#121212]">
+            <span className="w-2 h-2 rounded-full bg-[#38E54D] border border-[#121212] animate-pulse" />
+            <span>v0.2.2 BETA</span>
           </div>
         </div>
 
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#121212] uppercase leading-tight">
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#121212] uppercase leading-tight">
             Ruang Utilitas Terpadu
           </h1>
-          <p className="text-xs sm:text-sm font-bold text-gray-800 max-w-xl leading-relaxed mt-1">
-            Kumpulan alat produktivitas harian untuk pengunduhan media, manajemen sesi fokus, dan pencatatan ide dalam satu aplikasi yang cepat dan nyaman.
+          <p className="text-xs font-bold text-gray-800 leading-relaxed mt-1">
+            Utilitas harian offline-first: pengunduh media, pencatatan bento dengan widget homescreen, dan fokus timer.
           </p>
         </div>
 
-        {/* Feature Highlights Pills */}
-        <div className="flex flex-wrap gap-2 pt-1 text-xs font-mono-code font-bold">
-          <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212]">
-            <Zap className="w-3.5 h-3.5 text-[#121212]" />
-            <span>Cepat & Ringan</span>
+        {/* Feature Pills */}
+        <div className="flex flex-wrap gap-1.5 pt-1 text-[11px] font-mono-code font-bold">
+          <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-[#121212] shadow-[1.5px_1.5px_0px_#121212]">
+            <Zap className="w-3 h-3 text-[#121212]" />
+            <span>Cepat & Hemat</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#C4FAF8] px-3 py-1.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212]">
-            <Layers className="w-3.5 h-3.5 text-[#121212]" />
-            <span>Dukungan Multi-Format</span>
+          <div className="flex items-center gap-1 bg-[#C4FAF8] px-2.5 py-1 rounded-lg border border-[#121212] shadow-[1.5px_1.5px_0px_#121212]">
+            <Layers className="w-3 h-3 text-[#121212]" />
+            <span>Widget Native</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#38E54D] px-3 py-1.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212]">
-            <Smartphone className="w-3.5 h-3.5 text-[#121212]" />
-            <span>Android & Web</span>
+          <div className="flex items-center gap-1 bg-[#38E54D] px-2.5 py-1 rounded-lg border border-[#121212] shadow-[1.5px_1.5px_0px_#121212]">
+            <Smartphone className="w-3 h-3 text-[#121212]" />
+            <span>100% Offline</span>
           </div>
         </div>
       </div>
 
-      {/* Quick Launch Arloader Callout */}
-      <div 
-        onClick={() => setActiveTab('arloader')}
-        className="nb-card p-4 bg-[#38E54D] flex items-center justify-between cursor-pointer group shadow-[3.5px_3.5px_0px_#121212]"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white border-2 border-[#121212] flex items-center justify-center shadow-[2px_2px_0px_#121212] group-hover:scale-105 transition-transform overflow-hidden p-1">
-            <img src="/arloader.png" alt="Arloader Emblem" className="w-full h-full object-contain" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-sm sm:text-base uppercase tracking-tight text-[#121212]">
-                Arloader Downloader
-              </span>
-              <span className="text-[9px] font-mono-code font-black bg-white px-1.5 py-0.5 rounded border border-black shadow-[1px_1px_0px_#121212]">
-                POPULER
-              </span>
-            </div>
-            <p className="text-[11px] font-bold text-gray-800">
-              Unduh Spotify full MP3 & Playlist, YouTube Video/Audio, TikTok & Instagram
-            </p>
-          </div>
-        </div>
-        <div className="w-8 h-8 rounded-xl bg-white border-2 border-[#121212] flex items-center justify-center shadow-[2px_2px_0px_#121212] group-hover:translate-x-1 transition-transform">
-          <ArrowRight className="w-4 h-4 text-[#121212]" />
-        </div>
-      </div>
-
-      {/* Modules Grid Section */}
-      <div className="space-y-3 pt-2">
+      {/* Modules Bento Grid (1 baris = 2 kotak di mobile!) */}
+      <div className="space-y-2.5 pt-1">
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-sm font-black uppercase tracking-wider text-[#121212] flex items-center gap-2">
+          <h2 className="text-xs font-black uppercase tracking-wider text-[#121212] flex items-center gap-1.5">
             <span>DAFTAR MODUL APLIKASI</span>
           </h2>
-          <span className="text-[10px] font-mono-code font-black bg-white px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#121212]">
+          <span className="text-[9.5px] font-mono-code font-black bg-white px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#121212]">
             4 MODUL
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          {modules.map((mod) => {
-            return (
-              <div
-                key={mod.id}
-                onClick={() => setActiveTab(mod.id)}
-                className={`nb-card p-4.5 flex flex-col justify-between cursor-pointer group transition-all ${mod.cardBg}`}
-              >
-                <div>
-                  <div className="flex items-start justify-between mb-3">
-                    <div className={`w-10 h-10 rounded-xl ${mod.iconBg} border-2 border-[#121212] flex items-center justify-center shadow-[2px_2px_0px_#121212] group-hover:scale-105 transition-transform overflow-hidden p-1`}>
-                      <img src={mod.iconUrl} alt={mod.title} className="w-full h-full object-contain" />
-                    </div>
-                    <span className={`text-[10px] font-mono-code font-black px-2.5 py-0.5 rounded-full border-2 border-[#121212] shadow-[1.5px_1.5px_0px_#121212] ${mod.statusBg} text-[#121212]`}>
-                      {mod.status}
-                    </span>
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
+          {modules.map((mod) => (
+            <div
+              key={mod.id}
+              onClick={() => setActiveTab(mod.id)}
+              className={`p-3 sm:p-4 rounded-xl border-2 border-[#121212] shadow-[3px_3px_0px_#121212] hover:shadow-[4px_4px_0px_#121212] hover:-translate-y-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0px_#121212] transition-all flex flex-col justify-between cursor-pointer select-none ${mod.cardBg}`}
+            >
+              <div>
+                {/* Icon & Status Pill */}
+                <div className="flex items-start justify-between gap-1.5 mb-2">
+                  <div
+                    className="w-9 h-9 rounded-xl border-2 border-[#121212] flex items-center justify-center shadow-[1.5px_1.5px_0px_#121212] overflow-hidden p-1 shrink-0"
+                    style={{ backgroundColor: mod.accentColor }}
+                  >
+                    <img src={mod.iconUrl} alt={mod.title} className="w-full h-full object-contain" />
                   </div>
 
-                  <h3 className="font-black text-base text-[#121212] uppercase tracking-tight">
-                    {mod.title}
-                  </h3>
-                  <p className="text-[11px] font-mono-code font-bold text-gray-600 mb-2">
-                    {mod.subtitle}
-                  </p>
-                  <p className="text-xs font-semibold text-gray-700 leading-relaxed line-clamp-2">
-                    {mod.description}
-                  </p>
+                  <span className={`text-[9px] font-mono-code font-black px-2 py-0.5 rounded-md border border-[#121212] shadow-[1px_1px_0px_#121212] ${mod.statusColor} text-[#121212] shrink-0`}>
+                    {mod.status}
+                  </span>
                 </div>
 
-                <div className="mt-4 pt-3 border-t-2 border-[#121212]/20 flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-wider text-[#121212] group-hover:underline">
-                    {mod.actionLabel}
-                  </span>
-                  <div className="w-6 h-6 rounded-lg bg-[#FFE600] border border-[#121212] flex items-center justify-center shadow-[1px_1px_0px_#121212] group-hover:translate-x-0.5 transition-transform">
-                    <ArrowRight className="w-3.5 h-3.5 text-[#121212]" />
-                  </div>
+                <h3 className="font-black text-sm sm:text-base text-[#121212] uppercase tracking-tight leading-tight">
+                  {mod.title}
+                </h3>
+                <p className="text-[10px] font-mono-code font-bold text-gray-500 mb-1 truncate">
+                  {mod.tagline}
+                </p>
+                <p className="text-[11px] font-medium text-gray-700 leading-snug line-clamp-2">
+                  {mod.description}
+                </p>
+              </div>
+
+              <div className="mt-3 pt-2 border-t border-[#121212]/15 flex items-center justify-between">
+                <span className="text-[10.5px] font-black uppercase tracking-wider text-[#121212]">
+                  {mod.actionLabel}
+                </span>
+                <div
+                  className="w-5 h-5 rounded-md border border-[#121212] flex items-center justify-center shadow-[1px_1px_0px_#121212]"
+                  style={{ backgroundColor: mod.accentColor }}
+                >
+                  <ArrowRight className="w-3 h-3 text-[#121212]" />
                 </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
     </div>
