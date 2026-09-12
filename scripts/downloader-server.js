@@ -63,6 +63,7 @@ async function download(requestUrl, response) {
   const sourceUrl = requestUrl.searchParams.get('url') || '';
   const query = requestUrl.searchParams.get('query') || '';
   const format = requestUrl.searchParams.get('format');
+  const quality = requestUrl.searchParams.get('quality') || '';
 
   let target = '';
   if (query.trim()) {
@@ -82,10 +83,19 @@ async function download(requestUrl, response) {
   const jobDir = await mkdtemp(join(tmpdir(), 'arplication-yt-'));
   const outputTemplate = join(jobDir, '%(title).120B-%(id)s.%(ext)s');
   const commonArgs = ['--no-playlist', '--no-warnings', '--restrict-filenames', '-o', outputTemplate];
-  const formatArgs =
-    format === 'audio'
-      ? ['-x', '--audio-format', 'mp3']
-      : ['-f', 'bv*+ba/b', '--merge-output-format', 'mp4'];
+  
+  let formatArgs = [];
+  if (format === 'audio') {
+    const kbps = quality.replace(/[^0-9]/g, '');
+    formatArgs = ['-x', '--audio-format', 'mp3', '--audio-quality', kbps ? `${kbps}K` : '0'];
+  } else {
+    const height = quality.replace(/[^0-9]/g, '');
+    if (height) {
+      formatArgs = ['-f', `bv*[height<=${height}]+ba/b[height<=${height}]/b`, '--merge-output-format', 'mp4'];
+    } else {
+      formatArgs = ['-f', 'bv*+ba/b', '--merge-output-format', 'mp4'];
+    }
+  }
 
   try {
     await runYtDlp([...commonArgs, ...formatArgs, target]);

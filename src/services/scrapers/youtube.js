@@ -1,7 +1,8 @@
 import { httpClient, isLocalWeb } from '../http.js';
 
-function createLocalDownloadUrl(url, format) {
+function createLocalDownloadUrl(url, format, quality = '') {
   const params = new URLSearchParams({ url, format });
+  if (quality) params.set('quality', quality);
   return `http://127.0.0.1:8787/download?${params.toString()}`;
 }
 
@@ -184,6 +185,154 @@ export async function scrapeYouTubePlaylist(url = '') {
   };
 }
 
+function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aData, isLocal }) {
+  const thumbHq = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  const thumbSd = `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`;
+
+  const mp4Options = [
+    {
+      id: 'yt-video-1080p',
+      category: 'mp4',
+      label: 'Full HD (1080p)',
+      ext: 'mp4',
+      type: 'video',
+      resolution: '1080p',
+      quality: 'Full HD • Kualitas Terbaik',
+      estimatedSize: '~ 48.5 MB',
+      bytes: 50855936,
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '1080p') : (vData?.downloadURL || null),
+    },
+    {
+      id: 'yt-video-720p',
+      category: 'mp4',
+      label: 'HD (720p)',
+      ext: 'mp4',
+      type: 'video',
+      resolution: '720p',
+      quality: 'HD • Standar Seimbang',
+      estimatedSize: '~ 26.2 MB',
+      bytes: 27472691,
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '720p') : (vData?.downloadURL || null),
+    },
+    {
+      id: 'yt-video-480p',
+      category: 'mp4',
+      label: 'SD (480p)',
+      ext: 'mp4',
+      type: 'video',
+      resolution: '480p',
+      quality: 'SD • Hemat Kuota',
+      estimatedSize: '~ 14.8 MB',
+      bytes: 15518924,
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '480p') : (vData?.downloadURL || null),
+    },
+    {
+      id: 'yt-video-360p',
+      category: 'mp4',
+      label: 'Mobile (360p)',
+      ext: 'mp4',
+      type: 'video',
+      resolution: '360p',
+      quality: 'Low • Sangat Hemat',
+      estimatedSize: '~ 8.1 MB',
+      bytes: 8493465,
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '360p') : (vData?.downloadURL || null),
+    },
+  ];
+
+  const mp3Options = [
+    {
+      id: 'yt-audio-320k',
+      category: 'mp3',
+      label: 'Audio HD (320 kbps)',
+      ext: 'mp3',
+      type: 'audio',
+      resolution: '320 kbps',
+      quality: 'Audio HD • Suara Jernih Maksimal',
+      estimatedSize: '~ 8.5 MB',
+      bytes: 8912896,
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '320k') : (aData?.downloadURL || null),
+    },
+    {
+      id: 'yt-audio-256k',
+      category: 'mp3',
+      label: 'Audio Tinggi (256 kbps)',
+      ext: 'mp3',
+      type: 'audio',
+      resolution: '256 kbps',
+      quality: 'Audio High • Suara Jernih',
+      estimatedSize: '~ 6.8 MB',
+      bytes: 7130316,
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '256k') : (aData?.downloadURL || null),
+    },
+    {
+      id: 'yt-audio-192k',
+      category: 'mp3',
+      label: 'Audio Sedang (192 kbps)',
+      ext: 'mp3',
+      type: 'audio',
+      resolution: '192 kbps',
+      quality: 'Audio Medium • Standar Musik',
+      estimatedSize: '~ 5.1 MB',
+      bytes: 5347737,
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '192k') : (aData?.downloadURL || null),
+    },
+    {
+      id: 'yt-audio-128k',
+      category: 'mp3',
+      label: 'Audio Hemat (128 kbps)',
+      ext: 'mp3',
+      type: 'audio',
+      resolution: '128 kbps',
+      quality: 'Audio Low • Ukuran Ringan',
+      estimatedSize: '~ 3.4 MB',
+      bytes: 3565158,
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '128k') : (aData?.downloadURL || null),
+    },
+  ];
+
+  const imgOptions = [
+    {
+      id: 'yt-img-maxres',
+      category: 'img',
+      label: 'Sampul HD MaxRes (1080p)',
+      ext: 'jpg',
+      type: 'image',
+      resolution: '1080p',
+      quality: 'Gambar Sampul Resolusi Maksimal',
+      estimatedSize: '~ 380 KB',
+      bytes: 389120,
+      url: maxThumbUrl,
+    },
+    {
+      id: 'yt-img-hq',
+      category: 'img',
+      label: 'Sampul HQ (480p)',
+      ext: 'jpg',
+      type: 'image',
+      resolution: '480p',
+      quality: 'Gambar Sampul Kualitas Tinggi',
+      estimatedSize: '~ 120 KB',
+      bytes: 122880,
+      url: thumbHq,
+    },
+    {
+      id: 'yt-img-sd',
+      category: 'img',
+      label: 'Sampul Standar (360p)',
+      ext: 'jpg',
+      type: 'image',
+      resolution: '360p',
+      quality: 'Gambar Sampul Hemat Kuota',
+      estimatedSize: '~ 45 KB',
+      bytes: 46080,
+      url: thumbSd,
+    },
+  ];
+
+  return [...mp4Options, ...mp3Options, ...imgOptions];
+}
+
 /**
  * Resolves YouTube video or playlist metadata and download links
  */
@@ -215,32 +364,7 @@ export async function scrapeYouTube(url = '') {
         avatar: null,
       },
       duration: null,
-      options: [
-        {
-          id: 'yt-video-mp4',
-          label: 'Video MP4',
-          ext: 'mp4',
-          type: 'video',
-          url: createLocalDownloadUrl(cleanUrl, 'video'),
-          quality: 'Best available',
-        },
-        {
-          id: 'yt-audio-mp3',
-          label: 'Audio MP3',
-          ext: 'mp3',
-          type: 'audio',
-          url: createLocalDownloadUrl(cleanUrl, 'audio'),
-          quality: 'Best available',
-        },
-        {
-          id: 'yt-thumbnail',
-          label: 'High-Res Thumbnail',
-          ext: 'jpg',
-          type: 'image',
-          url: maxThumbUrl,
-          quality: '1080p Image',
-        },
-      ],
+      options: buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, isLocal: true }),
     };
   }
 
@@ -284,39 +408,13 @@ export async function scrapeYouTube(url = '') {
   const aData = audioConv.status === 'fulfilled' ? audioConv.value : null;
 
   const title = vData?.title || aData?.title || `YouTube Video (${videoId})`;
-  const downloadOptions = [];
-
-  if (vData && vData.downloadURL) {
-    downloadOptions.push({
-      id: 'yt-video-mp4',
-      label: 'Video MP4 (720p)',
-      ext: 'mp4',
-      type: 'video',
-      url: vData.downloadURL,
-      quality: 'HD 720p',
-      progressUrl: vData.progressURL,
-    });
-  }
-
-  if (aData && aData.downloadURL) {
-    downloadOptions.push({
-      id: 'yt-audio-mp3',
-      label: 'Audio MP3 (128kbps)',
-      ext: 'mp3',
-      type: 'audio',
-      url: aData.downloadURL,
-      quality: 'Stereo Audio',
-      progressUrl: aData.progressURL,
-    });
-  }
-
-  downloadOptions.push({
-    id: 'yt-thumbnail',
-    label: 'High-Res Thumbnail',
-    ext: 'jpg',
-    type: 'image',
-    url: maxThumbUrl,
-    quality: '1080p Image',
+  const downloadOptions = buildYouTubeDownloadOptions({
+    cleanUrl,
+    videoId,
+    maxThumbUrl,
+    vData,
+    aData,
+    isLocal: false,
   });
 
   return {

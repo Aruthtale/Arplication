@@ -20,6 +20,7 @@ export default function MediaCard({ media, onDownloadComplete }) {
   const [batch, setBatch] = useState(null); // { done, total, currentTitle }
   const [sizes, setSizes] = useState({});
   const [captionSaved, setCaptionSaved] = useState(false);
+  const [ytCategory, setYtCategory] = useState('mp4'); // mp4 | mp3 | img
   
   // Audio preview playback state for tracks
   const [playingTrackId, setPlayingTrackId] = useState(null);
@@ -29,11 +30,15 @@ export default function MediaCard({ media, onDownloadComplete }) {
   useEffect(() => {
     setSizes({});
     setCaptionSaved(false);
+    setYtCategory('mp4');
     if (!media?.options?.length) return;
     let cancelled = false;
     (async () => {
       const entries = await Promise.all(
         media.options.map(async (opt) => {
+          // Prefer backend-provided estimate; only probe when no size info exists.
+          if (opt.bytes) return [opt.id, opt.bytes];
+          if (opt.estimatedSize) return [opt.id, null];
           if (!opt.url) return [opt.id, null];
           try {
             const bytes = await probeFileSize(opt.url);
@@ -393,6 +398,26 @@ export default function MediaCard({ media, onDownloadComplete }) {
 
   const badge = getPlatformBadge(media.platform);
 
+  // YouTube: group options by category (mp4 | mp3 | img) for tabbed picking.
+  const isYouTubeOptions =
+    media.platform === 'youtube' && (media.options || []).some((o) => o.category);
+  const ytCounts = isYouTubeOptions
+    ? {
+        mp4: media.options.filter((o) => o.category === 'mp4').length,
+        mp3: media.options.filter((o) => o.category === 'mp3').length,
+        img: media.options.filter((o) => o.category === 'img').length,
+      }
+    : { mp4: 0, mp3: 0, img: 0 };
+  const visibleOptions = isYouTubeOptions
+    ? media.options.filter((o) => (o.category || 'mp4') === ytCategory)
+    : media.options;
+
+  const displaySize = (option) => {
+    if (sizes[option.id]) return formatFileSize(sizes[option.id]);
+    if (option.estimatedSize) return option.estimatedSize;
+    return null;
+  };
+
   return (
     <div className="space-y-3 font-sans">
       <audio ref={audioRef} onEnded={() => setPlayingTrackId(null)} className="hidden" />
@@ -620,11 +645,11 @@ export default function MediaCard({ media, onDownloadComplete }) {
         ) : (
           /* CASE 2: SINGLE MEDIA AVAILABLE FORMATS */
           <div className="p-4 sm:p-5 bg-[#F8F5EE] space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h4 className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider">
-                PILIHAN FORMAT ({media.options?.length || 0})
+                {isYouTubeOptions ? 'PILIH FORMAT' : `PILIHAN FORMAT (${media.options?.length || 0})`}
               </h4>
-              {media.options?.length > 1 && (
+              {!isYouTubeOptions && media.options?.length > 1 && (
                 <button
                   onClick={handleDownloadAll}
                   disabled={!!batch || !!downloadingId}
@@ -636,8 +661,43 @@ export default function MediaCard({ media, onDownloadComplete }) {
               )}
             </div>
 
+            {isYouTubeOptions && (
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => setYtCategory('mp4')}
+                  className={`nb-btn px-2 py-2 text-xs flex items-center justify-center gap-1.5 ${
+                    ytCategory === 'mp4' ? 'bg-[#FF525E] text-white' : 'bg-white text-black'
+                  }`}
+                >
+                  <Video className="w-4 h-4" />
+                  <span className="font-black">MP4</span>
+                  <span className="font-mono-code text-[10px] opacity-80">{ytCounts.mp4}</span>
+                </button>
+                <button
+                  onClick={() => setYtCategory('mp3')}
+                  className={`nb-btn px-2 py-2 text-xs flex items-center justify-center gap-1.5 ${
+                    ytCategory === 'mp3' ? 'bg-[#1DB954] text-white' : 'bg-white text-black'
+                  }`}
+                >
+                  <Music className="w-4 h-4" />
+                  <span className="font-black">MP3</span>
+                  <span className="font-mono-code text-[10px] opacity-80">{ytCounts.mp3}</span>
+                </button>
+                <button
+                  onClick={() => setYtCategory('img')}
+                  className={`nb-btn px-2 py-2 text-xs flex items-center justify-center gap-1.5 ${
+                    ytCategory === 'img' ? 'bg-[#4D96FF] text-white' : 'bg-white text-black'
+                  }`}
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  <span className="font-black">IMG</span>
+                  <span className="font-mono-code text-[10px] opacity-80">{ytCounts.img}</span>
+                </button>
+              </div>
+            )}
+
             <div className="space-y-2.5">
-              {media.options?.map((option) => {
+              {visibleOptions?.map((option) => {
                 const isCurrent = downloadingId === option.id;
                 const currentDownload = downloadState[option.id];
 
@@ -656,9 +716,14 @@ export default function MediaCard({ media, onDownloadComplete }) {
                           <span className="text-[10px] font-mono-code font-bold px-1.5 py-0.2 rounded bg-[#F8F5EE] text-black border border-black uppercase">
                             {option.ext}
                           </span>
-                          {sizes[option.id] ? (
+                          {option.resolution && (
+                            <span className="text-[10px] font-mono-code font-black px-1.5 py-0.2 rounded bg-[#FFE600] text-black border border-black">
+                              {option.resolution}
+                            </span>
+                          )}
+                          {displaySize(option) ? (
                             <span className="text-[10px] font-mono-code font-black px-1.5 py-0.2 rounded bg-[#38E54D]/30 text-emerald-800 border border-black">
-                              {formatFileSize(sizes[option.id])}
+                              {displaySize(option)}
                             </span>
                           ) : null}
                         </div>
