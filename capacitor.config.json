@@ -1,0 +1,13 @@
+{
+  "appId": "com.aruthtale.arplication",
+  "appName": "Arplication",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
