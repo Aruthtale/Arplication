@@ -4,6 +4,24 @@ const SPOTIFY_URL_PATTERN = /(?:https?:\/\/)?open\.spotify\.com\/(track|album|pl
 const SPOTIFY_LINK_PATTERN = /(?:https?:\/\/)?spotify\.link\/([a-zA-Z0-9]+)/i;
 
 /**
+ * Checks if current environment is local web browser (Vite dev server)
+ */
+function isLocalWeb() {
+  return typeof window !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+}
+
+/**
+ * Gets the proxy or direct URL for Spotify embed page
+ */
+export function getSpotifyEmbedUrl(type, id) {
+  const path = `/embed/${type}/${id}`;
+  if (isLocalWeb()) {
+    return `/__spotify${path}`;
+  }
+  return `https://open.spotify.com${path}`;
+}
+
+/**
  * Checks if a string is a valid Spotify URL
  */
 export function isSpotifyUrl(url = '') {
@@ -144,13 +162,12 @@ export async function scrapeSpotify(url = '') {
   }
 
   // Step 1: Request Spotify Embed page (contains full __NEXT_DATA__ + audio preview URL)
-  const embedUrl = `https://open.spotify.com/embed/${details.type}/${details.id}`;
+  const embedUrl = getSpotifyEmbedUrl(details.type, details.id);
 
   try {
     const embedRes = await httpClient({
       url: embedUrl,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       raw: true,

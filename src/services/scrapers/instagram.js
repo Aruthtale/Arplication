@@ -4,6 +4,34 @@ const IG_URL_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)
 const IG_SHARE_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/share\/(?:reel|p)\/([A-Za-z0-9_-]+)/i;
 
 /**
+ * Checks if current environment is local web browser (Vite dev server)
+ */
+function isLocalWeb() {
+  return typeof window !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+}
+
+/**
+ * Gets the proxy or direct URL for an Instagram path
+ */
+export function getInstagramPageUrl(shortcode, embed = false) {
+  const path = embed ? `/p/${shortcode}/embed/captioned/` : `/p/${shortcode}/`;
+  if (isLocalWeb()) {
+    return `/__instagram${path}`;
+  }
+  return `https://www.instagram.com${path}`;
+}
+
+/**
+ * Gets the FastDL endpoint (proxy in local web, direct in native/production)
+ */
+export function getFastDlApiUrl() {
+  if (isLocalWeb()) {
+    return '/__fastdl/api/convert';
+  }
+  return 'https://api-wh.fastdl.app/api/convert';
+}
+
+/**
  * Checks if a string is a valid Instagram URL (Post, Reel, TV)
  */
 export function isInstagramUrl(url = '') {
@@ -227,12 +255,10 @@ export async function scrapeInstagram(url = '') {
   // Fallback 1: FastDL API Convert Engine
   try {
     const fastDlRes = await httpClient({
-      url: 'https://api-wh.fastdl.app/api/convert',
+      url: getFastDlApiUrl(),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Origin: 'https://fastdl.app',
-        Referer: 'https://fastdl.app/',
       },
       data: {
         url: normalizedUrl,
@@ -269,40 +295,13 @@ export async function scrapeInstagram(url = '') {
     // FastDL fallback failed, proceed to next fallback
   }
 
-  // Fallback 2: SnapInsta Worker Convert Engine
-  try {
-    const snapRes = await httpClient({
-      url: 'https://snapinsta.app/action.php',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Origin: 'https://snapinsta.app',
-        Referer: 'https://snapinsta.app/',
-      },
-      data: `url=${encodeURIComponent(normalizedUrl)}&action=post`,
-      timeout: 10000,
-      raw: true,
-    });
-
-    const snapHtml = snapRes?.data || '';
-    if (snapHtml && (snapHtml.includes('download-bottom') || snapHtml.includes('btn-download'))) {
-      const parsed = parseInstagramHtml(snapHtml, normalizedUrl);
-      if (parsed.options.length > 0) {
-        return parsed;
-      }
-    }
-  } catch {
-    // SnapInsta fallback failed, proceed to Direct Meta Tags
-  }
-
-  // Fallback 3: Direct Meta Tags / Public Instagram Page / Embed parser
+  // Fallback 2: Direct Meta Tags / Public Instagram Page / Embed parser
   try {
     // Try embed page first (fewer bot challenges)
-    const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
+    const embedUrl = getInstagramPageUrl(shortcode, true);
     const embedRes = await httpClient({
       url: embedUrl,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       raw: true,
@@ -310,17 +309,18 @@ export async function scrapeInstagram(url = '') {
     });
 
     const embedHtml = embedRes?.data || '';
-    if (embedHtml && embedHtml.length > 500) {
+    if (embedHtml && embedHtml.length > 200) {
       return parseInstagramHtml(embedHtml, normalizedUrl);
     }
   } catch {
     // Embed fetch failed, fallback to main page URL
   }
 
+  // Fallback 3: Direct main page fetch
+  const directUrl = getInstagramPageUrl(shortcode, false);
   const directRes = await httpClient({
-    url: normalizedUrl,
+    url: directUrl,
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
     raw: true,

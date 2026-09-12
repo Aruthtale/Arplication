@@ -21,6 +21,32 @@ export default defineConfig({
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9',
         },
       },
+      // Instagram proxy for local development
+      '/__instagram': {
+        target: 'https://www.instagram.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/__instagram/, ''),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      },
+      // Spotify proxy for local development
+      '/__spotify': {
+        target: 'https://open.spotify.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/__spotify/, ''),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      },
+      // FastDL API proxy for local development
+      '/__fastdl': {
+        target: 'https://api-wh.fastdl.app',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/__fastdl/, ''),
+      },
       '/api/yt-dlp': {
         target: 'http://127.0.0.1:8787',
         changeOrigin: true,
