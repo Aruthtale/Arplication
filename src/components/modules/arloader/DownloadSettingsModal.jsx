@@ -160,6 +160,39 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
           </p>
         </div>
 
+        {/* Filename Pattern */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-gray-300 block">
+            Pola Nama File
+          </label>
+          <div className="grid grid-cols-1 gap-1.5">
+            {[
+              { value: 'title_id', label: 'Judul + ID', example: 'Judul_Video_yt-video-mp4.mp4' },
+              { value: 'author_title', label: 'Author + Judul', example: 'NamaAuthor_Judul_Video.mp4' },
+              { value: 'platform_title_id', label: 'Platform + Judul + ID', example: 'tiktok_Judul_Video_v1.mp4' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setSettings((s) => ({ ...s, filenamePattern: opt.value }))}
+                className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 ${
+                  (settings.filenamePattern || 'title_id') === opt.value
+                    ? 'border-[#05C46B] bg-[#05C46B]/10 shadow-sm'
+                    : 'border-[#262B3B] bg-[#181B24] hover:border-gray-600'
+                }`}
+              >
+                <span>
+                  <span className="text-xs font-bold block text-white">{opt.label}</span>
+                  <span className="text-[10px] font-mono text-gray-400 block truncate">{opt.example}</span>
+                </span>
+                {(settings.filenamePattern || 'title_id') === opt.value && (
+                  <Check className="w-3.5 h-3.5 text-[#05C46B] shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Instagram Session ID Section */}
         <div className="p-3.5 rounded-xl bg-[#181B24] border border-[#262B3B] space-y-3.5">
           <div className="flex items-start gap-2.5">

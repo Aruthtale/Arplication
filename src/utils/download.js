@@ -1,6 +1,6 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { CapacitorHttp } from '@capacitor/core';
+import { CapacitorHttp, Capacitor } from '@capacitor/core';
 import { isNative } from '../services/http.js';
 
 export const DEFAULT_DOWNLOAD_SETTINGS = {
@@ -8,6 +8,7 @@ export const DEFAULT_DOWNLOAD_SETTINGS = {
   subfolder: 'Arloader',  // e.g. 'Arloader' or ''
   autoShare: false,       // whether to pop up "Buka dengan / Bagikan"
   igSessionId: '',        // optional Instagram sessionid cookie
+  filenamePattern: 'title_id', // 'title_id' | 'author_title' | 'platform_title_id'
 };
 
 export function getDownloadSettings() {
@@ -35,8 +36,186 @@ export function saveDownloadSettings(settings) {
 }
 
 /**
- * Helper to convert Blob to Base64
+ * Build a tidy filename from media metadata + user pattern setting.
+ * Patterns: 'title_id' | 'author_title' | 'platform_title_id'
  */
+export function buildFilename({ title, author, platform, optionId, ext, pattern }) {
+  const clean = (s, len) =>
+    String(s || '')
+      .replace(/[^\p{L}\p{N}._-]+/gu, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, len) || 'media';
+  const t = clean(title, 50);
+  const a = clean(author, 30);
+  const p = clean(platform, 15);
+  const id = clean(optionId, 20);
+  let base;
+  switch (pattern) {
+    case 'author_title':
+      base = a !== 'media' ? `${a}_${t}` : `${t}_${id}`;
+      break;
+    case 'platform_title_id':
+      base = `${p}_${t}_${id}`;
+      break;
+    case 'title_id':
+    default:
+      base = `${t}_${id}`;
+      break;
+  }
+  return `${base}.${String(ext || 'bin').replace(/[^a-zA-Z0-9]/g, '') || 'bin'}`;
+}
+
+/**
+ * Map technical errors to user-friendly Indonesian messages.
+ */
+export function formatDownloadError(err) {
+  const msg = String(err?.message || err || '');
+  if (/401|403|session|login|cookie/i.test(msg)) {
+    return 'Akses ditolak — sesi kedaluwarsa. Perbarui IG Session ID di Pengaturan lalu coba lagi.';
+  }
+  if (/404|expired|gone|not found/i.test(msg)) {
+    return 'Tautan kedaluwarsa atau media sudah dihapus. Ambil ulang link terbaru lalu coba lagi.';
+  }
+  if (/network|timeout|fetch|failed to fetch|econn|socket/i.test(msg)) {
+    return 'Jaringan bermasalah. Periksa koneksi internet lalu coba lagi.';
+  }
+  if (/HTTP\s*5\d\d/i.test(msg)) {
+    return 'Server penyedia sedang sibuk. Tunggu sebentar lalu coba lagi.';
+  }
+  return `Unduhan gagal (${msg.slice(0, 80) || 'kesalahan tak dikenal'}). Coba lagi.`;
+}
+/**
+ * Format byte count into human readable string (KB/MB/GB).
+ */
+export function formatFileSize(bytes) {
+  if (bytes === null || bytes === undefined || isNaN(Number(bytes))) return null;
+  const n = Number(bytes);
+  if (n <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = n;
+  let u = 0;
+  while (size >= 1024 && u < units.length - 1) {
+    size /= 1024;
+    u += 1;
+  }
+  return `${size >= 100 ? Math.round(size) : size.toFixed(size >= 10 ? 1 : 2)} ${units[u]}`;
+}
+
+/**
+ * Probe remote file size via HEAD (fallback Range 0-0).
+ * Returns byte count number or null when unknown.
+ */
+export async function probeFileSize(url) {
+  if (!url) return null;
+  // Native: CapacitorHttp HEAD
+  if (isNative()) {
+    try {
+      const res = await CapacitorHttp.request({ url, method: 'HEAD' });
+      const headers = res?.headers || {};
+      const len = headers['Content-Length'] || headers['content-length'] || headers['Content-length'];
+      if (len) {
+        const n = Number(len);
+        if (!isNaN(n) && n > 0) return n;
+      }
+    } catch (_) { /* fall through to GET range */ }
+    try {
+      const res = await CapacitorHttp.request({
+        url,
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        responseType: 'blob',
+      });
+      const headers = res?.headers || {};
+      const range = headers['Content-Range'] || headers['content-range'] || '';
+      const m = String(range).match(/\/(\d+)\s*$/);
+      if (m) {
+        const n = Number(m[1]);
+        if (!isNaN(n) && n > 0) return n;
+      }
+    } catch (_) { /* unknown */ }
+    return null;
+  }
+
+  // Web: fetch HEAD, fallback Range
+  try {
+    const head = await fetch(url, { method: 'HEAD' });
+    const len = head?.headers?.get?.('content-length');
+    if (len) {
+      const n = Number(len);
+      if (!isNaN(n) && n > 0) return n;
+    }
+  } catch (_) { /* try range */ }
+  try {
+    const r = await fetch(url, { headers: { Range: 'bytes=0-0' } });
+    const range = r?.headers?.get?.('content-range') || '';
+    const m = String(range).match(/\/(\d+)\s*$/);
+    if (m) {
+      const n = Number(m[1]);
+      if (!isNaN(n) && n > 0) return n;
+    }
+    const len = r?.headers?.get?.('content-length');
+    if (len && r.status === 200) {
+      const n = Number(len);
+      if (!isNaN(n) && n > 0) return n;
+    }
+  } catch (_) { /* unknown */ }
+  return null;
+}
+
+/**
+ * Save a text file (caption/description) next to downloads.
+ */
+export async function saveTextFile({ text, filename, targetDirectory = null, subfolder = null }) {
+  if (!text) throw new Error('Teks kosong.');
+  const settings = getDownloadSettings();
+  const dirChoice = targetDirectory || settings.directory || 'Downloads';
+  const folderChoice = subfolder !== null ? subfolder : settings.subfolder;
+  const safeFilename = String(filename || 'caption.txt').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const cleanSubfolder = String(folderChoice || '').trim().replace(/^\/+|\/+$/g, '');
+
+  if (isNative()) {
+    const base64 = typeof Buffer !== 'undefined'
+      ? Buffer.from(text, 'utf-8').toString('base64')
+      : btoa(unescape(encodeURIComponent(text)));
+    let directoryEnum;
+    let relativePath;
+    if (dirChoice === 'Documents') {
+      directoryEnum = Directory.Documents;
+      relativePath = cleanSubfolder ? `${cleanSubfolder}/${safeFilename}` : safeFilename;
+    } else {
+      directoryEnum = Directory.ExternalStorage;
+      const mkdirPath = cleanSubfolder ? `Download/${cleanSubfolder}` : 'Download';
+      relativePath = `${mkdirPath}/${safeFilename}`;
+    }
+    await Filesystem.mkdir({
+      path: relativePath.split('/').slice(0, -1).join('/') || '/',
+      directory: directoryEnum,
+      recursive: true,
+    }).catch(() => {});
+    const res = await Filesystem.writeFile({
+      path: relativePath,
+      data: base64,
+      directory: directoryEnum,
+      recursive: true,
+    });
+    return { success: true, path: res.uri };
+  }
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = safeFilename;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  }, 1500);
+  return { success: true };
+}
+
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -156,6 +335,15 @@ export async function downloadMedia({
 
       if (onProgress) onProgress(100, `Tersimpan di ${displayLocation}`);
 
+      // Normalize to a viewable file URI (downloadFile may return a relative path)
+      let viewUri = resPath;
+      try {
+        if (viewUri && !viewUri.startsWith('file://') && !viewUri.startsWith('content://')) {
+          const uriRes = await Filesystem.getUri({ path: relativePath, directory: directoryEnum }).catch(() => null);
+          if (uriRes?.uri) viewUri = uriRes.uri;
+        }
+      } catch (_) { /* keep original path */ }
+
       // Optional share/open dialog only if explicitly enabled by user
       if (shouldShare && resPath) {
         try {
@@ -170,7 +358,7 @@ export async function downloadMedia({
         }
       }
 
-      return { success: true, path: resPath, location: displayLocation };
+      return { success: true, path: viewUri || resPath, location: displayLocation };
     } catch (nativeErr) {
       console.error('All native download methods failed:', nativeErr);
       if (onProgress) onProgress(0, 'Gagal menyimpan ke penyimpanan.');
