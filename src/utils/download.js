@@ -65,7 +65,6 @@ export async function downloadMedia({
 
   const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
   const cleanSubfolder = String(folderChoice || '').trim().replace(/^\/+|\/+$/g, '');
-  const relativePath = cleanSubfolder ? `${cleanSubfolder}/${safeFilename}` : safeFilename;
 
   // 1. Android Native Environment
   if (isNative()) {
@@ -73,16 +72,30 @@ export async function downloadMedia({
       if (onProgress) onProgress(10, 'Memeriksa izin penyimpanan...');
       await Filesystem.requestPermissions().catch(() => {});
 
-      const directoryEnum = dirChoice === 'Documents' ? Directory.Documents : Directory.Downloads;
+      let directoryEnum;
+      let relativePath;
+      let mkdirPath = '';
+
+      if (dirChoice === 'Documents') {
+        directoryEnum = Directory.Documents;
+        mkdirPath = cleanSubfolder;
+        relativePath = cleanSubfolder ? `${cleanSubfolder}/${safeFilename}` : safeFilename;
+      } else {
+        // Downloads directory on Android (Directory.ExternalStorage points to /storage/emulated/0)
+        directoryEnum = Directory.ExternalStorage;
+        mkdirPath = cleanSubfolder ? `Download/${cleanSubfolder}` : 'Download';
+        relativePath = `${mkdirPath}/${safeFilename}`;
+      }
+
       const targetLabel = dirChoice === 'Documents' ? 'Documents' : 'Download';
       const displayLocation = cleanSubfolder ? `${targetLabel}/${cleanSubfolder}` : targetLabel;
 
-      if (cleanSubfolder) {
+      if (mkdirPath) {
         await Filesystem.mkdir({
-          path: cleanSubfolder,
+          path: mkdirPath,
           directory: directoryEnum,
           recursive: true,
-        }).catch(() => {});
+        }).catch((err) => console.warn('mkdir warning:', err));
       }
 
       let resPath = null;
