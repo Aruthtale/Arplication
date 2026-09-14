@@ -24,6 +24,9 @@ import {
   extractInstagramShortcode,
   extractInstagramDetails,
   parseInstagramHtml,
+  hasDirectVideoOption,
+  isReelUrl,
+  getActiveInstagramCookie,
 } from '../src/services/scrapers/instagram.js';
 import {
   isSpotifyUrl,
@@ -272,6 +275,78 @@ test('parseInstagramHtml extracts video, cover, and author correctly', () => {
   const videoOption = result.options.find((opt) => opt.type === 'video');
   assert.ok(videoOption);
   assert.equal(videoOption.url, 'https://scontent.cdninstagram.com/v/t51.82787-15/video_802119960.mp4');
+});
+
+test('parseInstagramHtml bot-wall on /reel/ never resolves to JPG-only', () => {
+  // Regresi: reels IG hanya jadi JPG. Penyebab: scrapeInstagram Layer 3 mem-parse
+  // pakai normalizedUrl /p/ sehingga isVideoPage=false, lalu JPG-only di-return
+  // tanpa lanjut ke FastDL Layer 4. Parse pakai cleanUrl /reel/ + gate hasDirectVideoOption.
+  const botWallHtml = `<html><head>
+    <meta property="og:title" content="surfclip on Instagram: &quot;Sunset session&quot;" />
+    <meta property="og:image" content="https://scontent.cdninstagram.com/v/t51/cover123.jpg" />
+  </head><body>login wall</body></html>`;
+
+  const viaFixedPath = parseInstagramHtml(botWallHtml, 'https://www.instagram.com/reel/C8xyz123/');
+  // JPG fallback boleh ada di opsi, tapi direct MP4 harus tidak ada
+  // -> caller wajib lanjut ke FastDL Layer 4, bukan return JPG.
+  assert.equal(hasDirectVideoOption(viaFixedPath), false);
+
+  const directMp4 = parseInstagramHtml(igHtml, 'https://www.instagram.com/reel/DdFFK5vSwpG/');
+  assert.equal(hasDirectVideoOption(directMp4), true);
+});
+
+test('isReelUrl flags reel/tv links, hasDirectVideoOption rejects page links', () => {
+  assert.equal(isReelUrl('https://www.instagram.com/reel/C8xyz123/'), true);
+  assert.equal(isReelUrl('https://www.instagram.com/reels/C8xyz123/'), true);
+  assert.equal(isReelUrl('https://www.instagram.com/tv/DdFFK5vSwpG/'), true);
+  assert.equal(isReelUrl('https://www.instagram.com/p/DZT71H-BJuK/'), false);
+
+  const pageLinkOnly = {
+    options: [{ type: 'video', url: 'https://www.instagram.com/reel/C8xyz123/', ext: 'mp4' }],
+  };
+  assert.equal(hasDirectVideoOption(pageLinkOnly), false);
+  const cdnFile = {
+    options: [{ type: 'video', url: 'https://scontent.cdninstagram.com/v/t51/video123.mp4?x=1', ext: 'mp4' }],
+  };
+  assert.equal(hasDirectVideoOption(cdnFile), true);
+});
+
+test('getActiveInstagramCookie reads instagramSessionId (UI) and igSessionId (legacy)', () => {
+  // Regresi: modal Pengaturan menyimpan `instagramSessionId`, scraper membaca
+  // `igSessionId` -> Session ID user diabaikan, scrape jatuh ke jalur publik/JPG.
+  const originalWindow = globalThis.window;
+  const originalCapacitor = globalThis.Capacitor;
+  const originalLocalStorage = globalThis.localStorage;
+  globalThis.window = { location: { hostname: 'example.com' } };
+  globalThis.Capacitor = { isNativePlatform: () => false };
+  const store = {};
+  globalThis.localStorage = {
+    getItem: (k) => store[k] ?? null,
+    setItem: (k, v) => { store[k] = String(v); },
+  };
+  try {
+    globalThis.localStorage.setItem(
+      'arloader_settings',
+      JSON.stringify({ instagramSessionId: ' UISESSION123 ' })
+    );
+    assert.ok(
+      getActiveInstagramCookie().includes('UISESSION123'),
+      'UI key instagramSessionId must be honored'
+    );
+
+    globalThis.localStorage.setItem(
+      'arloader_settings',
+      JSON.stringify({ igSessionId: ' LEGACYSESSION456 ' })
+    );
+    assert.ok(
+      getActiveInstagramCookie().includes('LEGACYSESSION456'),
+      'legacy key igSessionId must keep working'
+    );
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.Capacitor = originalCapacitor;
+    globalThis.localStorage = originalLocalStorage;
+  }
 });
 
 test('parseInstagramHtml supports carousel multi-slide extraction', () => {

@@ -50,7 +50,8 @@ export function formatInstagramCookie(input = '') {
  */
 export function getActiveInstagramCookie() {
   const settings = getDownloadSettings();
-  const userSetting = settings.igSessionId ? settings.igSessionId.trim() : '';
+  // UI Pengaturan menyimpan `instagramSessionId`, default lama `igSessionId` — baca keduanya.
+  const userSetting = String(settings.igSessionId || settings.instagramSessionId || '').trim();
   if (userSetting) {
     return formatInstagramCookie(userSetting);
   }
@@ -369,6 +370,22 @@ export function parseInstagramHtml(html = '', originalUrl = '') {
 }
 
 /**
+ * True when the parser found a directly-downloadable MP4 (CDN file), not a
+ * "Watch / Stream" page link. Guards Layers 2-3 so Reels never resolve to JPG-only.
+ */
+export function hasDirectVideoOption(parsed) {
+  const opts = Array.isArray(parsed?.options) ? parsed.options : [];
+  return opts.some((o) => o?.type === 'video' && /scontent|cdninstagram|fbcdn|\.mp4(\?|$)/i.test(String(o.url || '')));
+}
+
+/**
+ * True for Reel/TV links — these must resolve to video, never photo-only.
+ */
+export function isReelUrl(url = '') {
+  return /instagram\.com\/(?:reel|reels|tv)\//i.test(String(url));
+}
+
+/**
  * Scrapes Instagram Stories or Highlights using Session Cookie or Fallback Gateways
  */
 export async function scrapeInstagramStoryOrHighlight(details, originalUrl) {
@@ -656,8 +673,9 @@ export async function scrapeInstagram(url = '') {
 
     const embedHtml = embedRes?.data || '';
     if (embedHtml && embedHtml.length > 200) {
-      const parsed = parseInstagramHtml(embedHtml, normalizedUrl);
-      if (parsed.options.some((o) => o.type === 'video')) {
+      // Pakai cleanUrl asli agar link /reel/ tetap terdeteksi sebagai halaman video.
+      const parsed = parseInstagramHtml(embedHtml, cleanUrl);
+      if (hasDirectVideoOption(parsed)) {
         return parsed;
       }
     }
@@ -680,7 +698,12 @@ export async function scrapeInstagram(url = '') {
 
     const directHtml = directRes?.data || '';
     if (directHtml && directHtml.length > 200) {
-      return parseInstagramHtml(directHtml, normalizedUrl);
+      // Pakai cleanUrl asli (bukan normalized /p/) agar Reel tidak jatuh ke JPG.
+      // Reel tanpa MP4 langsung diteruskan ke FastDL (Layer 4), bukan JPG.
+      const parsed = parseInstagramHtml(directHtml, cleanUrl);
+      if (hasDirectVideoOption(parsed) || !isReelUrl(cleanUrl)) {
+        return parsed;
+      }
     }
   } catch {
     // Main page fetch failed, proceed to fallback
@@ -695,7 +718,7 @@ export async function scrapeInstagram(url = '') {
         'Content-Type': 'application/json',
       },
       data: {
-        url: normalizedUrl,
+        url: cleanUrl,
       },
       timeout: 10000,
     });

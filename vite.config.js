@@ -68,6 +68,11 @@ export default defineConfig({
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9',
         },
       },
+      '/__fastdl': {
+        target: 'https://api-wh.fastdl.app',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/__fastdl/, ''),
+      },
       '/api/yt-dlp': {
         target: 'http://127.0.0.1:8787',
         changeOrigin: true,

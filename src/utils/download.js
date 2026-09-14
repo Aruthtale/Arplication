@@ -8,7 +8,8 @@ export const DEFAULT_DOWNLOAD_SETTINGS = {
   directory: 'Downloads', // 'Downloads' | 'Documents'
   subfolder: 'Arloader/{platform}',  // Default: Otomatis pisah folder per-platform (TikTok, Spotify, YouTube, etc)
   autoShare: false,       // whether to pop up "Buka dengan / Bagikan"
-  igSessionId: '',        // optional Instagram sessionid cookie
+  igSessionId: '',        // optional Instagram sessionid cookie (legacy key)
+  instagramSessionId: '', // optional Instagram sessionid cookie (kunci dipakai UI Pengaturan)
   filenamePattern: 'title_id', // 'title_id' | 'clean_title' | 'id_only'
 };
 

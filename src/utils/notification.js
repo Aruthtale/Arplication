@@ -89,3 +89,35 @@ export async function sendDownloadErrorNotification({ title = '', platform = '',
     console.warn('Failed to post error notification:', e);
   }
 }
+
+/**
+ * Pomodoro phase notification (Ardoro). No-op di web.
+ * phase: fase yang baru selesai, nextPhase: fase berikutnya.
+ */
+export async function sendPomodoroPhaseNotification({ phase = '', nextPhase = '' }) {
+  if (!isNative()) return;
+  try {
+    const ok = await ensureNotificationChannel();
+    if (!ok) return;
+    const finishedLabel = phase === 'focus' ? 'Sesi fokus selesai!' : 'Waktu istirahat selesai!';
+    const nextLabel = nextPhase === 'focus'
+      ? 'Saatnya kembali fokus.'
+      : nextPhase === 'long'
+        ? 'Nikmati istirahat panjang.'
+        : 'Istirahat sebentar dulu.';
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          title: `🍅 Ardoro — ${finishedLabel}`,
+          body: nextLabel,
+          id: Math.floor(Date.now() % 100000) + Math.floor(Math.random() * 1000),
+          schedule: { at: new Date(Date.now() + 100) },
+          channelId: 'arloader_downloads',
+          smallIcon: 'ic_launcher',
+        },
+      ],
+    });
+  } catch (e) {
+    console.warn('Failed to post pomodoro notification:', e);
+  }
+}

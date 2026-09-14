@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, Tag, Plus, CheckSquare, ListPlus } from 'lucide-react';
+import { ArrowLeft, X, Save, Tag, Plus, ListPlus } from 'lucide-react';
 
 const COLORS = [
-  { value: 'yellow', label: 'Kuning', bg: 'bg-[#FFE600]', border: 'border-[#FFE600]' },
-  { value: 'mint',   label: 'Mint',   bg: 'bg-[#38E54D]', border: 'border-[#38E54D]' },
-  { value: 'pink',   label: 'Pink',   bg: 'bg-[#FF70A6]', border: 'border-[#FF70A6]' },
-  { value: 'cyan',   label: 'Cyan',   bg: 'bg-[#C4FAF8]', border: 'border-[#C4FAF8]' },
-  { value: 'purple', label: 'Ungu',   bg: 'bg-[#D8B4FE]', border: 'border-[#D8B4FE]' },
-  { value: 'white',  label: 'Putih',  bg: 'bg-[#FFFFFF]', border: 'border-[#FFFFFF]' },
+  { value: 'yellow', label: 'Kuning', bg: 'bg-[#FFE600]' },
+  { value: 'mint',   label: 'Mint',   bg: 'bg-[#38E54D]' },
+  { value: 'pink',   label: 'Pink',   bg: 'bg-[#FF70A6]' },
+  { value: 'cyan',   label: 'Cyan',   bg: 'bg-[#C4FAF8]' },
+  { value: 'purple', label: 'Ungu',   bg: 'bg-[#D8B4FE]' },
+  { value: 'white',  label: 'Putih',  bg: 'bg-[#FFFFFF]' },
 ];
 
 const COLOR_BG = {
@@ -20,10 +20,10 @@ const COLOR_BG = {
 };
 
 export default function NoteEditorModal({ isOpen, onClose, editingNote, onSave }) {
-  const [title, setTitle]     = useState('');
-  const [content, setContent] = useState('');
-  const [color, setColor]     = useState('yellow');
-  const [tags, setTags]       = useState([]);
+  const [title, setTitle]       = useState('');
+  const [content, setContent]   = useState('');
+  const [color, setColor]       = useState('yellow');
+  const [tags, setTags]         = useState([]);
   const [tagInput, setTagInput] = useState('');
   const titleRef = useRef(null);
   const contentRef = useRef(null);
@@ -100,80 +100,76 @@ export default function NoteEditorModal({ isOpen, onClose, editingNote, onSave }
   const previewBg = COLOR_BG[color] || COLOR_BG.yellow;
 
   return (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs"
-    >
-      <div
-        className="w-full max-w-lg bg-[#F8F5EE] border-2 sm:border-[2.5px] border-[#121212] shadow-[5px_5px_0px_#121212] rounded-2xl flex flex-col overflow-hidden max-h-[90vh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Modal Header */}
-        <div className={`flex items-center justify-between px-4 py-3 border-b-2 border-[#121212] ${previewBg} transition-colors`}>
-          <h2 className="font-black text-base sm:text-lg text-[#121212]">
-            {editingNote ? '✏️ Edit Catatan' : '📝 Catatan Baru'}
-          </h2>
+    <div className="fixed inset-0 z-50 bg-[#F8F5EE] flex flex-col w-full h-full overflow-hidden">
+      {/* Full Screen Header */}
+      <header className={`flex items-center justify-between px-4 py-3 border-b-2 border-[#121212] ${previewBg} transition-colors shrink-0`}>
+        <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg border-2 border-[#121212] bg-white/90 hover:bg-white text-[#121212] shadow-[1.5px_1.5px_0px_#121212] active:translate-y-0.5 cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-[#121212] bg-white text-[#121212] font-black text-xs shadow-[2px_2px_0px_#121212] active:translate-y-0.5 cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
+            <span>Kembali</span>
           </button>
+          <span className="font-black text-sm sm:text-base text-[#121212] hidden sm:inline ml-2">
+            {editingNote ? '✏️ Edit Catatan' : '📝 Catatan Baru'}
+          </span>
         </div>
 
-        {/* Form Body */}
-        <div className="flex flex-col gap-3.5 p-4 sm:p-5 overflow-y-auto">
+        {/* Header Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleInsertChecklist}
+            className="inline-flex items-center gap-1 text-xs font-black px-3 py-1.5 bg-white text-[#121212] border-2 border-[#121212] rounded-xl shadow-[2px_2px_0px_#121212] hover:bg-yellow-100 active:translate-y-0.5 cursor-pointer"
+          >
+            <ListPlus className="w-4 h-4 text-[#121212]" />
+            <span className="hidden sm:inline">+ Checklist</span>
+          </button>
 
-          {/* Title Input */}
-          <div>
-            <label className="block text-[11px] font-black text-[#121212] mb-1 uppercase tracking-wider">Judul</label>
-            <input
-              ref={titleRef}
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="Judul catatan..."
-              maxLength={120}
-              className="w-full px-3.5 py-2 sm:py-2.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] bg-white text-[#121212] font-black placeholder:text-[#121212]/30 focus:outline-none focus:shadow-[3px_3px_0px_#121212]"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!title.trim() && !content.trim()}
+            className="flex items-center gap-1.5 px-4 sm:px-5 py-1.5 sm:py-2 rounded-xl border-2 border-[#121212] bg-[#121212] text-white font-black text-xs sm:text-sm shadow-[2.5px_2.5px_0px_#FFE600] hover:bg-[#282828] active:translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <Save className="w-4 h-4 text-[#FFE600]" />
+            <span>Simpan</span>
+          </button>
+        </div>
+      </header>
 
-          {/* Content TextArea with Toolbar */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-[11px] font-black text-[#121212] uppercase tracking-wider">Isi Catatan</label>
-              <button
-                type="button"
-                onClick={handleInsertChecklist}
-                className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 bg-white border border-[#121212] rounded-md shadow-[1px_1px_0px_#121212] hover:bg-yellow-100 active:translate-y-0.5 cursor-pointer"
-              >
-                <ListPlus className="w-3 h-3 text-[#121212]" />
-                + Checklist
-              </button>
-            </div>
-            <textarea
-              ref={contentRef}
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              placeholder={"Tulis catatan disini...\n- [ ] Todo item\n- [x] Selesai"}
-              rows={6}
-              className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] bg-white text-[#121212] font-mono text-xs sm:text-sm placeholder:text-[#121212]/30 focus:outline-none focus:shadow-[3px_3px_0px_#121212] resize-none leading-relaxed"
-            />
-          </div>
+      {/* Main Full Screen Body */}
+      <div className="flex-1 flex flex-col max-w-4xl w-full mx-auto p-3.5 sm:p-6 gap-3.5 overflow-y-auto">
+        {/* Title Input */}
+        <div>
+          <input
+            ref={titleRef}
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Judul catatan..."
+            maxLength={120}
+            className="w-full px-4 py-3 rounded-xl border-2 border-[#121212] shadow-[3px_3px_0px_#121212] bg-white text-[#121212] font-black text-base sm:text-xl placeholder:text-[#121212]/30 focus:outline-none focus:shadow-[4px_4px_0px_#121212]"
+          />
+        </div>
 
-          {/* Color Palette Selector */}
-          <div>
-            <label className="block text-[11px] font-black text-[#121212] mb-1.5 uppercase tracking-wider">Warna Bento</label>
-            <div className="flex gap-2 flex-wrap items-center">
+        {/* Color Palette Selector & Tags Input */}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between bg-white/70 p-3 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212]">
+          {/* Colors */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-black text-[#121212] uppercase tracking-wider shrink-0">Warna:</span>
+            <div className="flex gap-1.5 items-center">
               {COLORS.map(c => (
                 <button
                   key={c.value}
                   type="button"
                   onClick={() => setColor(c.value)}
                   title={c.label}
-                  className={`w-8 h-8 rounded-xl border-2 cursor-pointer transition-all ${c.bg} ${
+                  className={`w-7 h-7 rounded-lg border-2 cursor-pointer transition-all ${c.bg} ${
                     color === c.value
-                      ? 'border-[#121212] shadow-[2.5px_2.5px_0px_#121212] scale-110 ring-2 ring-black/10'
+                      ? 'border-[#121212] shadow-[2px_2px_0px_#121212] scale-110'
                       : 'border-[#121212]/30 hover:border-[#121212]'
                   }`}
                 />
@@ -181,68 +177,59 @@ export default function NoteEditorModal({ isOpen, onClose, editingNote, onSave }
             </div>
           </div>
 
-          {/* Tags */}
-          <div>
-            <label className="block text-[11px] font-black text-[#121212] mb-1 uppercase tracking-wider">Tag / Kategori</label>
-            <div className="flex gap-2">
+          {/* Tag Input */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 flex-1 sm:w-64">
               <input
                 type="text"
                 value={tagInput}
                 onChange={e => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
-                placeholder="Tambah tag, lalu tekan Enter..."
-                className="flex-1 px-3 py-1.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] bg-white text-xs text-[#121212] placeholder:text-[#121212]/30 focus:outline-none"
+                placeholder="Tambah tag..."
+                className="w-full px-3 py-1.5 rounded-lg border-2 border-[#121212] bg-white text-xs font-bold text-[#121212] placeholder:text-[#121212]/30 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={handleAddTag}
                 disabled={!tagInput.trim()}
-                className="px-3 py-1.5 bg-[#121212] text-white rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] hover:bg-[#333] disabled:opacity-40 cursor-pointer"
+                className="p-1.5 bg-[#121212] text-white rounded-lg border-2 border-[#121212] hover:bg-[#333] disabled:opacity-40 cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4" />
               </button>
             </div>
-
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {tags.map(tag => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 bg-[#121212] text-white rounded-lg border border-[#121212]"
-                  >
-                    #{tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(tag)}
-                      className="hover:text-red-300 ml-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-2.5 px-4 py-3 border-t-2 border-[#121212] bg-[#F8F5EE]">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl border-2 border-[#121212] bg-white text-[#121212] font-black text-xs shadow-[2px_2px_0px_#121212] hover:bg-gray-100 active:translate-y-0.5 cursor-pointer"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!title.trim() && !content.trim()}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-xl border-2 border-[#121212] bg-[#121212] text-white font-black text-xs shadow-[3px_3px_0px_#FFE600] hover:bg-[#282828] active:translate-y-0.5 active:shadow-[1px_1px_0px_#FFE600] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            <Save className="w-3.5 h-3.5 text-[#FFE600]" />
-            Simpan Catatan
-          </button>
+        {/* Tag List */}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map(tag => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 text-xs font-black px-2.5 py-1 bg-[#121212] text-white rounded-lg border border-[#121212]"
+              >
+                #{tag}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(tag)}
+                  className="hover:text-red-300 ml-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Full Height Wide Textarea */}
+        <div className="flex-1 flex flex-col min-h-[380px]">
+          <textarea
+            ref={contentRef}
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            placeholder={"Tulis isi catatan di sini...\n\n- [ ] Checklist item\n- [x] Item selesai"}
+            className="flex-1 w-full p-4 sm:p-5 rounded-xl border-2 border-[#121212] shadow-[3.5px_3.5px_0px_#121212] bg-white text-[#121212] font-mono text-sm sm:text-base placeholder:text-[#121212]/30 focus:outline-none focus:shadow-[4px_4px_0px_#121212] resize-none leading-relaxed"
+          />
         </div>
       </div>
     </div>

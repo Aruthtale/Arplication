@@ -3,7 +3,7 @@ import Header from './components/layout/Header';
 import BottomNav from './components/layout/BottomNav';
 import HomeHub from './components/modules/HomeHub';
 import ArloaderModule from './components/modules/arloader/ArloaderModule';
-import ArdoroPlaceholder from './components/modules/ArdoroPlaceholder';
+import ArdoroModule from './components/modules/ardoro/ArdoroModule';
 import ArNoteModule from './components/modules/arnote/ArNoteModule';
 import AruthtaleInfo from './components/modules/AruthtaleInfo';
 
@@ -19,7 +19,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 pt-3.5 sm:pt-6 pb-28">
         {activeTab === 'home' && <HomeHub setActiveTab={setActiveTab} />}
         {activeTab === 'arloader' && <ArloaderModule setActiveTab={setActiveTab} />}
-        {activeTab === 'ardoro' && <ArdoroPlaceholder setActiveTab={setActiveTab} />}
+        {activeTab === 'ardoro' && <ArdoroModule setActiveTab={setActiveTab} />}
         {activeTab === 'arnote' && <ArNoteModule setActiveTab={setActiveTab} />}
         {activeTab === 'aruthtale' && <AruthtaleInfo setActiveTab={setActiveTab} />}
       </main>

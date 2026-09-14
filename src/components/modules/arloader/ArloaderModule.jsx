@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ArrowLeft, AlertCircle, Settings, Folder, History, Trash2, 
+  AlertCircle, Settings, Folder, History, Trash2,
   Sparkles, Layers, Download, CheckCircle2, RotateCcw, Loader2,
-  HardDrive, ShieldCheck, Activity
+  HardDrive, ShieldCheck, Activity, Home
 } from 'lucide-react';
 import UrlInput, { extractLinks } from './UrlInput.jsx';
 import MediaCard from './MediaCard.jsx';
@@ -13,6 +13,7 @@ import { loadScraperHistory, saveScraperHistory, clearScraperHistory } from '../
 import { getDownloadSettings, formatFileSize } from '../../../utils/download.js';
 import { getDownloadHistory, addDownloadRecord } from '../../../utils/history.js';
 import { readClipboard } from '../../../utils/clipboard.js';
+import { APP_VERSION } from '../../../services/updater.js';
 
 export default function ArloaderModule({ setActiveTab }) {
   const [url, setUrl] = useState('');
@@ -161,9 +162,10 @@ export default function ArloaderModule({ setActiveTab }) {
         <button
           onClick={() => setActiveTab('home')}
           className="nb-btn px-3 py-1.5 bg-white text-[#121212] text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_#121212]"
+          title="Kembali ke Hub Utama"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Hub Utama</span>
+          <Home className="w-3.5 h-3.5" />
+          <span>Hub</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -205,7 +207,7 @@ export default function ArloaderModule({ setActiveTab }) {
             </div>
           </div>
           <span className="text-[9px] font-mono-code font-bold bg-[#F8F5EE] text-gray-700 px-2 py-0.5 border border-black rounded">
-            MORI SUITE • v0.2.0
+            MORI SUITE • v{APP_VERSION}
           </span>
         </div>
 

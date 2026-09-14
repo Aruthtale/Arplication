@@ -9,15 +9,15 @@ Arplication is a high-performance, private, client-side personal utility platfor
 ## 🚀 Integrated Modules
 
 1. **Arloader** (Active Focus)
-   - Universal media downloader for TikTok and YouTube.
+   - Universal media downloader for TikTok, YouTube, Instagram (Post/Reel/Story/Highlight), Spotify, X, and Pinterest.
    - Watermark-free HD video and high-bitrate MP3 audio extraction.
    - 100% on-device processing with hybrid CORS bypass.
 
 2. **Ardoro** (Upcoming)
    - Minimalist Pomodoro focus technique companion with interval loops and ambient audio.
 
-3. **ArNote** (Upcoming)
-   - Encrypted local-first markdown scratchpad with full-text search.
+3. **ArNote** (Active)
+   - Local-first notes with full-text search, file sync, and Android home-screen widgets (list + sticky note).
 
 4. **Aruthtale**
    - Ecosystem overview, diagnostics, and developer documentation.

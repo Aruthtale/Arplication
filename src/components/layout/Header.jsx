@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutGrid, Sparkles } from 'lucide-react';
+import { APP_VERSION } from '../../services/updater.js';
 
 export default function Header({ activeTab, setActiveTab }) {
   const getTabLabel = () => {
@@ -37,7 +38,7 @@ export default function Header({ activeTab, setActiveTab }) {
                 ARPLICATION
               </span>
               <span className="text-[9px] sm:text-[10px] font-mono-code font-black bg-[#38E54D] text-[#121212] px-1.5 py-0.5 border border-[#121212] rounded shadow-[1px_1px_0px_#121212]">
-                v0.2.2
+                v{APP_VERSION}
               </span>
             </div>
             <span className="text-[8.5px] sm:text-[9px] font-mono-code font-bold text-[#121212]/60 tracking-wider block mt-0.5">

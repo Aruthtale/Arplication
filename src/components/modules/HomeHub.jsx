@@ -3,6 +3,7 @@ import {
   Download, Timer, FileText, Info, ArrowRight, Zap, Sparkles, 
   Layers, Smartphone, CheckCircle2
 } from 'lucide-react';
+import { APP_VERSION } from '../../services/updater.js';
 
 export default function HomeHub({ setActiveTab }) {
   const modules = [
@@ -38,15 +39,15 @@ export default function HomeHub({ setActiveTab }) {
       id: 'ardoro',
       title: 'Ardoro',
       tagline: 'Focus & Pomodoro',
-      description: 'Timer produktivitas untuk sesi belajar & kerja mendalam.',
+      description: 'Timer Pomodoro offline dengan interval kustom & statistik sesi.',
       iconUrl: '/ardoro.png',
-      status: 'Segera',
+      status: 'Aktif',
       statusColor: 'bg-[#FF70A6]',
       cardBg: 'bg-[#FFFFFF]',
       accentColor: '#FF70A6',
       badgeBg: 'bg-[#FF70A6]',
-      actionLabel: 'Konsep',
-      isReady: false,
+      actionLabel: 'Buka',
+      isReady: true,
     },
     {
       id: 'aruthtale',
@@ -78,7 +79,7 @@ export default function HomeHub({ setActiveTab }) {
 
           <div className="flex items-center gap-1.5 font-mono-code text-[10px] font-black bg-white px-2 py-0.5 rounded-md border border-[#121212] shadow-[1px_1px_0px_#121212]">
             <span className="w-2 h-2 rounded-full bg-[#38E54D] border border-[#121212] animate-pulse" />
-            <span>v0.2.2 BETA</span>
+            <span>v{APP_VERSION} BETA</span>
           </div>
         </div>
 
