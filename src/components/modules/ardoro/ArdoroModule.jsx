@@ -8,8 +8,10 @@ import {
   formatClock, durationFor, advancePhase,
   loadArdoroSettings, saveArdoroSettings,
   loadArdoroStats, recordFocusSession, summarizeStats,
+  saveTimerState, loadTimerState, clearTimerState,
 } from '../../../utils/pomodoro.js';
-import { sendPomodoroPhaseNotification } from '../../../utils/notification.js';
+import { sendPomodoroPhaseNotification, checkNotificationPermission, requestNotificationPermission } from '../../../utils/notification.js';
+import { startForegroundTimer, stopForegroundTimer } from '../../../services/timerService.js';
 
 const PHASE_META = {
   focus: { label: 'FOKUS', chip: 'DEEP FOCUS MODE', color: '#FFE600' },
@@ -51,6 +53,7 @@ export default function ArdoroModule({ setActiveTab }) {
   const [running, setRunning] = useState(false);
   const [remaining, setRemaining] = useState(() => durationFor('focus', loadArdoroSettings()));
   const [showSettings, setShowSettings] = useState(false);
+  const [notifStatus, setNotifStatus] = useState({ granted: false, canRequest: false, denied: false });
 
   const endAtRef = useRef(0);
   const tickRef = useRef(null);
@@ -61,6 +64,37 @@ export default function ArdoroModule({ setActiveTab }) {
 
   const totalFor = (p) => durationFor(p, settings);
   const summary = summarizeStats(stats);
+
+  // Load timer state on mount (restore from navigation or minimize)
+  useEffect(() => {
+    const saved = loadTimerState();
+    if (saved && saved.running) {
+      setPhase(saved.phase);
+      setFocusDone(saved.focusDone);
+      setRemaining(saved.remaining);
+      if (saved.remaining > 0) {
+        endAtRef.current = Date.now() + saved.remaining * 1000;
+        setRunning(true);
+      }
+    }
+    // Check notification permission status
+    checkNotificationPermission().then(setNotifStatus);
+  }, []);
+
+  // Save timer state on every change (persist across navigation)
+  useEffect(() => {
+    if (running) {
+      saveTimerState({
+        phase,
+        focusDone,
+        remaining,
+        running,
+        endAt: endAtRef.current,
+      });
+    } else {
+      clearTimerState();
+    }
+  }, [running, phase, focusDone, remaining]);
 
   const stopTicker = () => {
     if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
@@ -102,22 +136,27 @@ export default function ArdoroModule({ setActiveTab }) {
   const toggleRun = () => {
     if (running) {
       setRunning(false);
+      stopForegroundTimer(); // Stop foreground service
     } else {
       if (remaining <= 0) setRemaining(totalFor(phase));
-      endAtRef.current = Date.now() + (remaining > 0 ? remaining : totalFor(phase)) * 1000;
+      const endTime = Date.now() + (remaining > 0 ? remaining : totalFor(phase)) * 1000;
+      endAtRef.current = endTime;
       setRunning(true);
+      startForegroundTimer(endTime, phase); // Start foreground service
     }
   };
 
   const resetTimer = () => {
     setRunning(false);
     stopTicker();
+    stopForegroundTimer(); // Stop foreground service
     setRemaining(totalFor(phase));
   };
 
   const switchPhase = (p) => {
     setRunning(false);
     stopTicker();
+    stopForegroundTimer(); // Stop foreground service
     setPhase(p);
     setRemaining(durationFor(p, settings));
   };
@@ -333,6 +372,34 @@ export default function ArdoroModule({ setActiveTab }) {
                 {settings.sound ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
                 Bunyi: {settings.sound ? 'ON' : 'OFF'}
               </button>
+            </div>
+
+            {/* Notification Permission Check */}
+            <div className="nb-card p-3 bg-[#F8F5EE] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase text-gray-600">Notifikasi</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border border-[#121212] ${
+                  notifStatus.granted ? 'bg-[#38E54D]' : notifStatus.denied ? 'bg-[#FF525E]' : 'bg-[#FFE600]'
+                }`}>
+                  {notifStatus.granted ? 'AKTIF' : notifStatus.denied ? 'DITOLAK' : 'NONAKTIF'}
+                </span>
+              </div>
+              {!notifStatus.granted && notifStatus.canRequest && (
+                <button
+                  onClick={async () => {
+                    const ok = await requestNotificationPermission();
+                    if (ok) setNotifStatus(await checkNotificationPermission());
+                  }}
+                  className="nb-btn w-full px-3 py-1.5 text-[11px] font-black bg-[#38E54D] text-[#121212]"
+                >
+                  Aktifkan Notifikasi
+                </button>
+              )}
+              {notifStatus.denied && (
+                <p className="text-[10px] text-gray-600">
+                  Izin ditolak. Buka Pengaturan Android → Aplikasi → Arplication → Notifikasi.
+                </p>
+              )}
             </div>
           </div>
         )}

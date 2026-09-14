@@ -149,3 +149,63 @@ export function summarizeStats(stats, now = new Date()) {
     last7,
   };
 }
+
+// ============================================
+// Timer State Persistence (for background continuity)
+// ============================================
+
+const TIMER_STATE_KEY = 'ardoro_timer_state_v1';
+
+/**
+ * Save running timer state to localStorage.
+ * Allows timer to survive navigation and app minimize.
+ */
+export function saveTimerState(state) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(TIMER_STATE_KEY, JSON.stringify({
+        ...state,
+        savedAt: Date.now(),
+      }));
+    }
+  } catch {
+    /* storage penuh / private mode — abaikan */
+  }
+}
+
+/**
+ * Load timer state from localStorage.
+ * Adjusts remaining time based on elapsed time since save.
+ */
+export function loadTimerState() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(TIMER_STATE_KEY);
+    if (!raw) return null;
+    const state = JSON.parse(raw);
+    
+    // Adjust remaining time based on elapsed time
+    if (state.running && state.endAt) {
+      const elapsed = (Date.now() - state.savedAt) / 1000;
+      const newRemaining = Math.max(0, state.remaining - elapsed);
+      return { ...state, remaining: newRemaining };
+    }
+    
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clear timer state from localStorage.
+ */
+export function clearTimerState() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(TIMER_STATE_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}

@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -71,6 +74,13 @@
             android:name=".NoteWidgetService"
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!-- Ardoro Timer Foreground Service -->
+        <service
+            android:name=".ArdoroTimerService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
 
         <!-- FileProvider for sharing downloaded APK with system installer -->
         <provider

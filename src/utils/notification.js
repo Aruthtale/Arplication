@@ -4,6 +4,38 @@ import { isNative } from '../services/http.js';
 let channelCreated = false;
 
 /**
+ * Check notification permission status (for UI display).
+ * Returns { granted, canRequest, denied }
+ */
+export async function checkNotificationPermission() {
+  if (!isNative()) return { granted: false, canRequest: false, denied: false };
+  try {
+    const perm = await LocalNotifications.checkPermissions();
+    return {
+      granted: perm.display === 'granted',
+      canRequest: perm.display === 'prompt',
+      denied: perm.display === 'denied',
+    };
+  } catch {
+    return { granted: false, canRequest: false, denied: false };
+  }
+}
+
+/**
+ * Request notification permission from user.
+ * Returns true if granted.
+ */
+export async function requestNotificationPermission() {
+  if (!isNative()) return false;
+  try {
+    const req = await LocalNotifications.requestPermissions();
+    return req.display === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Ensures notification channel and permissions are granted on Android
  */
 export async function ensureNotificationChannel() {
@@ -15,6 +47,7 @@ export async function ensureNotificationChannel() {
       if (req.display !== 'granted') return false;
     }
     if (!channelCreated) {
+      // Arloader channel
       await LocalNotifications.createChannel({
         id: 'arloader_downloads',
         name: 'Arloader Unduhan',
@@ -22,7 +55,20 @@ export async function ensureNotificationChannel() {
         importance: 4, // High importance (banner notification)
         visibility: 1, // Public on lockscreen
         vibration: true,
+        sound: 'default', // ADD sound
       }).catch(() => {});
+      
+      // Ardoro channel (NEW)
+      await LocalNotifications.createChannel({
+        id: 'ardoro_timer',
+        name: 'Ardoro Timer',
+        description: 'Notifikasi fase Pomodoro selesai',
+        importance: 5, // Max importance for heads-up
+        visibility: 1,
+        vibration: true,
+        sound: 'default',
+      }).catch(() => {});
+      
       channelCreated = true;
     }
     return true;
@@ -112,7 +158,8 @@ export async function sendPomodoroPhaseNotification({ phase = '', nextPhase = ''
           body: nextLabel,
           id: Math.floor(Date.now() % 100000) + Math.floor(Math.random() * 1000),
           schedule: { at: new Date(Date.now() + 100) },
-          channelId: 'arloader_downloads',
+          channelId: 'ardoro_timer', // Changed from 'arloader_downloads'
+          sound: 'default', // Explicit sound
           smallIcon: 'ic_launcher',
         },
       ],
