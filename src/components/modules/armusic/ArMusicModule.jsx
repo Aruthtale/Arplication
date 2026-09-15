@@ -32,12 +32,27 @@ export default function ArMusicModule({ setActiveTab }) {
   const [elapsed, setElapsed] = useState(0);
   const [duration, setDuration] = useState(0);
   const [order, setOrder] = useState([]); // index order untuk shuffle
+  const [musicView, setMusicView] = useState('semua'); // semua | artis | folder — sub-navbar ala Spotify
 
   const audioRef = useRef(null);
   const fileRef = useRef(null);
   const endRef = useRef(false);
 
-  const filtered = filterTracks(tracks, query);
+  const filteredByQuery = filterTracks(tracks, query);
+  // Sub-navbar view: semua = flat list, artis = grup per artis, folder = grup per folder
+  const groupedByArtist = {};
+  const groupedByFolder = {};
+  for (const t of filteredByQuery) {
+    const artistKey = (t.artist || 'Artis Tidak Dikenal').trim() || 'Artis Tidak Dikenal';
+    const folderKey = (t.folder || 'Lainnya').trim() || 'Lainnya';
+    if (!groupedByArtist[artistKey]) groupedByArtist[artistKey] = [];
+    if (!groupedByFolder[folderKey]) groupedByFolder[folderKey] = [];
+    groupedByArtist[artistKey].push(t);
+    groupedByFolder[folderKey].push(t);
+  }
+  const artistNames = Object.keys(groupedByArtist).sort((a, b) => a.localeCompare(b, 'id'));
+  const folderNames = Object.keys(groupedByFolder).sort((a, b) => a.localeCompare(b, 'id'));
+  const filtered = filteredByQuery;
   const current = tracks.find((t) => t.id === currentId) || null;
 
   const persist = (next) => {
@@ -222,6 +237,61 @@ export default function ArMusicModule({ setActiveTab }) {
     }
   };
 
+  const renderTrackCard = (track) => {
+    const isCurrent = track.id === currentId;
+    return (
+      <div
+        key={track.id}
+        onClick={() => playTrack(track)}
+        className={`nb-card p-2.5 flex items-center gap-2.5 transition-all cursor-pointer shadow-[1.5px_1.5px_0px_#121212] ${isCurrent ? 'bg-[#FFE600]' : 'bg-[#F8F5EE] hover:bg-white'}`}
+      >
+        <div className={`w-9 h-9 rounded-lg border border-black flex items-center justify-center shrink-0 shadow-[1px_1px_0px_#121212] ${isCurrent ? 'bg-[#121212]' : 'bg-[#D8B4FE]'}`}>
+          {isCurrent && playing
+            ? <Pause className="w-4 h-4 text-[#FFE600]" />
+            : <Play className={`w-4 h-4 ${isCurrent ? 'text-[#FFE600]' : 'text-[#121212]'}`} />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-black text-[#121212] truncate">{track.title}</p>
+          <p className="text-[10px] font-mono-code font-bold text-gray-500 truncate">
+            {track.artist}{track.folder ? ` • ${track.folder}` : ''}
+          </p>
+        </div>
+        {track.durationSec > 0 && (
+          <span className="text-[10px] font-mono-code font-bold text-gray-500 shrink-0">
+            {formatTrackDuration(track.durationSec)}
+          </span>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); handleRemove(track.id); }}
+          className="w-7 h-7 rounded-lg bg-white hover:bg-red-100 border border-black flex items-center justify-center text-red-600 transition-colors shadow-[1px_1px_0px_#121212] shrink-0"
+          title="Hapus dari koleksi"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  };
+
+  const renderGroupSection = (name, list) => (
+    <div key={name} className="space-y-2">
+      <div className="flex items-center justify-between px-1 pt-1">
+        <p className="text-[11px] font-black uppercase tracking-wider text-[#121212] truncate">
+          {name} <span className="font-mono-code text-gray-500">({list.length})</span>
+        </p>
+        <button
+          onClick={() => list.length > 0 && playTrack(list[0])}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#D8B4FE] border border-black text-[10px] font-black uppercase shadow-[1.5px_1.5px_0px_#121212] shrink-0"
+        >
+          <Play className="w-3 h-3" />
+          <span>Putar</span>
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {list.map((t) => renderTrackCard(t))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-3.5 sm:space-y-5 font-sans">
       {/* Header */}
@@ -256,6 +326,26 @@ export default function ArMusicModule({ setActiveTab }) {
             placeholder="Cari judul, artis, nama file..."
             className="flex-1 min-w-0 bg-transparent outline-none text-sm font-bold text-[#121212] placeholder:text-gray-400"
           />
+        </div>
+        {/* Sub-navbar ala Spotify: Semua / Artis / Folder */}
+        <div className="flex gap-2 overflow-x-auto pb-0.5">
+          {[
+            { id: 'semua', label: 'Semua' },
+            { id: 'artis', label: `Artis (${artistNames.length})` },
+            { id: 'folder', label: `Folder (${folderNames.length})` },
+          ].map((v) => (
+            <button
+              key={v.id}
+              onClick={() => setMusicView(v.id)}
+              className={`px-3.5 py-1.5 rounded-full border-2 border-[#121212] text-xs font-black uppercase whitespace-nowrap transition-all shadow-[2px_2px_0px_#121212] ${
+                musicView === v.id
+                  ? 'bg-[#121212] text-white'
+                  : 'bg-white text-[#121212] hover:bg-[#FFE600]'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
@@ -394,42 +484,17 @@ export default function ArMusicModule({ setActiveTab }) {
                 : 'Coba kata kunci lain.'}
             </p>
           </div>
+        ) : musicView === 'artis' ? (
+          <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+            {artistNames.map((name) => renderGroupSection(name, groupedByArtist[name]))}
+          </div>
+        ) : musicView === 'folder' ? (
+          <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+            {folderNames.map((name) => renderGroupSection(name, groupedByFolder[name]))}
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-1">
-            {filtered.map((track) => {
-              const isCurrent = track.id === currentId;
-              return (
-                <div
-                  key={track.id}
-                  onClick={() => playTrack(track)}
-                  className={`nb-card p-2.5 flex items-center gap-2.5 transition-all cursor-pointer shadow-[1.5px_1.5px_0px_#121212] ${isCurrent ? 'bg-[#FFE600]' : 'bg-[#F8F5EE] hover:bg-white'}`}
-                >
-                  <div className={`w-9 h-9 rounded-lg border border-black flex items-center justify-center shrink-0 shadow-[1px_1px_0px_#121212] ${isCurrent ? 'bg-[#121212]' : 'bg-[#D8B4FE]'}`}>
-                    {isCurrent && playing
-                      ? <Pause className="w-4 h-4 text-[#FFE600]" />
-                      : <Play className={`w-4 h-4 ${isCurrent ? 'text-[#FFE600]' : 'text-[#121212]'}`} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-[#121212] truncate">{track.title}</p>
-                    <p className="text-[10px] font-mono-code font-bold text-gray-500 truncate">
-                      {track.artist}{track.folder ? ` • ${track.folder}` : ''}
-                    </p>
-                  </div>
-                  {track.durationSec > 0 && (
-                    <span className="text-[10px] font-mono-code font-bold text-gray-500 shrink-0">
-                      {formatTrackDuration(track.durationSec)}
-                    </span>
-                  )}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleRemove(track.id); }}
-                    className="w-7 h-7 rounded-lg bg-white hover:bg-red-100 border border-black flex items-center justify-center text-red-600 transition-colors shadow-[1px_1px_0px_#121212] shrink-0"
-                    title="Hapus dari koleksi"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              );
-            })}
+            {filtered.map((track) => renderTrackCard(track))}
           </div>
         )}
       </div>

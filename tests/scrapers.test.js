@@ -16,6 +16,8 @@ import {
   pickPipedProgressiveStreams,
   pickPipedAudioUrl,
   formatPipedDuration,
+  isBotBlockError,
+  formatResolverError,
 } from '../src/services/scrapers/youtube.js';
 import { isAllowedYouTubeUrl } from '../scripts/downloader-server.js';
 import {
@@ -493,4 +495,24 @@ test('resolveSubfolderPath handles automatic platform folders and legacy presets
 
   // Custom user subfolders
   assert.equal(resolveSubfolderPath('MyVideos', 'youtube'), 'MyVideos');
+});
+
+test('isBotBlockError detects anti-bot / rate-limit errors', () => {
+  assert.equal(isBotBlockError(new Error('SignInConfirmNotBot: Please sign in')), true);
+  assert.equal(isBotBlockError(new Error('HTTP 429 Too Many Requests')), true);
+  assert.equal(isBotBlockError(new Error('Request failed 403 Forbidden')), true);
+  assert.equal(isBotBlockError(new Error('Network timeout')), false);
+  assert.equal(isBotBlockError(new Error('Stream audio tidak tersedia')), false);
+});
+
+test('formatResolverError gives clear Indonesian actionable messages', () => {
+  const botMsg = formatResolverError(new Error('SignInConfirmNotBot'), 'Daft Punk - One More Time');
+  assert.ok(botMsg.includes('memblokir'), `bot message should mention block, got: ${botMsg}`);
+  assert.ok(botMsg.includes('satu per satu'), `bot message should suggest single-track, got: ${botMsg}`);
+
+  const nfMsg = formatResolverError(new Error('Tidak dapat menemukan stream audio'), 'xyz');
+  assert.ok(nfMsg.includes('Tidak dapat menemukan'));
+
+  const netMsg = formatResolverError(new Error('fetch failed: network timeout'), 'xyz');
+  assert.ok(netMsg.includes('Jaringan'));
 });

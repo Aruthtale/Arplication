@@ -196,10 +196,11 @@ export default function MediaCard({ media, onDownloadComplete }) {
     setBatch(null);
   };
 
-  // Batch download for Playlist/Album (all tracks sequentially)
+  // Batch download for Playlist/Album (all tracks sequentially, dengan jeda anti rate-limit)
   const handleDownloadPlaylistBatch = async () => {
     if (batch || !media.tracks?.length) return;
     const tracksToDownload = media.tracks;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     setBatch({ done: 0, total: tracksToDownload.length, currentTitle: tracksToDownload[0]?.title });
 
     for (let i = 0; i < tracksToDownload.length; i += 1) {
@@ -215,6 +216,14 @@ export default function MediaCard({ media, onDownloadComplete }) {
 
       setBatch({ done: i, total: tracksToDownload.length, currentTitle: track.title });
       setDownloadingId(optId);
+      // Jeda 1.5 dtk antar track agar tidak dihajar anti-bot/rate-limit Piped
+      if (i > 0) {
+        setDownloadState((prev) => ({
+          ...prev,
+          [optId]: { progress: 5, message: 'Menunggu jeda anti-blokir...', failed: false },
+        }));
+        await sleep(1500);
+      }
       setDownloadState((prev) => ({
         ...prev,
         [optId]: { progress: 12, message: `Mengunduh track ${i + 1}/${tracksToDownload.length}...`, failed: false },

@@ -197,33 +197,95 @@ export function formatPipedDuration(sec) {
 }
 
 /**
+ * True jika error berasal dari proteksi anti-bot YouTube/Piped
+ * (SignInConfirmNotBot, 403/429, "sign in to confirm").
+ * Pure function — aman untuk unit test.
+ */
+export function isBotBlockError(err) {
+  const msg = String(err?.message || err || '');
+  return /SignInConfirm|confirm.*not.*bot|sign in to confirm|you're a bot|429|too many requests|rate limit|403.*forbidden/i.test(msg);
+}
+
+/**
+ * Format error resolver menjadi pesan Indonesia yang jelas & actionable.
+ * Pure function — aman untuk unit test.
+ */
+export function formatResolverError(err, query = '') {
+  const raw = String(err?.message || err || '');
+  const q = String(query || '').slice(0, 60);
+  if (isBotBlockError(err)) {
+    return `YouTube/Piped sedang memblokir permintaan otomatis untuk "${q}". Tunggu 1–2 menit lalu coba lagi, atau unduh track satu per satu (jangan batch sekaligus).`;
+  }
+  if (/tidak dapat menemukan|not found|404/i.test(raw)) {
+    return `Tidak dapat menemukan stream audio untuk "${q}". Coba kata kunci lain atau pakai link YouTube langsung.`;
+  }
+  if (/network|timeout|fetch|failed to fetch|econn|socket|tidak dapat dijangkau/i.test(raw)) {
+    return 'Jaringan bermasalah atau semua instance Piped offline. Periksa koneksi lalu coba lagi.';
+  }
+  if (/stream audio tidak tersedia/i.test(raw)) {
+    return `Video ditemukan tapi stream audio-nya kosong untuk "${q}". Coba lagu lain.`;
+  }
+  return raw.slice(0, 160) || 'Gagal resolve audio.';
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Resolves a direct playable/downloadable audio URL for a query, video ID, or watch URL.
- * Strategy: direct video ID/URL -> Piped streams; otherwise Piped search -> first hit -> streams.
+ * Strategy: direct video ID/URL -> Piped streams; otherwise Piped search
+ * -> coba hingga 5 kandidat teratas satu per satu (dengan jeda) -> streams.
+ * Multi-kandidat + jeda ini penting karena 1 hit pertama sering kena
+ * SignInConfirmNotBot sementara instance lain/video lain masih lolos.
  * Replaces the dead ymcdn (ytmp3.mobi) conversion engine.
  */
 export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url = '' } = {}) {
   const rawQuery = String(query || '').trim();
-  let vid = extractPipedVideoId(String(videoId || '')) || extractPipedVideoId(String(url || '')) || extractPipedVideoId(rawQuery);
+  const directVid = extractPipedVideoId(String(videoId || '')) || extractPipedVideoId(String(url || '')) || extractPipedVideoId(rawQuery);
 
-  if (!vid) {
-    if (!rawQuery) throw new Error('Kueri pencarian kosong.');
-    const results = await pipedSearchVideosSafe(rawQuery);
-    vid = results[0]?.videoId || null;
+  // Jalur cepat: ID video langsung (tanpa search)
+  if (directVid) {
+    try {
+      const streams = await pipedGetStreams(directVid);
+      const audioUrl = pickPipedAudioUrl(streams);
+      if (!audioUrl) {
+        throw new Error('Stream audio tidak tersedia untuk video ini. Coba lagu lain.');
+      }
+      return audioUrl;
+    } catch (err) {
+      throw new Error(formatResolverError(err, rawQuery || directVid));
+    }
   }
-  if (!vid) {
-    throw new Error(`Tidak dapat menemukan stream audio untuk "${rawQuery || url}".`);
+
+  if (!rawQuery) throw new Error('Kueri pencarian kosong.');
+  const results = await pipedSearchVideosSafe(rawQuery, 5);
+  if (!results.length) {
+    throw new Error(`Tidak dapat menemukan stream audio untuk "${rawQuery}". Coba kata kunci lain atau pakai link YouTube langsung.`);
   }
-  const streams = await pipedGetStreams(vid);
-  const audioUrl = pickPipedAudioUrl(streams);
-  if (!audioUrl) {
-    throw new Error('Stream audio tidak tersedia untuk video ini. Coba lagu lain.');
+
+  let lastError = null;
+  const attempts = results.slice(0, 5);
+  for (let i = 0; i < attempts.length; i += 1) {
+    const vid = attempts[i]?.videoId;
+    if (!vid) continue;
+    try {
+      const streams = await pipedGetStreams(vid);
+      const audioUrl = pickPipedAudioUrl(streams);
+      if (audioUrl) return audioUrl;
+      lastError = new Error('Stream audio tidak tersedia untuk video ini. Coba lagu lain.');
+    } catch (err) {
+      lastError = err;
+    }
+    // Jeda antar kandidat agar tidak dihajar rate-limit / bot-detect beruntun
+    if (i < attempts.length - 1) await sleep(800);
   }
-  return audioUrl;
+  throw new Error(formatResolverError(lastError, rawQuery));
 }
 
-async function pipedSearchVideosSafe(rawQuery) {
+async function pipedSearchVideosSafe(rawQuery, limit = 5) {
   try {
-    return await pipedSearchVideos(rawQuery, 5);
+    return await pipedSearchVideos(rawQuery, limit);
   } catch {
     return [];
   }

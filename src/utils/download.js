@@ -98,6 +98,12 @@ export function buildFilename({ title, author, platform, optionId, ext, pattern 
  */
 export function formatDownloadError(err) {
   const msg = String(err?.message || err || '');
+  if (/SignInConfirm|confirm.*not.*bot|sign in to confirm|you're a bot/i.test(msg)) {
+    return 'YouTube/Piped memblokir permintaan otomatis (anti-bot). Tunggu 1–2 menit, lalu unduh track satu per satu — jangan batch sekaligus.';
+  }
+  if (/429|too many requests|rate limit/i.test(msg)) {
+    return 'Terlalu banyak permintaan beruntun. Tunggu sebentar lalu coba lagi satu per satu.';
+  }
   if (/401|403|session|login|cookie/i.test(msg)) {
     return 'Akses ditolak — sesi kedaluwarsa. Perbarui IG Session ID di Pengaturan lalu coba lagi.';
   }
