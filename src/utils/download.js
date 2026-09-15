@@ -73,12 +73,18 @@ export function buildFilename({ title, author, platform, optionId, ext, pattern 
       .replace(/_+/g, '_')
       .replace(/^_+|_+$/g, '')
       .slice(0, len) || 'media';
-  const t = clean(title, 50);
+  const t = clean(title, 60);
   const a = clean(author, 30);
   const p = clean(platform, 15);
   const id = clean(optionId, 20);
   let base;
   switch (pattern) {
+    case 'clean_title':
+      base = t;
+      break;
+    case 'id_only':
+      base = id !== 'media' ? id : t;
+      break;
     case 'author_title':
       base = a !== 'media' ? `${a}_${t}` : `${t}_${id}`;
       break;
@@ -342,10 +348,23 @@ export async function downloadMedia({
       }
 
       let resPath = null;
+      let progressListener = null;
+      if (typeof onProgress === 'function') {
+        try {
+          progressListener = await Filesystem.addListener('progress', (status) => {
+            const bytes = Number(status?.bytes || 0);
+            const total = Number(status?.contentLength || 0);
+            if (total > 0) {
+              const pct = Math.min(99, Math.max(1, Math.round((bytes / total) * 100)));
+              onProgress(pct, `Mengunduh (${pct}%)...`);
+            }
+          });
+        } catch (_) { /* ignore listener fail */ }
+      }
 
       // Method A: Filesystem.downloadFile
       try {
-        if (onProgress) onProgress(30, 'Mengunduh file ke penyimpanan...');
+        if (onProgress) onProgress(5, 'Menghubungkan ke server...');
         const res = await Filesystem.downloadFile({
           url,
           path: relativePath,
@@ -389,6 +408,10 @@ export async function downloadMedia({
             recursive: true,
           });
           resPath = writeRes.uri;
+        }
+      } finally {
+        if (progressListener && typeof progressListener.remove === 'function') {
+          progressListener.remove().catch(() => {});
         }
       }
 
@@ -438,14 +461,31 @@ export async function downloadMedia({
   }
 
   // 2. Web Browser Environment
-  if (onProgress) onProgress(12, 'Menyiapkan unduhan...');
+  if (onProgress) onProgress(5, 'Menyiapkan unduhan...');
 
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    if (onProgress) onProgress(72, 'Menyimpan file ke browser...');
-    const blob = await response.blob();
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    let blob;
+    if (response.body && contentLength > 0 && typeof ReadableStream !== 'undefined') {
+      const reader = response.body.getReader();
+      let receivedBytes = 0;
+      const chunks = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        receivedBytes += value.length;
+        const pct = Math.min(99, Math.max(1, Math.round((receivedBytes / contentLength) * 100)));
+        if (onProgress) onProgress(pct, `Mengunduh (${pct}%)...`);
+      }
+      blob = new Blob(chunks);
+    } else {
+      if (onProgress) onProgress(50, 'Mengambil data media...');
+      blob = await response.blob();
+    }
     const blobUrl = window.URL.createObjectURL(blob);
 
     const link = document.createElement('a');

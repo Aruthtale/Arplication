@@ -54,7 +54,7 @@ export default function HomeHub({ setActiveTab }) {
       title: 'ArMusic',
       tagline: 'Pemutar Lokal',
       description: 'Putar lagu dari storage HP — hasil unduhan Arloader & file musik, offline.',
-      iconUrl: '/armusic.svg',
+      iconUrl: '/armusic.png',
       status: 'Aktif',
       statusColor: 'bg-[#D8B4FE]',
       cardBg: 'bg-[#FFFFFF]',

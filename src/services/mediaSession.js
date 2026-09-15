@@ -15,7 +15,10 @@
  * perlu plugin native (langkah lanjutan, lihat BUGFIX-PLAN).
  */
 
-const ACTION_HANDLERS = ['play', 'pause', 'previoustrack', 'nexttrack', 'seekto', 'seekbackward', 'seekforward'];
+const ACTION_HANDLERS = [
+  'play', 'pause', 'previoustrack', 'nexttrack', 'stop',
+  'seekto', 'seekbackward', 'seekforward', 'toggleshuffle'
+];
 
 export function isMediaSessionSupported() {
   return typeof navigator !== 'undefined' && 'mediaSession' in navigator;
@@ -54,6 +57,8 @@ export function publishNowPlaying({
   onPause,
   onPrev,
   onNext,
+  onStop,
+  onShuffle,
   onSeek,
 } = {}) {
   if (!isMediaSessionSupported()) return false;
@@ -66,11 +71,20 @@ export function publishNowPlaying({
       album: String(album || 'ArMusic'),
       artwork: artwork
         ? [
-            { src: artwork, sizes: '512x512', type: 'image/svg+xml' },
+            { src: artwork, sizes: '512x512', type: 'image/png' },
+            { src: artwork, sizes: '192x192', type: 'image/png' },
+            { src: artwork, sizes: '128x128', type: 'image/png' },
           ]
         : [],
     });
-    const handlers = { play: onPlay, pause: onPause, previoustrack: onPrev, nexttrack: onNext };
+    const handlers = {
+      play: onPlay,
+      pause: onPause,
+      previoustrack: onPrev,
+      nexttrack: onNext,
+      stop: onStop,
+      toggleshuffle: onShuffle,
+    };
     for (const [action, fn] of Object.entries(handlers)) {
       try {
         ms.setActionHandler(action, typeof fn === 'function' ? () => fn() : null);
@@ -143,11 +157,12 @@ export function clearNowPlaying() {
 }
 
 function resolveArtwork() {
-  // Artwork default ArMusic — absolute biar bisa dibaca SystemUI.
+  // Artwork default ArMusic PNG — PNG mutlak diperlukan agar dibaca oleh Android SystemUI.
+  // Pakai ukuran 512x512 terkompresi (~230KB) agar cepat dimuat SystemUI Android.
   try {
     if (typeof window !== 'undefined' && window.location?.origin) {
-      return `${window.location.origin}/armusic.svg`;
+      return `${window.location.origin}/armusic-512.png`;
     }
   } catch { /* abaikan */ }
-  return '/armusic.svg';
+  return '/armusic-512.png';
 }

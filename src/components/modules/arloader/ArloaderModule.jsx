@@ -413,7 +413,7 @@ export default function ArloaderModule({ setActiveTab }) {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#38E54D] border border-black animate-pulse" />
             <h4 className="font-mono-code font-extrabold text-xs text-[#121212] uppercase tracking-wide">
-              ACTIVE PIPELINE
+              ANTREAN UNDUHAN
             </h4>
           </div>
           <div className="flex items-center gap-1.5 font-mono-code text-[9px] font-black">

@@ -13,6 +13,13 @@ import {
   publishNowPlaying, setPlaybackState, setPositionState, clearNowPlaying,
 } from '../../../services/mediaSession.js';
 import {
+  showNativeNowPlaying, dismissNativeNowPlaying, onNativeMediaControl,
+  nativePlaybackSupported, shouldUseNativePlayback,
+  playNativeQueue, updateNativeQueue, pauseNativePlayback, resumeNativePlayback,
+  nextNativeTrack, prevNativeTrack, stopNativePlayback,
+  seekNativePlayback, getNativePlaybackState,
+} from '../../../services/armusicNative.js';
+import {
   fetchLyrics, activeLyricIndex,
 } from '../../../services/lyrics.js';
 
@@ -119,27 +126,22 @@ export default function ArMusicModule({ setActiveTab }) {
   const endRef = useRef(false);
   const lyricBoxRef = useRef(null);
   const lyricReqRef = useRef(0);
+  // Routing native-first (ExoPlayer service anti-kill):
+  // nativeModeRef=true → audio dimainkan service, WebView <audio> idle (fallback saja).
+  const nativeModeRef = useRef(false);
+  const nativeSupportRef = useRef(null); // null=belum deteksi, bool=hasil nativePlaybackSupported()
+  const effectiveQueueRef = useRef([]); // snapshot list yang dikirim ke native (peta index→id)
+  const currentIdRef = useRef(null);
+  const pollNativeOnceRef = useRef(null);
   // Refs agar MediaSession action handler selalu memanggil versi terbaru
   const togglePlayRef = useRef(null);
   const nextTrackRef = useRef(null);
   const prevTrackRef = useRef(null);
   const seekToRef = useRef(null);
+  const stopRef = useRef(null);
+  const toggleShuffleRef = useRef(null);
 
-  const filteredByQuery = filterTracks(tracks, query);
-  // Sub-navbar view: semua = flat list, artis = grup per artis, folder = grup per folder
-  const groupedByArtist = {};
-  const groupedByFolder = {};
-  for (const t of filteredByQuery) {
-    const artistKey = (t.artist || 'Artis Tidak Dikenal').trim() || 'Artis Tidak Dikenal';
-    const folderKey = (t.folder || 'Lainnya').trim() || 'Lainnya';
-    if (!groupedByArtist[artistKey]) groupedByArtist[artistKey] = [];
-    if (!groupedByFolder[folderKey]) groupedByFolder[folderKey] = [];
-    groupedByArtist[artistKey].push(t);
-    groupedByFolder[folderKey].push(t);
-  }
-  const artistNames = Object.keys(groupedByArtist).sort((a, b) => a.localeCompare(b, 'id'));
-  const folderNames = Object.keys(groupedByFolder).sort((a, b) => a.localeCompare(b, 'id'));
-  const filtered = filteredByQuery;
+  const filtered = filterTracks(tracks, query);
   const current = tracks.find((t) => t.id === currentId) || null;
 
   const persist = (next) => {
@@ -147,10 +149,16 @@ export default function ArMusicModule({ setActiveTab }) {
     saveLibrary(next);
   };
 
-  // Boot audio element sekali
+  // Boot audio element sekali — SINGLETON global agar lagu TIDAK mati
+  // saat pindah tab / komponen re-mount. Cleanup hanya lepas listener,
+  // TIDAK pernah pause di sini (pause hanya via aksi user / stopPlayback).
   useEffect(() => {
-    const audio = document.createElement('audio');
-    audio.preload = 'metadata';
+    let audio = globalThis.__arMusicAudio || null;
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.preload = 'metadata';
+      globalThis.__arMusicAudio = audio;
+    }
     audioRef.current = audio;
     const onTime = () => setElapsed(audio.currentTime || 0);
     const onMeta = () => setDuration(audio.duration && Number.isFinite(audio.duration) ? audio.duration : 0);
@@ -158,8 +166,9 @@ export default function ArMusicModule({ setActiveTab }) {
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('loadedmetadata', onMeta);
     audio.addEventListener('ended', onEnd);
+    // Sinkronkan state awal kalau audio sudah bunyi sebelum mount (mis. balik ke tab music)
+    if (!audio.paused) setPlaying(true);
     return () => {
-      audio.pause();
       audio.removeEventListener('timeupdate', onTime);
       audio.removeEventListener('loadedmetadata', onMeta);
       audio.removeEventListener('ended', onEnd);
@@ -167,8 +176,10 @@ export default function ArMusicModule({ setActiveTab }) {
     };
   }, []);
 
-  // Auto-next setelah track selesai (hormati repeat-one)
+  // Auto-next setelah track selesai (jalur WebView saja — native memakai
+  // auto-advance ExoPlayer + event 'advanced').
   useEffect(() => {
+    if (nativeModeRef.current) { endRef.current = false; return; }
     if (!endRef.current) return;
     endRef.current = false;
     if (repeatOne && current) {
@@ -179,6 +190,79 @@ export default function ArMusicModule({ setActiveTab }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
+  // Daftar efektif = hasil search (bila aktif) atau seluruh library.
+  const effectiveList = () => (filtered.length > 0 ? filtered : tracks);
+
+  // Terapkan urutan shuffle ke list (sinkron dgn state order).
+  const buildOrdered = (list, useShuffle) => {
+    if (!useShuffle) return list;
+    const ord = order.length === list.length ? order : pickFromList(list);
+    if (order.length !== list.length) setOrder(ord);
+    return ord.map((i) => list[i]).filter(Boolean);
+  };
+
+  // Publikasikan metadata ke Web MediaSession + state playback (kedua mode).
+  const syncMetaFor = (track, isPlaying) => {
+    setPlaybackState(isPlaying);
+    if (!track) return;
+    publishNowPlaying({
+      title: track.title,
+      artist: track.artist,
+      album: track.folder || 'ArMusic',
+      onPlay: () => togglePlayRef.current?.(),
+      onPause: () => togglePlayRef.current?.(),
+      onPrev: () => prevTrackRef.current?.(),
+      onNext: () => nextTrackRef.current?.(),
+      onStop: () => stopRef.current?.(),
+      onShuffle: () => toggleShuffleRef.current?.(),
+      onSeek: (sec) => seekToRef.current?.(sec),
+    });
+  };
+
+  // Poll sekali state ExoPlayer → sinkronkan UI (posisi, index, playing).
+  const pollNativeOnce = async () => {
+    const s = await getNativePlaybackState();
+    if (!s) return;
+    const q = effectiveQueueRef.current;
+    if (s.queueSize > 0 && s.index >= 0 && s.index < q.length) {
+      const id = q[s.index]?.id ?? q[s.index];
+      if (id && id !== currentIdRef.current) {
+        currentIdRef.current = id;
+        setCurrentId(id);
+        setElapsed(0);
+      }
+    }
+    setPlaying(s.playing);
+    setPlaybackState(s.playing);
+    setElapsed(s.positionMs / 1000);
+    if (s.durationMs > 0) setDuration(s.durationMs / 1000);
+  };
+
+  // Jalur WebView <audio> — fallback (blob:/data:, browser, atau native gagal).
+  const playViaWeb = async (track, src, forceReplay = false) => {
+    nativeModeRef.current = false;
+    try {
+      const audio = audioRef.current;
+      if (currentId !== track.id || forceReplay) {
+        audio.src = src;
+        currentIdRef.current = track.id;
+        setCurrentId(track.id);
+        setElapsed(0);
+        setDuration(track.durationSec || 0);
+      }
+      await audio.play();
+      setPlaying(true);
+      syncMetaFor(track, true);
+      showNativeNowPlaying({
+        title: track.title, artist: track.artist,
+        album: track.folder || 'ArMusic', playing: true,
+      });
+    } catch (e) {
+      setError(`Gagal memutar: ${e?.message || e}`);
+      setPlaying(false);
+    }
+  };
+
   const playTrack = async (track, forceReplay = false) => {
     if (!track || track.unavailable) return;
     setError(null);
@@ -187,44 +271,86 @@ export default function ArMusicModule({ setActiveTab }) {
       setError(`File "${track.filename || track.title}" tidak bisa dibuka. Pilih ulang dari storage.`);
       return;
     }
-    try {
-      const audio = audioRef.current;
-      if (currentId !== track.id || forceReplay) {
-        audio.src = src;
-        setCurrentId(track.id);
-        setElapsed(0);
-        setDuration(track.durationSec || 0);
+    // Deteksi dukungan ExoPlayer sekali per sesi
+    if (nativeSupportRef.current === null) {
+      try {
+        nativeSupportRef.current = await nativePlaybackSupported();
+      } catch {
+        nativeSupportRef.current = false;
       }
-      await audio.play();
+    }
+    const useNative = shouldUseNativePlayback({
+      nativeSupported: nativeSupportRef.current === true,
+      uri: track.uri,
+    });
+    if (!useNative) {
+      await playViaWeb(track, src, forceReplay);
+      return;
+    }
+    // Lagu sama sedang dipegang native → lanjutkan saja
+    if (nativeModeRef.current && currentIdRef.current === track.id && !forceReplay) {
+      await resumeNativePlayback();
       setPlaying(true);
       setPlaybackState(true);
-      publishNowPlaying({
-        title: track.title,
-        artist: track.artist,
-        album: track.folder || 'ArMusic',
-        onPlay: () => togglePlayRef.current?.(),
-        onPause: () => togglePlayRef.current?.(),
-        onPrev: () => prevTrackRef.current?.(),
-        onNext: () => nextTrackRef.current?.(),
-        onSeek: (sec) => seekToRef.current?.(sec),
-      });
-    } catch (e) {
-      setError(`Gagal memutar: ${e?.message || e}`);
-      setPlaying(false);
+      return;
     }
+    // Matikan fallback WebView agar tidak bunyi ganda
+    try { audioRef.current?.pause(); } catch { /* abaikan */ }
+    let ordered = buildOrdered(effectiveList(), shuffle);
+    let idx = ordered.findIndex((t) => t.id === track.id);
+    if (idx < 0) { ordered = [track, ...ordered]; idx = 0; }
+    const ok = await playNativeQueue(ordered, idx, { repeatOne });
+    if (ok) {
+      nativeModeRef.current = true;
+      effectiveQueueRef.current = ordered;
+      currentIdRef.current = track.id;
+      setCurrentId(track.id);
+      setElapsed(0);
+      setDuration(track.durationSec || 0);
+      setPlaying(true);
+      syncMetaFor(track, true);
+      // Notifikasi kini milik service — JANGAN showNativeNowPlaying (legacy meta-only).
+      return;
+    }
+    // Native gagal terkirim → fallback WebView
+    setError('Pemutar native gagal — memakai pemutar WebView.');
+    await playViaWeb(track, src, forceReplay);
   };
 
   const togglePlay = () => {
+    if (nativeModeRef.current) {
+      if (playing) {
+        pauseNativePlayback();
+        setPlaying(false);
+        setPlaybackState(false);
+      } else if (current) {
+        resumeNativePlayback();
+        setPlaying(true);
+        setPlaybackState(true);
+        pollNativeOnceRef.current?.();
+      } else if (filtered.length > 0) {
+        playTrack(filtered[0]);
+      }
+      return;
+    }
     const audio = audioRef.current;
     if (!audio) return;
     if (playing) {
       audio.pause();
       setPlaying(false);
       setPlaybackState(false);
+      showNativeNowPlaying({
+        title: current.title, artist: current.artist,
+        album: current.folder || 'ArMusic', playing: false,
+      });
     } else if (current) {
       audio.play().then(() => {
         setPlaying(true);
         setPlaybackState(true);
+        showNativeNowPlaying({
+          title: current.title, artist: current.artist,
+          album: current.folder || 'ArMusic', playing: true,
+        });
         publishNowPlaying({
           title: current.title,
           artist: current.artist,
@@ -233,6 +359,8 @@ export default function ArMusicModule({ setActiveTab }) {
           onPause: () => togglePlayRef.current?.(),
           onPrev: () => prevTrackRef.current?.(),
           onNext: () => nextTrackRef.current?.(),
+          onStop: () => stopRef.current?.(),
+          onShuffle: () => toggleShuffleRef.current?.(),
           onSeek: (sec) => seekToRef.current?.(sec),
         });
       }).catch((e) => setError(`Gagal memutar: ${e?.message || e}`));
@@ -246,6 +374,13 @@ export default function ArMusicModule({ setActiveTab }) {
     : [...Array(fromFiltered.length).keys()]);
 
   const nextTrack = (auto = false) => {
+    if (nativeModeRef.current) {
+      if (auto) return; // auto-advance dipegang ExoPlayer; event 'advanced' sinkronkan UI
+      nextNativeTrack();
+      // Optimistic UI — poll koreksi posisi/index aktual
+      setTimeout(() => pollNativeOnceRef.current?.(), 350);
+      return;
+    }
     const list = filtered.length > 0 ? filtered : tracks;
     if (!list.length) return;
     const idx = list.findIndex((t) => t.id === currentId);
@@ -263,6 +398,11 @@ export default function ArMusicModule({ setActiveTab }) {
   };
 
   const prevTrack = () => {
+    if (nativeModeRef.current) {
+      prevNativeTrack();
+      setTimeout(() => pollNativeOnceRef.current?.(), 350);
+      return;
+    }
     const audio = audioRef.current;
     if (audio && audio.currentTime > 3) {
       audio.currentTime = 0;
@@ -276,20 +416,136 @@ export default function ArMusicModule({ setActiveTab }) {
   };
 
   const handleSeek = (e) => {
-    const audio = audioRef.current;
     const pct = Number(e.target.value);
     setProgress(pct);
+    if (nativeModeRef.current) {
+      if (duration > 0) {
+        const sec = (pct / 100) * duration;
+        setElapsed(sec);
+        seekNativePlayback(sec * 1000);
+      }
+      return;
+    }
+    const audio = audioRef.current;
     if (audio && duration > 0) {
       audio.currentTime = (pct / 100) * duration;
     }
   };
 
   const seekTo = (sec) => {
+    if (nativeModeRef.current) {
+      if (Number.isFinite(sec) && duration > 0) {
+        const clamped = Math.min(Math.max(0, sec), duration);
+        setElapsed(clamped);
+        seekNativePlayback(clamped * 1000);
+      }
+      return;
+    }
     const audio = audioRef.current;
     if (audio && Number.isFinite(sec) && duration > 0) {
       audio.currentTime = Math.min(Math.max(0, sec), duration);
     }
   };
+
+  const stopPlayback = () => {
+    if (nativeModeRef.current) {
+      stopNativePlayback();
+      nativeModeRef.current = false;
+      effectiveQueueRef.current = [];
+      setPlaying(false);
+      setPlaybackState(false);
+      clearNowPlaying();
+      try { localStorage.removeItem('armusic-native-queue'); } catch { /* abaikan */ }
+      return;
+    }
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    setPlaying(false);
+    setPlaybackState(false);
+    dismissNativeNowPlaying();
+    clearNowPlaying();
+  };
+
+  const toggleShuffle = () => {
+    const nextVal = !shuffle;
+    setShuffle(nextVal);
+    // Sinkronkan urutan ke ExoPlayer tanpa memutus lagu aktif
+    if (nativeModeRef.current && effectiveQueueRef.current.length > 0) {
+      let target;
+      if (nextVal) {
+        target = [...effectiveQueueRef.current].sort(() => Math.random() - 0.5);
+        const curId = currentIdRef.current;
+        if (curId) {
+          const at = target.findIndex((t) => t.id === curId);
+          if (at > 0) { const [c] = target.splice(at, 1); target.unshift(c); }
+        }
+      } else {
+        // Kembali ke urutan library/search semula
+        const base = effectiveList();
+        target = base.filter((t) => effectiveQueueRef.current.some((q) => q.id === t.id));
+        if (target.length !== effectiveQueueRef.current.length) {
+          target = effectiveQueueRef.current; // fallback aman
+        }
+      }
+      effectiveQueueRef.current = target;
+      updateNativeQueue(target, -1, repeatOne);
+    }
+  };
+
+  const toggleRepeatOne = () => {
+    const nextVal = !repeatOne;
+    setRepeatOne(nextVal);
+    if (nativeModeRef.current && effectiveQueueRef.current.length > 0) {
+      updateNativeQueue(effectiveQueueRef.current, -1, nextVal);
+    }
+  };
+
+  // Terima event dari service + aksi tombol notifikasi/lockscreen/headset.
+  // Service SUDAH mengeksekusi perintah secara native — JS hanya sinkronkan UI.
+  useEffect(() => {
+    const off = onNativeMediaControl((ev) => {
+      const action = typeof ev === 'string' ? ev : ev?.action;
+      if (!nativeModeRef.current) {
+        if (action === 'toggle') togglePlayRef.current?.();
+        else if (action === 'next') nextTrackRef.current?.();
+        else if (action === 'prev') prevTrackRef.current?.();
+        else if (action === 'stop') stopRef.current?.();
+        return;
+      }
+      // Mode native: service sudah eksekusi, JS sinkron UI via poll.
+      if (action === 'stop') { stopRef.current?.(); return; }
+      if (action === 'queue-ended' || action === 'queueended') {
+        setPlaying(false);
+        setPlaybackState(false);
+        return;
+      }
+      if (action === 'error') {
+        setError(typeof ev === 'object' && ev?.message ? String(ev.message) : 'Pemutar native error.');
+        return;
+      }
+      if (action === 'advanced' && typeof ev === 'object' && ev?.index != null) {
+        const q = effectiveQueueRef.current;
+        const item = q[Number(ev.index)];
+        const id = item?.id ?? item;
+        if (id && id !== currentIdRef.current) {
+          currentIdRef.current = id;
+          setCurrentId(id);
+          setElapsed(0);
+          setPlaying(true);
+          setPlaybackState(true);
+          const track = tracks.find((t) => t.id === id);
+          if (track) syncMetaFor(track, true);
+        }
+      }
+      // toggle/next/prev → poll koreksi state aktual
+      setTimeout(() => pollNativeOnceRef.current?.(), 250);
+    });
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sinkronkan refs agar handler notif/lockscreen tak pernah stale
   useEffect(() => {
@@ -297,7 +553,19 @@ export default function ArMusicModule({ setActiveTab }) {
     nextTrackRef.current = nextTrack;
     prevTrackRef.current = prevTrack;
     seekToRef.current = seekTo;
+    stopRef.current = stopPlayback;
+    toggleShuffleRef.current = toggleShuffle;
+    pollNativeOnceRef.current = pollNativeOnce;
   });
+
+  // Polling posisi ExoPlayer tiap 1 detik saat mode native agar progress bar,
+  // timer, dan lirik tetap hidup walau WebView di-background.
+  useEffect(() => {
+    if (!playing || !nativeModeRef.current) return undefined;
+    const t = setInterval(() => { pollNativeOnceRef.current?.(); }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, currentId]);
 
   // Progress bar di notif lockscreen/shade
   useEffect(() => {
@@ -387,11 +655,33 @@ export default function ArMusicModule({ setActiveTab }) {
       try { URL.revokeObjectURL(target.uri); } catch { /* abaikan */ }
     }
     if (id === currentId) {
-      audioRef.current?.pause();
-      setPlaying(false);
-      setPlaybackState(false);
-      clearNowPlaying();
-      setCurrentId(null);
+      if (nativeModeRef.current) {
+        // Keluarkan dari queue native; bila tersisa lanjutkan, bila habis stop.
+        const rest = effectiveQueueRef.current.filter((t) => t.id !== id);
+        if (rest.length > 0) {
+          effectiveQueueRef.current = rest;
+          updateNativeQueue(rest, 0, repeatOne).then(() => pollNativeOnceRef.current?.());
+        } else {
+          stopPlayback();
+        }
+        currentIdRef.current = rest[0]?.id ?? null;
+        setCurrentId(rest[0]?.id ?? null);
+      } else {
+        audioRef.current?.pause();
+        setPlaying(false);
+        setPlaybackState(false);
+        dismissNativeNowPlaying();
+        clearNowPlaying();
+        currentIdRef.current = null;
+        setCurrentId(null);
+      }
+    } else if (nativeModeRef.current) {
+      // Hapus lagu lain dari queue native juga
+      const rest = effectiveQueueRef.current.filter((t) => t.id !== id);
+      if (rest.length !== effectiveQueueRef.current.length) {
+        effectiveQueueRef.current = rest;
+        updateNativeQueue(rest, -1, repeatOne);
+      }
     }
     persist(removeTrack(loadLibrary(), id));
   };
@@ -440,26 +730,6 @@ export default function ArMusicModule({ setActiveTab }) {
     );
   };
 
-  const renderGroupSection = (name, list) => (
-    <div key={name} className="space-y-2">
-      <div className="flex items-center justify-between px-1 pt-1">
-        <p className="text-[11px] font-black uppercase tracking-wider text-[#121212] truncate">
-          {name} <span className="font-mono-code text-gray-500">({list.length})</span>
-        </p>
-        <button
-          onClick={() => list.length > 0 && playTrack(list[0])}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#D8B4FE] border border-black text-[10px] font-black uppercase shadow-[1.5px_1.5px_0px_#121212] shrink-0"
-        >
-          <Play className="w-3 h-3" />
-          <span>Putar</span>
-        </button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        {list.map((t) => renderTrackCard(t))}
-      </div>
-    </div>
-  );
-
   return (
     <div className="space-y-3.5 sm:space-y-5 font-sans">
       {/* Header */}
@@ -494,26 +764,6 @@ export default function ArMusicModule({ setActiveTab }) {
             placeholder="Cari judul, artis, nama file..."
             className="flex-1 min-w-0 bg-transparent outline-none text-sm font-bold text-[#121212] placeholder:text-gray-400"
           />
-        </div>
-        {/* Sub-navbar ala Spotify: Semua / Artis / Folder */}
-        <div className="flex gap-2 overflow-x-auto pb-0.5">
-          {[
-            { id: 'semua', label: 'Semua' },
-            { id: 'artis', label: `Artis (${artistNames.length})` },
-            { id: 'folder', label: `Folder (${folderNames.length})` },
-          ].map((v) => (
-            <button
-              key={v.id}
-              onClick={() => setMusicView(v.id)}
-              className={`px-3.5 py-1.5 rounded-full border-2 border-[#121212] text-xs font-black uppercase whitespace-nowrap transition-all shadow-[2px_2px_0px_#121212] ${
-                musicView === v.id
-                  ? 'bg-[#121212] text-white'
-                  : 'bg-white text-[#121212] hover:bg-[#FFE600]'
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
         </div>
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
@@ -592,7 +842,7 @@ export default function ArMusicModule({ setActiveTab }) {
           />
           <div className="flex items-center justify-center gap-3">
             <button
-              onClick={() => setShuffle((v) => !v)}
+              onClick={toggleShuffle}
               title="Acak"
               className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${shuffle ? 'bg-[#FFE600] text-[#121212] border-[#FFE600]' : 'bg-transparent text-white/60 border-white/30'}`}
             >
@@ -617,7 +867,7 @@ export default function ArMusicModule({ setActiveTab }) {
               <SkipForward className="w-5 h-5" />
             </button>
             <button
-              onClick={() => setRepeatOne((v) => !v)}
+              onClick={toggleRepeatOne}
               title="Ulangi satu lagu"
               className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${repeatOne ? 'bg-[#FFE600] text-[#121212] border-[#FFE600]' : 'bg-transparent text-white/60 border-white/30'}`}
             >
@@ -665,14 +915,6 @@ export default function ArMusicModule({ setActiveTab }) {
                 ? 'Ketuk "Scan Storage" untuk memindai hasil unduhan Arloader, atau "Pilih File" untuk menambah manual.'
                 : 'Coba kata kunci lain.'}
             </p>
-          </div>
-        ) : musicView === 'artis' ? (
-          <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
-            {artistNames.map((name) => renderGroupSection(name, groupedByArtist[name]))}
-          </div>
-        ) : musicView === 'folder' ? (
-          <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
-            {folderNames.map((name) => renderGroupSection(name, groupedByFolder[name]))}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-1">

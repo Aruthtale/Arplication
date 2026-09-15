@@ -14,10 +14,12 @@ public class TimerServicePlugin extends Plugin {
     
     @PluginMethod
     public void startForegroundTimer(PluginCall call) {
-        Long endTime = call.getLong("endTime");
+        // Jangan pakai call.getLong: angka dari JS tiba sebagai Integer/Double
+        // (org.json) sehingga getLong() gagal instanceof dan mengembalikan null.
+        long endTime = call.getData().optLong("endTime", -1L);
         String phase = call.getString("phase");
-        
-        if (endTime == null || phase == null) {
+
+        if (endTime < 0 || phase == null) {
             call.reject("Missing endTime or phase");
             return;
         }

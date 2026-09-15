@@ -47,7 +47,12 @@ export async function ensureNotificationChannel() {
       if (req.display !== 'granted') return false;
     }
     if (!channelCreated) {
-      // Arloader channel
+      // Hapus channel lama dulu agar config korup ikut terbuang — channel
+      // Android bersifat PERSISTEN: createChannel tidak menimpa config lama.
+      // (Channel lama menyimpan sound raw/default yang tidak ada di res/.)
+      await LocalNotifications.deleteChannel({ id: 'arloader_downloads' }).catch(() => {});
+      await LocalNotifications.deleteChannel({ id: 'ardoro_timer' }).catch(() => {});
+      // Arloader channel (tanpa sound kustom — pakai bunyi default sistem)
       await LocalNotifications.createChannel({
         id: 'arloader_downloads',
         name: 'Arloader Unduhan',
@@ -55,7 +60,6 @@ export async function ensureNotificationChannel() {
         importance: 4, // High importance (banner notification)
         visibility: 1, // Public on lockscreen
         vibration: true,
-        sound: 'default', // ADD sound
       }).catch(() => {});
       
       // Ardoro channel (NEW)
@@ -66,7 +70,6 @@ export async function ensureNotificationChannel() {
         importance: 5, // Max importance for heads-up
         visibility: 1,
         vibration: true,
-        sound: 'default',
       }).catch(() => {});
       
       channelCreated = true;
@@ -93,12 +96,11 @@ export async function sendDownloadCompleteNotification({ title = '', platform = 
     await LocalNotifications.schedule({
       notifications: [
         {
-          title: `🎬 Unduhan ${platName} Selesai!`,
-          body: `"${cleanTitle}" telah tersimpan di ${path || 'penyimpanan'}.`,
+          title: `🎬 Unduhan ${platName} Selesai`,
+          body: `"${cleanTitle}" berhasil diunduh.`,
           id: Math.floor(Date.now() % 100000) + Math.floor(Math.random() * 1000),
-          schedule: { at: new Date(Date.now() + 100) },
+          schedule: { at: new Date(Date.now() + 500) },
           channelId: 'arloader_downloads',
-          smallIcon: 'ic_launcher',
         },
       ],
     });
@@ -125,9 +127,8 @@ export async function sendDownloadErrorNotification({ title = '', platform = '',
           title: `❌ Unduhan ${platName} Gagal`,
           body: `Gagal mengunduh "${cleanTitle}". ${error || ''}`,
           id: Math.floor(Date.now() % 100000) + Math.floor(Math.random() * 1000),
-          schedule: { at: new Date(Date.now() + 100) },
+          schedule: { at: new Date(Date.now() + 500) },
           channelId: 'arloader_downloads',
-          smallIcon: 'ic_launcher',
         },
       ],
     });
@@ -160,7 +161,6 @@ export async function sendPomodoroPhaseNotification({ phase = '', nextPhase = ''
           schedule: { at: new Date(Date.now() + 100) },
           channelId: 'ardoro_timer', // Changed from 'arloader_downloads'
           sound: 'default', // Explicit sound
-          smallIcon: 'ic_launcher',
         },
       ],
     });

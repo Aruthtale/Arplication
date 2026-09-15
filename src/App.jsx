@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/layout/Header';
 import BottomNav from './components/layout/BottomNav';
 import HomeHub from './components/modules/HomeHub';
@@ -7,9 +7,14 @@ import ArdoroModule from './components/modules/ardoro/ArdoroModule';
 import ArNoteModule from './components/modules/arnote/ArNoteModule';
 import ArMusicModule from './components/modules/armusic/ArMusicModule';
 import AruthtaleInfo from './components/modules/AruthtaleInfo';
+import { ensureNotificationChannel } from './utils/notification';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
+
+  useEffect(() => {
+    ensureNotificationChannel().catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F8F5EE] text-[#121212] flex flex-col selection:bg-[#FFE600] selection:text-[#121212]">
@@ -22,7 +27,11 @@ export default function App() {
         {activeTab === 'arloader' && <ArloaderModule setActiveTab={setActiveTab} />}
         {activeTab === 'ardoro' && <ArdoroModule setActiveTab={setActiveTab} />}
         {activeTab === 'arnote' && <ArNoteModule setActiveTab={setActiveTab} />}
-        {activeTab === 'armusic' && <ArMusicModule setActiveTab={setActiveTab} />}
+        {/* ArMusic SELALU mounted (hidden saat tab lain aktif) agar audio + state
+            tidak ikut unmount — pindah page tidak menghentikan lagu. */}
+        <div className={activeTab === 'armusic' ? '' : 'hidden'}>
+          <ArMusicModule setActiveTab={setActiveTab} />
+        </div>
         {activeTab === 'aruthtale' && <AruthtaleInfo setActiveTab={setActiveTab} />}
       </main>
 

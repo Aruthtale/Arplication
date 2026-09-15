@@ -37,3 +37,7 @@ android/local.properties
 android/app/release/
 *.apk
 *.aab
+# Release keystore — JANGAN commit (kunci signing + password publik di build.gradle)
+android/arplication-release.keystore
+*.keystore
+*.jks
