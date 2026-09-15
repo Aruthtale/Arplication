@@ -57,22 +57,15 @@ export function extractPipedVideoId(text = '') {
 /**
  * Piped API instances (public frontends for YouTube data + direct stream URLs).
  * Ordered by last-known reliability; the first responsive instance wins.
+ * Pruned 2026-09-15: verified live via curl (HTTP 200 + valid JSON).
+ * Removed: kavin.rocks (525), adminforge.de (403), leptons.xyz (502),
+ * reallyaweso.me (502), nosebs.ru (DNS mati), privacy.com.de (DNS mati),
+ * api.piped.yt (DNS mati), drgns.space (DNS mati), owo.si (timeout),
+ * codespace.cz (DNS mati), darkness.services (DNS mati), orangenet.cc (502).
  */
 export const PIPED_API_INSTANCES = [
   'https://pipedapi.ducks.party',
   'https://api.piped.private.coffee',
-  'https://pipedapi.kavin.rocks',
-  'https://pipedapi.adminforge.de',
-  'https://pipedapi.leptons.xyz',
-  'https://pipedapi.reallyaweso.me',
-  'https://pipedapi.nosebs.ru',
-  'https://piped-api.privacy.com.de',
-  'https://api.piped.yt',
-  'https://pipedapi.drgns.space',
-  'https://pipedapi.owo.si',
-  'https://piped-api.codespace.cz',
-  'https://pipedapi.darkness.services',
-  'https://pipedapi.orangenet.cc',
 ];
 
 /**
@@ -203,7 +196,7 @@ export function formatPipedDuration(sec) {
  */
 export function isBotBlockError(err) {
   const msg = String(err?.message || err || '');
-  return /SignInConfirm|confirm.*not.*bot|sign in to confirm|you're a bot|429|too many requests|rate limit|403.*forbidden/i.test(msg);
+  return /SignInConfirm|confirm.*not.*bot|sign in to confirm|you're a bot|LOGIN_REQUIRED|429|too many requests|rate limit|403.*forbidden|HTML error\/block page|upstream server returned|block page|cloudflare|attention required|just a moment|502.*bad gateway|525/i.test(msg);
 }
 
 /**

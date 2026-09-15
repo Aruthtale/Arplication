@@ -98,6 +98,9 @@ export function buildFilename({ title, author, platform, optionId, ext, pattern 
  */
 export function formatDownloadError(err) {
   const msg = String(err?.message || err || '');
+  if (/HTML error\/block page|upstream server returned|block page|cloudflare|attention required|just a moment/i.test(msg)) {
+    return 'Server penyedia memblokir permintaan otomatis (anti-bot / halaman blokir). Tunggu 1–2 menit, lalu unduh track satu per satu — jangan batch sekaligus.';
+  }
   if (/SignInConfirm|confirm.*not.*bot|sign in to confirm|you're a bot/i.test(msg)) {
     return 'YouTube/Piped memblokir permintaan otomatis (anti-bot). Tunggu 1–2 menit, lalu unduh track satu per satu — jangan batch sekaligus.';
   }

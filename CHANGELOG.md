@@ -7,6 +7,30 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.2.10] - 2026-09-15
+
+### 🐛 Fixed
+- **Arloader Spotify "Upstream HTML block page"** — Resolver Spotify kini memberi pesan Indonesia yang jelas (anti-bot, saran unduh satu per satu) alih-alih error teknis mentah:
+  - `isBotBlockError()` di `src/services/scrapers/youtube.js` kini mendeteksi pola halaman blokir (`HTML error/block page`, `upstream server returned`, Cloudflare `attention required` / `just a moment`, `LOGIN_REQUIRED`, HTTP 502/525)
+  - `formatResolverError()` memetakan error blokir ke pesan "YouTube/Piped sedang memblokir permintaan otomatis… unduh track satu per satu"
+  - `formatDownloadError()` di `src/utils/download.js` memetakan halaman blokir ke panduan anti-bot Indonesia
+- **Prune daftar instance Piped mati** — `PIPED_API_INSTANCES` dipangkas dari 14 → 2 instance yang terverifikasi hidup via curl (HTTP 200 + JSON valid):
+  - ✅ `pipedapi.ducks.party` (primary), ✅ `api.piped.private.coffee` (failover)
+  - ❌ Dihapus: kavin.rocks (525), adminforge.de (403), leptons.xyz (502), reallyaweso.me (502), nosebs.ru / privacy.com.de / api.piped.yt / drgns.space / codespace.cz / darkness.services (DNS mati), owo.si (timeout), orangenet.cc (502)
+  - Dampak: failover Spotify→YouTube audio kini ~2 percobaan alih-alih 14 timeout beruntun
+
+### 🧪 Tests
+- 3 regression test baru di `tests/scrapers.test.js` (total 50/50 pass, lint 0 errors):
+  - `formatResolverError` memetakan HTML block page → pesan "memblokir" + "satu per satu"
+  - `PIPED_API_INSTANCES` bebas dari 12 host mati yang diketahui
+  - `formatDownloadError` memetakan HTML block page → panduan anti-bot
+
+### 📦 Build
+- **versionCode**: 11 → **12**
+- **versionName**: "0.2.9" → **"0.2.10"**
+
+---
+
 ## [0.2.7] - 2026-09-15
 
 ### ✨ Added

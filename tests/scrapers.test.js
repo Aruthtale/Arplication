@@ -18,6 +18,7 @@ import {
   formatPipedDuration,
   isBotBlockError,
   formatResolverError,
+  PIPED_API_INSTANCES,
 } from '../src/services/scrapers/youtube.js';
 import { isAllowedYouTubeUrl } from '../scripts/downloader-server.js';
 import {
@@ -42,7 +43,7 @@ import {
   parseSpotifyEmbedData,
 } from '../src/services/scrapers/spotify.js';
 import { detectPlatform } from '../src/services/scrapers/index.js';
-import { resolveSubfolderPath, formatPlatformFolderName } from '../src/utils/download.js';
+import { resolveSubfolderPath, formatPlatformFolderName, formatDownloadError } from '../src/utils/download.js';
 
 const xResponse = {
   id_str: '2097687546381713860',
@@ -515,4 +516,48 @@ test('formatResolverError gives clear Indonesian actionable messages', () => {
 
   const netMsg = formatResolverError(new Error('fetch failed: network timeout'), 'xyz');
   assert.ok(netMsg.includes('Jaringan'));
+});
+
+test('formatResolverError maps HTML block page to clear Indonesian message', () => {
+  const htmlMsg = formatResolverError(
+    new Error('Native request failed: Upstream server returned an HTML error/block page.'),
+    'Daft Punk - One More Time',
+  );
+  assert.ok(htmlMsg.includes('memblokir'), `html block message should mention block, got: ${htmlMsg}`);
+  assert.ok(htmlMsg.includes('satu per satu'), `html block message should suggest single-track, got: ${htmlMsg}`);
+});
+
+test('PIPED_API_INSTANCES only lists known-healthy instances (no dead hosts)', () => {
+  const deadHosts = [
+    'pipedapi.kavin.rocks',
+    'pipedapi.adminforge.de',
+    'pipedapi.leptons.xyz',
+    'pipedapi.reallyaweso.me',
+    'pipedapi.nosebs.ru',
+    'piped-api.privacy.com.de',
+    'api.piped.yt',
+    'pipedapi.drgns.space',
+    'pipedapi.owo.si',
+    'piped-api.codespace.cz',
+    'pipedapi.darkness.services',
+    'pipedapi.orangenet.cc',
+  ];
+  for (const dead of deadHosts) {
+    assert.ok(
+      !PIPED_API_INSTANCES.some((base) => String(base).includes(dead)),
+      `dead instance ${dead} must be pruned from failover list`,
+    );
+  }
+  assert.ok(PIPED_API_INSTANCES.length >= 2, 'at least 2 healthy instances must remain');
+  assert.ok(
+    PIPED_API_INSTANCES.some((base) => String(base).includes('ducks.party')),
+    'ducks.party must remain as primary healthy instance',
+  );
+});
+
+test('formatDownloadError maps HTML block page to anti-bot guidance', () => {
+  const msg = formatDownloadError(
+    new Error('Native request failed: Upstream server returned an HTML error/block page.'),
+  );
+  assert.ok(msg.includes('memblokir'), `should mention block, got: ${msg}`);
 });
