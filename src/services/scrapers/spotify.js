@@ -270,7 +270,10 @@ export async function scrapeSpotify(url = '') {
   }
 
   // Step 2: Fallback to Spotify official oEmbed API
-  const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(cleanUrl)}`;
+  // Di web lokal, lewat proxy Vite (/__spotify) agar tidak kena blokir CORS.
+  const oembedUrl = isLocalWeb()
+    ? `/__spotify/oembed?url=${encodeURIComponent(cleanUrl)}`
+    : `https://open.spotify.com/oembed?url=${encodeURIComponent(cleanUrl)}`;
   const oembedData = await httpClient({
     url: oembedUrl,
     timeout: 10000,

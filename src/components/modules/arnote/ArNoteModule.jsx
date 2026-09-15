@@ -171,7 +171,7 @@ export default function ArNoteModule() {
             </span>
           </div>
           <p className="text-[11px] sm:text-xs text-[#121212]/70 font-semibold">
-            Bento Grid lokal • Sinkron otomatis ke homescreen widget
+             • Sinkron otomatis ke homescreen widget
           </p>
         </div>
 

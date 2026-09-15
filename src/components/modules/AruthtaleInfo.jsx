@@ -64,7 +64,7 @@ export default function AruthtaleInfo({ setActiveTab }) {
           <span>TENTANG APLIKASI & VSI</span>
         </h3>
         <p className="text-xs font-semibold text-gray-700 leading-relaxed">
-          <strong>Arplication</strong> dirancang oleh Aruthtale sebagai pusat utilitas harian terpadu. Fokus utama aplikasi ini adalah menghadirkan alat-alat produktivitas personal yang cepat, intuitif, dan nyaman digunakan tanpa proses yang rumit.
+          <strong>Arplication</strong> dirancang oleh brand Aruthtale sebagai pusat utilitas harian terpadu. Fokus utama aplikasi ini adalah menghadirkan alat-alat produktivitas personal yang cepat, intuitif, dan nyaman digunakan tanpa proses yang rumit.
         </p>
         <p className="text-xs font-semibold text-gray-700 leading-relaxed">
           Setiap modul di dalam Arplication dikembangkan secara bertahap untuk memenuhi kebutuhan pengunduhan media, manajemen sesi fokus produktif, serta pencatatan ide harian.

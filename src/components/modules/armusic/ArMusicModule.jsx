@@ -2,19 +2,97 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Music, Play, Pause, SkipBack, SkipForward, Search, FolderOpen,
   FileUp, ScanLine, Trash2, ListMusic, Loader2, AlertCircle,
-  Shuffle, Repeat, Home, Clock3,
+  Shuffle, Repeat, Home, Clock3, Mic, ChevronDown,
 } from 'lucide-react';
 import { isNative } from '../../../services/http.js';
 import {
   loadLibrary, saveLibrary, removeTrack, mergeScanResults,
   scanLocalAudio, toPlayableSrc, formatTrackDuration, isAudioFilename,
 } from '../../../services/localMusic.js';
+import {
+  publishNowPlaying, setPlaybackState, setPositionState, clearNowPlaying,
+} from '../../../services/mediaSession.js';
+import {
+  fetchLyrics, activeLyricIndex,
+} from '../../../services/lyrics.js';
 
 function filterTracks(tracks, query) {
   const q = String(query || '').toLowerCase().trim();
   if (!q) return tracks;
   return tracks.filter((t) =>
     `${t.title} ${t.artist} ${t.filename || ''}`.toLowerCase().includes(q)
+  );
+}
+
+function LyricsPanel({ lyricsState, elapsed, lyricBoxRef }) {
+  const { status, synced, plain, instrumental } = lyricsState || {};
+  const hasSynced = Array.isArray(synced) && synced.length > 0;
+  const idx = hasSynced ? activeLyricIndex(synced, elapsed || 0) : -1;
+
+  // Auto-scroll baris aktif ke tengah panel
+  useEffect(() => {
+    if (idx < 0) return;
+    const box = lyricBoxRef?.current;
+    if (!box) return;
+    const active = box.querySelector('[data-active="true"]');
+    if (active && typeof active.scrollIntoView === 'function') {
+      active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [idx, lyricBoxRef]);
+
+  return (
+    <div className="rounded-xl bg-white/5 border border-white/15 overflow-hidden">
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/10">
+        <Mic className="w-3.5 h-3.5 text-[#FFE600]" />
+        <p className="text-[10px] font-mono-code font-black uppercase tracking-wider text-white/70">
+          Lirik
+        </p>
+      </div>
+      {status === 'loading' && (
+        <div className="flex items-center gap-2 px-3 py-4">
+          <Loader2 className="w-4 h-4 animate-spin text-[#FFE600]" />
+          <p className="text-xs font-bold text-white/60">Mencari lirik...</p>
+        </div>
+      )}
+      {status === 'notfound' && (
+        <p className="px-3 py-4 text-xs font-bold text-white/50">
+          Lirik tidak ditemukan untuk lagu ini.
+        </p>
+      )}
+      {status === 'error' && (
+        <p className="px-3 py-4 text-xs font-bold text-white/50">
+          Gagal memuat lirik. Periksa koneksi lalu ganti lagu untuk coba lagi.
+        </p>
+      )}
+      {status === 'ready' && instrumental && (
+        <p className="px-3 py-4 text-xs font-bold text-white/60 italic">
+          Lagu instrumental — tidak ada lirik.
+        </p>
+      )}
+      {status === 'ready' && !instrumental && hasSynced && (
+        <div ref={lyricBoxRef} className="max-h-56 overflow-y-auto px-3 py-2 space-y-1.5">
+          {synced.map((line, i) => {
+            const active = i === idx;
+            return (
+              <p
+                key={`${line.t}-${i}`}
+                data-active={active ? 'true' : 'false'}
+                className={`text-xs leading-relaxed transition-all rounded-md px-2 py-1 ${active ? 'font-black text-[#FFE600] bg-white/10 scale-[1.01]' : 'font-bold text-white/45'}`}
+              >
+                {line.text}
+              </p>
+            );
+          })}
+        </div>
+      )}
+      {status === 'ready' && !instrumental && !hasSynced && plain && (
+        <div className="max-h-56 overflow-y-auto px-3 py-2">
+          <p className="text-xs font-bold text-white/70 leading-relaxed whitespace-pre-line">
+            {plain}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -33,10 +111,19 @@ export default function ArMusicModule({ setActiveTab }) {
   const [duration, setDuration] = useState(0);
   const [order, setOrder] = useState([]); // index order untuk shuffle
   const [musicView, setMusicView] = useState('semua'); // semua | artis | folder — sub-navbar ala Spotify
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [lyricsState, setLyricsState] = useState({ status: 'idle', synced: [], plain: '', instrumental: false }); // idle | loading | ready | notfound | error
 
   const audioRef = useRef(null);
   const fileRef = useRef(null);
   const endRef = useRef(false);
+  const lyricBoxRef = useRef(null);
+  const lyricReqRef = useRef(0);
+  // Refs agar MediaSession action handler selalu memanggil versi terbaru
+  const togglePlayRef = useRef(null);
+  const nextTrackRef = useRef(null);
+  const prevTrackRef = useRef(null);
+  const seekToRef = useRef(null);
 
   const filteredByQuery = filterTracks(tracks, query);
   // Sub-navbar view: semua = flat list, artis = grup per artis, folder = grup per folder
@@ -110,6 +197,17 @@ export default function ArMusicModule({ setActiveTab }) {
       }
       await audio.play();
       setPlaying(true);
+      setPlaybackState(true);
+      publishNowPlaying({
+        title: track.title,
+        artist: track.artist,
+        album: track.folder || 'ArMusic',
+        onPlay: () => togglePlayRef.current?.(),
+        onPause: () => togglePlayRef.current?.(),
+        onPrev: () => prevTrackRef.current?.(),
+        onNext: () => nextTrackRef.current?.(),
+        onSeek: (sec) => seekToRef.current?.(sec),
+      });
     } catch (e) {
       setError(`Gagal memutar: ${e?.message || e}`);
       setPlaying(false);
@@ -122,8 +220,22 @@ export default function ArMusicModule({ setActiveTab }) {
     if (playing) {
       audio.pause();
       setPlaying(false);
+      setPlaybackState(false);
     } else if (current) {
-      audio.play().then(() => setPlaying(true)).catch((e) => setError(`Gagal memutar: ${e?.message || e}`));
+      audio.play().then(() => {
+        setPlaying(true);
+        setPlaybackState(true);
+        publishNowPlaying({
+          title: current.title,
+          artist: current.artist,
+          album: current.folder || 'ArMusic',
+          onPlay: () => togglePlayRef.current?.(),
+          onPause: () => togglePlayRef.current?.(),
+          onPrev: () => prevTrackRef.current?.(),
+          onNext: () => nextTrackRef.current?.(),
+          onSeek: (sec) => seekToRef.current?.(sec),
+        });
+      }).catch((e) => setError(`Gagal memutar: ${e?.message || e}`));
     } else if (filtered.length > 0) {
       playTrack(filtered[0]);
     }
@@ -171,6 +283,60 @@ export default function ArMusicModule({ setActiveTab }) {
       audio.currentTime = (pct / 100) * duration;
     }
   };
+
+  const seekTo = (sec) => {
+    const audio = audioRef.current;
+    if (audio && Number.isFinite(sec) && duration > 0) {
+      audio.currentTime = Math.min(Math.max(0, sec), duration);
+    }
+  };
+
+  // Sinkronkan refs agar handler notif/lockscreen tak pernah stale
+  useEffect(() => {
+    togglePlayRef.current = togglePlay;
+    nextTrackRef.current = nextTrack;
+    prevTrackRef.current = prevTrack;
+    seekToRef.current = seekTo;
+  });
+
+  // Progress bar di notif lockscreen/shade
+  useEffect(() => {
+    if (current && playing && duration > 0) {
+      setPositionState({ duration, position: elapsed, playbackRate: 1 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsed]);
+
+  // Ambil lirik tiap ganti lagu (cache-first, batalkan request basi)
+  useEffect(() => {
+    if (!current) {
+      setLyricsState({ status: 'idle', synced: [], plain: '', instrumental: false });
+      return;
+    }
+    const reqId = ++lyricReqRef.current;
+    setLyricsState({ status: 'loading', synced: [], plain: '', instrumental: false });
+    fetchLyrics({
+      artist: current.artist,
+      title: current.title,
+      durationSec: current.durationSec || duration || 0,
+    }).then((res) => {
+      if (lyricReqRef.current !== reqId) return; // lagu sudah ganti — abaikan
+      if (res?.found) {
+        setLyricsState({
+          status: 'ready',
+          synced: res.synced || [],
+          plain: res.plain || '',
+          instrumental: Boolean(res.instrumental),
+        });
+      } else {
+        setLyricsState({ status: 'notfound', synced: [], plain: '', instrumental: false });
+      }
+    }).catch(() => {
+      if (lyricReqRef.current !== reqId) return;
+      setLyricsState({ status: 'error', synced: [], plain: '', instrumental: false });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
 
   useEffect(() => {
     if (duration > 0) setProgress((elapsed / duration) * 100);
@@ -223,6 +389,8 @@ export default function ArMusicModule({ setActiveTab }) {
     if (id === currentId) {
       audioRef.current?.pause();
       setPlaying(false);
+      setPlaybackState(false);
+      clearNowPlaying();
       setCurrentId(null);
     }
     persist(removeTrack(loadLibrary(), id));
@@ -405,6 +573,13 @@ export default function ArMusicModule({ setActiveTab }) {
               <Clock3 className="w-3 h-3" />
               {formatTrackDuration(elapsed) || '0:00'} / {formatTrackDuration(duration) || formatTrackDuration(current.durationSec) || '--:--'}
             </span>
+            <button
+              onClick={() => setShowLyrics((v) => !v)}
+              title={showLyrics ? 'Sembunyikan lirik' : 'Tampilkan lirik'}
+              className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${showLyrics ? 'bg-[#FFE600] text-[#121212] border-[#FFE600]' : 'bg-transparent text-white/60 border-white/30 hover:text-white'}`}
+            >
+              {showLyrics ? <ChevronDown className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
           </div>
           <input
             type="range"
@@ -449,6 +624,13 @@ export default function ArMusicModule({ setActiveTab }) {
               <Repeat className="w-4 h-4" />
             </button>
           </div>
+          {showLyrics && (
+            <LyricsPanel
+              lyricsState={lyricsState}
+              elapsed={elapsed}
+              lyricBoxRef={lyricBoxRef}
+            />
+          )}
         </div>
       )}
 

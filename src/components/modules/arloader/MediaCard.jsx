@@ -39,6 +39,9 @@ export default function MediaCard({ media, onDownloadComplete }) {
           // Prefer backend-provided estimate; only probe when no size info exists.
           if (opt.bytes) return [opt.id, opt.bytes];
           if (opt.estimatedSize) return [opt.id, null];
+          // Link halaman eksternal (ext 'url', cth. "Open in Spotify") bukan file
+          // yang bisa di-download — mem-probe-nya via fetch selalu kena blokir CORS.
+          if (opt.ext === 'url') return [opt.id, null];
           if (!opt.url) return [opt.id, null];
           try {
             const bytes = await probeFileSize(opt.url);
@@ -106,6 +109,12 @@ export default function MediaCard({ media, onDownloadComplete }) {
   };
 
   const handleDownload = async (option, customTitle = null) => {
+    // Link halaman eksternal (ext 'url', cth. "Open in Spotify") bukan file —
+    // buka di tab baru, jangan di-fetch (kena blokir CORS).
+    if (option.ext === 'url' && option.url) {
+      window.open(option.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
     setDownloadingId(option.id);
     setDownloadState((prev) => ({
       ...prev,
@@ -154,6 +163,12 @@ export default function MediaCard({ media, onDownloadComplete }) {
     if (batch) return;
     setBatch({ done: 0, total: media.options.length, currentTitle: media.title });
     for (const option of media.options) {
+      // Lewati link halaman eksternal (ext 'url', cth. "Open in Spotify") —
+      // bukan file yang bisa diunduh, jangan di-fetch (kena blokir CORS).
+      if (option.ext === 'url') {
+        setBatch((b) => (b ? { ...b, done: b.done + 1 } : b));
+        continue;
+      }
       setDownloadingId(option.id);
       setDownloadState((prev) => ({
         ...prev,
@@ -743,7 +758,7 @@ export default function MediaCard({ media, onDownloadComplete }) {
                     </div>
 
                     <div className="flex items-center gap-2 self-end sm:self-auto">
-                      {option.url && (
+                      {option.url && option.ext !== 'url' && (
                         <button
                           onClick={() => openPreview(option, currentDownload)}
                           className="nb-btn px-3 py-1.5 bg-[#C4FAF8] text-black text-xs flex items-center gap-1 shadow-[1.5px_1.5px_0px_#121212]"
@@ -754,7 +769,16 @@ export default function MediaCard({ media, onDownloadComplete }) {
                         </button>
                       )}
 
-                      {currentDownload?.failed && !isCurrent ? (
+                      {option.ext === 'url' ? (
+                        <button
+                          onClick={() => window.open(option.url, '_blank', 'noopener,noreferrer')}
+                          className="nb-btn px-3.5 py-1.5 bg-[#1DB954] text-black text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_#121212]"
+                          title="Buka di Spotify / situs resmi"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Buka</span>
+                        </button>
+                      ) : currentDownload?.failed && !isCurrent ? (
                         <button
                           onClick={() => handleDownload(option)}
                           className="nb-btn px-3 py-1.5 bg-[#FF6B6B] text-white text-xs flex items-center gap-1 shadow-[1.5px_1.5px_0px_#121212]"
