@@ -226,34 +226,150 @@ function sleep(ms) {
 }
 
 /**
+ * Direct YouTube search via web endpoint to get videoId without Piped.
+ */
+async function searchYouTubeDirect(query) {
+  if (!query) return null;
+  try {
+    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const res = await httpClient({
+      url: searchUrl,
+      raw: true,
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    const html = typeof res === 'string' ? res : (res?.data || '');
+    const match = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  } catch (err) {
+    console.warn('[YouTube] Direct web search failed:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Resolves MP3 audio URL via Convert1s / ytmp3.gg converter cluster (same engine Mori uses).
+ */
+async function resolveConvert1sAudio(videoId) {
+  if (!videoId) return null;
+  const convertHeaders = {
+    Origin: 'https://media.ytmp3.gg',
+    Referer: 'https://media.ytmp3.gg/',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  };
+  try {
+    const convRes = await httpClient({
+      url: 'https://hub.convert1s.com/api/download',
+      method: 'POST',
+      headers: convertHeaders,
+      data: {
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        os: 'android',
+        output: {
+          type: 'audio',
+          format: 'mp3',
+          quality: '128',
+        },
+        audio: { bitrate: '128k' },
+      },
+      timeout: 12000,
+    });
+
+    const statusUrl = convRes?.statusUrl;
+    if (!statusUrl) return null;
+
+    for (let i = 0; i < 15; i += 1) {
+      await sleep(1000);
+      try {
+        const pollRes = await httpClient({
+          url: statusUrl,
+          headers: convertHeaders,
+          timeout: 8000,
+        });
+        if (pollRes?.status === 'completed' && pollRes?.downloadUrl) {
+          return pollRes.downloadUrl;
+        }
+        if (pollRes?.status === 'failed') {
+          break;
+        }
+      } catch (err) {
+        console.warn('[Convert1s] Poll error:', err.message);
+      }
+    }
+  } catch (err) {
+    console.warn('[Convert1s] Conversion error:', err.message);
+  }
+  return null;
+}
+
+/**
  * Resolves a direct playable/downloadable audio URL for a query, video ID, or watch URL.
- * Strategy: direct video ID/URL -> Piped streams; otherwise Piped search
- * -> coba hingga 5 kandidat teratas satu per satu (dengan jeda) -> streams.
- * Multi-kandidat + jeda ini penting karena 1 hit pertama sering kena
- * SignInConfirmNotBot sementara instance lain/video lain masih lolos.
- * Replaces the dead ymcdn (ytmp3.mobi) conversion engine.
+ * Multi-layer strategy:
+ * 1. Convert1s cloud converter cluster (Fast, reliable, MP3 128k/320k)
+ * 2. Local yt-dlp server (if in Vite dev mode)
+ * 3. Direct Piped video stream
+ * 4. Piped search multi-candidate stream
  */
 export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url = '' } = {}) {
   const rawQuery = String(query || '').trim();
-  const directVid = extractPipedVideoId(String(videoId || '')) || extractPipedVideoId(String(url || '')) || extractPipedVideoId(rawQuery);
+  let directVid = extractPipedVideoId(String(videoId || '')) || extractPipedVideoId(String(url || '')) || extractPipedVideoId(rawQuery);
 
-  // Jalur cepat: ID video langsung (tanpa search)
+  // If no direct videoId, try finding videoId directly from YouTube web search
+  if (!directVid && rawQuery) {
+    directVid = await searchYouTubeDirect(rawQuery);
+  }
+
+  // PRIORITAS 1: Convert1s Cloud Converter (Mori Engine - bypasses YouTube bot-detect completely)
+  if (directVid) {
+    try {
+      const convertAudioUrl = await resolveConvert1sAudio(directVid);
+      if (convertAudioUrl) {
+        return convertAudioUrl;
+      }
+    } catch (err) {
+      console.warn('[YouTube] Convert1s resolution failed, falling back:', err.message);
+    }
+  }
+
+  // PRIORITAS 2: Local yt-dlp server (if in Vite dev web mode)
+  if (isLocalWeb()) {
+    try {
+      const searchQuery = rawQuery || (directVid ? `https://youtube.com/watch?v=${directVid}` : '');
+      if (searchQuery) {
+        const localRes = await httpClient({
+          url: `/api/yt-dlp/audio-url?q=${encodeURIComponent(searchQuery)}`,
+          timeout: 15000,
+        });
+        if (localRes?.audioUrl) {
+          return localRes.audioUrl;
+        }
+      }
+    } catch (err) {
+      console.warn('[YouTube] Local yt-dlp fallback gagal, coba Piped:', err.message);
+    }
+  }
+
+  // PRIORITAS 3: Jalur cepat Piped - ID video langsung
   if (directVid) {
     try {
       const streams = await pipedGetStreams(directVid);
       const audioUrl = pickPipedAudioUrl(streams);
-      if (!audioUrl) {
-        throw new Error('Stream audio tidak tersedia untuk video ini. Coba lagu lain.');
+      if (audioUrl) {
+        return audioUrl;
       }
-      return audioUrl;
     } catch (err) {
-      throw new Error(formatResolverError(err, rawQuery || directVid));
+      console.warn('[YouTube] Piped direct stream failed:', err.message);
     }
   }
 
+  // PRIORITAS 4: Piped search multi-kandidat
   if (!rawQuery) throw new Error('Kueri pencarian kosong.');
   const results = await pipedSearchVideosSafe(rawQuery, 5);
-  if (!results.length) {
+  if (!results.length && !directVid) {
     throw new Error(`Tidak dapat menemukan stream audio untuk "${rawQuery}". Coba kata kunci lain atau pakai link YouTube langsung.`);
   }
 

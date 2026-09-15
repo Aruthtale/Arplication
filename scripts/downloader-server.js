@@ -160,6 +160,54 @@ async function inspectPlaylist(requestUrl, response) {
   });
 }
 
+async function getAudioUrl(requestUrl, response) {
+  const sourceUrl = requestUrl.searchParams.get('url') || '';
+  const query = requestUrl.searchParams.get('q') || requestUrl.searchParams.get('query') || '';
+
+  let target = '';
+  if (query.trim()) {
+    target = isAllowedYouTubeUrl(query.trim()) ? query.trim() : `ytsearch1:${query.trim()}`;
+  } else if (isAllowedYouTubeUrl(sourceUrl)) {
+    target = sourceUrl;
+  } else {
+    sendJson(response, 400, { error: 'Hanya URL YouTube HTTPS atau query pencarian yang diizinkan.' });
+    return;
+  }
+
+  const child = spawn('yt-dlp', [
+    '--no-playlist',
+    '--no-warnings',
+    '-f', 'bestaudio/best',
+    '--get-url',
+    '--no-check-certificate',
+    target,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+  let stdout = '';
+  let stderr = '';
+
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk.toString();
+  });
+
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  child.once('close', (code) => {
+    if (code === 0 && stdout.trim()) {
+      const audioUrl = stdout.trim().split('\n')[0];
+      sendJson(response, 200, { ok: true, audioUrl });
+    } else {
+      sendJson(response, 502, { error: stderr.slice(-500) || `yt-dlp error ${code}` });
+    }
+  });
+
+  child.once('error', (err) => {
+    sendJson(response, 502, { error: err.message || 'Gagal menjalankan yt-dlp.' });
+  });
+}
+
 export function createDownloaderServer() {
   return createServer(async (request, response) => {
     setCorsHeaders(response);
@@ -180,6 +228,18 @@ export function createDownloaderServer() {
       } catch (error) {
         if (!response.headersSent) {
           sendJson(response, 502, { error: error.message || 'Gagal inspeksi playlist.' });
+        } else {
+          response.destroy(error);
+        }
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/audio-url') {
+      try {
+        await getAudioUrl(requestUrl, response);
+      } catch (error) {
+        if (!response.headersSent) {
+          sendJson(response, 502, { error: error.message || 'Gagal resolve audio URL.' });
         } else {
           response.destroy(error);
         }
