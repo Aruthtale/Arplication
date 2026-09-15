@@ -50,6 +50,20 @@ export default function HomeHub({ setActiveTab }) {
       isReady: true,
     },
     {
+      id: 'armusic',
+      title: 'ArMusic',
+      tagline: 'Pemutar Lokal',
+      description: 'Putar lagu dari storage HP — hasil unduhan Arloader & file musik, offline.',
+      iconUrl: '/armusic.svg',
+      status: 'Aktif',
+      statusColor: 'bg-[#D8B4FE]',
+      cardBg: 'bg-[#FFFFFF]',
+      accentColor: '#D8B4FE',
+      badgeBg: 'bg-[#D8B4FE]',
+      actionLabel: 'Buka',
+      isReady: true,
+    },
+    {
       id: 'aruthtale',
       title: 'Aruthtale',
       tagline: 'Info & Diagnostik',
@@ -88,7 +102,7 @@ export default function HomeHub({ setActiveTab }) {
             Ruang Utilitas Terpadu
           </h1>
           <p className="text-xs font-bold text-gray-800 leading-relaxed mt-1">
-            Utilitas harian offline-first: pengunduh media, pencatatan bento dengan widget homescreen, dan fokus timer.
+            Utilitas harian offline-first: pengunduh media, pemutar musik lokal, pencatatan bento dengan widget homescreen, dan fokus timer.
           </p>
         </div>
 
@@ -116,7 +130,7 @@ export default function HomeHub({ setActiveTab }) {
             <span>DAFTAR MODUL APLIKASI</span>
           </h2>
           <span className="text-[9.5px] font-mono-code font-black bg-white px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#121212]">
-            4 MODUL
+            5 MODUL
           </span>
         </div>
 

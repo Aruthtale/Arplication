@@ -13,6 +13,8 @@ export default function Header({ activeTab, setActiveTab }) {
         return 'ARDORO';
       case 'arnote':
         return 'ARNOTE';
+      case 'armusic':
+        return 'ARMUSIC';
       case 'aruthtale':
         return 'ARUTHTALE';
       default:

@@ -1,0 +1,180 @@
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
+import { isNative } from './http.js';
+
+export const ARMUSIC_LIBRARY_KEY = 'armusic_library';
+export const MAX_LIBRARY_ITEMS = 500;
+
+export const AUDIO_EXTENSIONS = [
+  'mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'flac', 'mid', 'midi', '3gp',
+];
+
+/**
+ * True jika nama file berekstensi audio yang didukung <audio>.
+ */
+export function isAudioFilename(name = '') {
+  const ext = String(name).split('.').pop().toLowerCase().split('?')[0];
+  return AUDIO_EXTENSIONS.includes(ext);
+}
+
+/**
+ * Tebak { artist, title } dari nama file.
+ * Pola umum Arloader: "Judul_id.mp3" atau "Artis_Judul.mp3" (underscore = spasi).
+ */
+export function parseFileMetadata(filename = '') {
+  const base = String(filename).replace(/\.[a-zA-Z0-9]+$/, '');
+  const withSpaces = base.replace(/_+/g, ' ').trim();
+  // Pola "Artis - Judul"
+  const dashSplit = withSpaces.split(' - ');
+  if (dashSplit.length >= 2) {
+    return {
+      artist: dashSplit[0].trim() || 'Artis Tidak Dikenal',
+      title: dashSplit.slice(1).join(' - ').trim() || withSpaces,
+    };
+  }
+  return { artist: 'Artis Tidak Dikenal', title: withSpaces || 'Tanpa Judul' };
+}
+
+/**
+ * Format detik -> "m:ss" (konsisten dengan formatPipedDuration).
+ */
+export function formatTrackDuration(totalSeconds) {
+  const s = Math.floor(Number(totalSeconds));
+  if (!Number.isFinite(s) || s <= 0) return null;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Ubah file URI native menjadi src yang bisa dimainkan WebView.
+ */
+export function toPlayableSrc(uri = '') {
+  if (!uri) return null;
+  if (/^(blob:|https?:|data:)/i.test(uri)) return uri;
+  if (isNative()) {
+    try {
+      return Capacitor.convertFileSrc(uri);
+    } catch {
+      return uri;
+    }
+  }
+  return uri;
+}
+
+function readLibrary() {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const saved = localStorage.getItem(ARMUSIC_LIBRARY_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.warn('Failed to read ArMusic library:', e);
+  }
+  return [];
+}
+
+function writeLibrary(items = []) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(ARMUSIC_LIBRARY_KEY, JSON.stringify(items.slice(0, MAX_LIBRARY_ITEMS)));
+    }
+  } catch (e) {
+    console.warn('Failed to save ArMusic library:', e);
+  }
+}
+
+export function loadLibrary() {
+  // Entri hasil file-picker (blob:) mati setelah reload — tandai agar user pilih ulang.
+  return readLibrary().map((t) => ({
+    ...t,
+    unavailable: t.source === 'pick' && String(t.uri || '').startsWith('blob:'),
+  }));
+}
+
+export function saveLibrary(tracks = []) {
+  const clean = tracks.map(({ _objectUrl, unavailable, ...rest }) => rest);
+  writeLibrary(clean);
+  return tracks;
+}
+
+export function removeTrack(tracks = [], id) {
+  return tracks.filter((t) => t.id !== id);
+}
+
+/**
+ * Scan folder hasil unduhan Arloader di storage HP (native only).
+ * Menjelajah Download/Arloader/* dan folder Music, kedalaman maks 3 level.
+ */
+export async function scanLocalAudio({ onProgress } = {}) {
+  if (!isNative()) {
+    throw new Error('Scan storage hanya tersedia di aplikasi Android.');
+  }
+  await Filesystem.requestPermissions().catch(() => {});
+
+  const roots = ['Download/Arloader', 'Music'];
+  const found = [];
+  const queue = roots.map((r) => ({ path: r, depth: 0 }));
+  const seen = new Set();
+
+  while (queue.length > 0 && found.length < MAX_LIBRARY_ITEMS) {
+    const { path, depth } = queue.shift();
+    if (seen.has(path)) continue;
+    seen.add(path);
+    let entries = [];
+    try {
+      const res = await Filesystem.readdir({
+        path,
+        directory: Directory.ExternalStorage,
+      });
+      entries = res?.files || [];
+    } catch {
+      continue; // folder tidak ada / tidak bisa dibaca — lewati
+    }
+    for (const entry of entries) {
+      const name = entry?.name;
+      if (!name) continue;
+      const fullPath = `${path}/${name}`;
+      const isDir = entry.type === 'directory' || (!name.includes('.') && depth < 3);
+      if (isDir && depth < 3) {
+        queue.push({ path: fullPath, depth: depth + 1 });
+      } else if (isAudioFilename(name)) {
+        let uri = null;
+        try {
+          const uriRes = await Filesystem.getUri({
+            path: fullPath,
+            directory: Directory.ExternalStorage,
+          });
+          uri = uriRes?.uri || null;
+        } catch {
+          uri = null;
+        }
+        if (uri) {
+          const { artist, title } = parseFileMetadata(name);
+          found.push({
+            id: `scan:${fullPath}`,
+            title,
+            artist,
+            filename: name,
+            folder: path,
+            uri,
+            source: 'scan',
+          });
+          if (onProgress) onProgress(found.length, name);
+        }
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Gabungkan hasil scan ke library: tambah yang baru, segarkan uri yang berubah.
+ */
+export function mergeScanResults(library = [], scanned = []) {
+  const byId = new Map(library.map((t) => [t.id, t]));
+  for (const track of scanned) {
+    byId.set(track.id, { ...byId.get(track.id), ...track, unavailable: false });
+  }
+  return [...byId.values()].slice(0, MAX_LIBRARY_ITEMS);
+}

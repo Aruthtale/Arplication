@@ -11,6 +11,11 @@ import {
   isYouTubePlaylistUrl,
   extractYouTubePlaylistId,
   extractYouTubeId,
+  extractPipedVideoId,
+  pipedQualityRank,
+  pickPipedProgressiveStreams,
+  pickPipedAudioUrl,
+  formatPipedDuration,
 } from '../src/services/scrapers/youtube.js';
 import { isAllowedYouTubeUrl } from '../scripts/downloader-server.js';
 import {
@@ -156,6 +161,64 @@ test('local downloader only accepts YouTube URLs', () => {
   assert.equal(isAllowedYouTubeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), true);
   assert.equal(isAllowedYouTubeUrl('https://youtu.be/dQw4w9WgXcQ'), true);
   assert.equal(isAllowedYouTubeUrl('https://example.com/video'), false);
+});
+
+test('extractPipedVideoId accepts watch URL, short link, and bare ID', () => {
+  assert.equal(extractPipedVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.equal(extractPipedVideoId('https://youtu.be/dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.equal(extractPipedVideoId('dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.equal(extractPipedVideoId('Rick Astley - Never Gonna Give You Up'), null);
+  assert.equal(extractPipedVideoId(''), null);
+});
+
+test('pipedQualityRank ranks numeric quality labels', () => {
+  assert.equal(pipedQualityRank('1080p'), 1080);
+  assert.equal(pipedQualityRank('720p60'), 720);
+  assert.equal(pipedQualityRank(''), 0);
+  assert.equal(pipedQualityRank('unknown'), 0);
+});
+
+test('pickPipedAudioUrl prefers highest bitrate, falls back to progressive', () => {
+  const withAudio = {
+    audioStreams: [
+      { url: 'https://a.example/low.webm', bitrate: 64000 },
+      { url: 'https://a.example/high.webm', bitrate: 192000 },
+    ],
+    videoStreams: [],
+  };
+  assert.equal(pickPipedAudioUrl(withAudio), 'https://a.example/high.webm');
+
+  const progressiveOnly = {
+    audioStreams: [],
+    videoStreams: [
+      { url: 'https://v.example/360.mp4', videoOnly: false, quality: '360p' },
+      { url: 'https://proxied.piped-proxy.example/720.mp4', videoOnly: false, quality: '720p' },
+    ],
+  };
+  assert.equal(pickPipedAudioUrl(progressiveOnly), 'https://proxied.piped-proxy.example/720.mp4');
+  assert.equal(pickPipedAudioUrl({}), null);
+});
+
+test('pickPipedProgressiveStreams filters video-only and sorts proxy first', () => {
+  const data = {
+    videoStreams: [
+      { url: 'https://v.example/only.mp4', videoOnly: true, quality: '1080p' },
+      { url: 'not-a-url', videoOnly: false, quality: '480p' },
+      { url: 'https://cdn.example/360.mp4', videoOnly: false, quality: '360p' },
+      { url: 'https://proxied.piped-proxy.example/720.mp4', videoOnly: false, quality: '720p' },
+    ],
+  };
+  const picked = pickPipedProgressiveStreams(data);
+  assert.equal(picked.length, 2);
+  assert.equal(picked[0].url, 'https://proxied.piped-proxy.example/720.mp4');
+  assert.equal(picked[1].url, 'https://cdn.example/360.mp4');
+});
+
+test('formatPipedDuration formats seconds to m:ss', () => {
+  assert.equal(formatPipedDuration(213), '3:33');
+  assert.equal(formatPipedDuration(65), '1:05');
+  assert.equal(formatPipedDuration(null), null);
+  assert.equal(formatPipedDuration(0), null);
 });
 
 test('getXSyndicationToken uses X syndication token formula', () => {

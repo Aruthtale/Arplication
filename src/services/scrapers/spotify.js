@@ -1,4 +1,5 @@
 import { httpClient, isLocalWeb } from '../http.js';
+import { resolveYouTubeAudioUrl } from './youtube.js';
 
 const SPOTIFY_URL_PATTERN = /(?:https?:\/\/)?open\.spotify\.com\/(track|album|playlist|artist|episode|show)\/([a-zA-Z0-9]+)/i;
 const SPOTIFY_LINK_PATTERN = /(?:https?:\/\/)?spotify\.link\/([a-zA-Z0-9]+)/i;
@@ -49,7 +50,7 @@ export function formatSpotifyDuration(ms) {
 }
 
 /**
- * Resolves full MP3 download URL for a Spotify track (via local yt-dlp or cloud ymcdn engine)
+ * Resolves full audio stream URL for a Spotify track (local yt-dlp or Piped direct stream)
  */
 export async function resolveSpotifyTrackAudio({ title = '', artist = '', query = '' }) {
   const searchQuery = (query || `${artist} - ${title}`).trim();
@@ -57,91 +58,12 @@ export async function resolveSpotifyTrackAudio({ title = '', artist = '', query 
     return `/api/yt-dlp/download?query=${encodeURIComponent(searchQuery)}&format=audio`;
   }
 
-  // Step 1: Search YouTube for matching video ID
-  let videoId = null;
-  try {
-    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
-    const searchRes = await httpClient({
-      url: searchUrl,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-      },
-      raw: true,
-      timeout: 12000,
-    });
-
-    let rawHtml = String(searchRes?.data || '');
-    // Decode YouTube hex escapes e.g. \x22videoId\x22
-    const unescapedHtml = rawHtml.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) =>
-      String.fromCharCode(parseInt(hex, 16))
-    );
-
-    const matches = [
-      ...unescapedHtml.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g),
-      ...unescapedHtml.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g),
-    ];
-    const ids = [...new Set(matches.map((m) => m[1]))];
-    videoId = ids[0] || null;
-  } catch (err) {
-    console.warn('YouTube search scraping error:', err);
+  if (!searchQuery) {
+    throw new Error('Kueri pencarian kosong.');
   }
 
-  if (!videoId) {
-    throw new Error(`Tidak dapat menemukan stream audio untuk "${searchQuery}".`);
-  }
-
-  // Step 2: Initialize ymcdn conversion engine
-  const initRes = await httpClient({
-    url: 'https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471',
-    headers: {
-      Origin: 'https://ytmp3.mobi',
-      Referer: 'https://ytmp3.mobi/',
-    },
-    timeout: 10000,
-  });
-
-  if (!initRes?.convertURL) {
-    throw new Error('Layanan konversi audio sedang sibuk. Silakan coba kembali beberapa saat lagi.');
-  }
-
-  // Step 3: Request MP3 conversion
-  const convRes = await httpClient({
-    url: `${initRes.convertURL}&v=${videoId}&f=mp3`,
-    headers: {
-      Origin: 'https://ytmp3.mobi',
-      Referer: 'https://ytmp3.mobi/',
-    },
-    timeout: 10000,
-  });
-
-  if (!convRes?.downloadURL) {
-    throw new Error('Gagal memulai konversi MP3.');
-  }
-
-  let downloadUrl = convRes.downloadURL;
-  if (convRes.progressURL) {
-    for (let i = 0; i < 15; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      try {
-        const progRes = await httpClient({
-          url: convRes.progressURL,
-          headers: {
-            Origin: 'https://ytmp3.mobi',
-            Referer: 'https://ytmp3.mobi/',
-          },
-          timeout: 8000,
-        });
-        if (progRes?.progress === 3 || progRes?.error === 0) {
-          if (progRes.downloadURL) downloadUrl = progRes.downloadURL;
-          break;
-        }
-      } catch {
-        // continue polling
-      }
-    }
-  }
-
-  return downloadUrl;
+  // Piped search -> first hit -> direct audio stream (replaces HTML scrape + ymcdn).
+  return resolveYouTubeAudioUrl({ query: searchQuery });
 }
 
 /**

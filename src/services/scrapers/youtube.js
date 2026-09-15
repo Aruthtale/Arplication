@@ -42,6 +42,194 @@ export function extractYouTubeId(url = '') {
 }
 
 /**
+ * Extracts a YouTube video ID from a watch URL, short link, or bare 11-char ID.
+ * Used to resolve per-track queries (e.g. playlist tracks) without searching.
+ */
+export function extractPipedVideoId(text = '') {
+  const s = String(text || '').trim();
+  if (!s) return null;
+  const fromUrl = extractYouTubeId(s);
+  if (fromUrl) return fromUrl;
+  const bare = s.match(/^([a-zA-Z0-9_-]{11})$/);
+  return bare ? bare[1] : null;
+}
+
+/**
+ * Piped API instances (public frontends for YouTube data + direct stream URLs).
+ * Ordered by last-known reliability; the first responsive instance wins.
+ */
+export const PIPED_API_INSTANCES = [
+  'https://pipedapi.ducks.party',
+  'https://api.piped.private.coffee',
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.adminforge.de',
+  'https://pipedapi.leptons.xyz',
+  'https://pipedapi.reallyaweso.me',
+  'https://pipedapi.nosebs.ru',
+  'https://piped-api.privacy.com.de',
+  'https://api.piped.yt',
+  'https://pipedapi.drgns.space',
+  'https://pipedapi.owo.si',
+  'https://piped-api.codespace.cz',
+  'https://pipedapi.darkness.services',
+  'https://pipedapi.orangenet.cc',
+];
+
+/**
+ * GET a Piped API path from the first healthy instance (failover loop).
+ * Returns parsed JSON. Throws when every instance fails or returns an error payload.
+ */
+export async function pipedGet(path = '') {
+  let lastError = null;
+  for (const base of PIPED_API_INSTANCES) {
+    try {
+      const data = await httpClient({
+        url: `${base}${path}`,
+        timeout: 15000,
+      });
+      if (data && !data.error && (data.title || data.name || data.items || data.audioStreams || data.videoStreams)) {
+        return data;
+      }
+      lastError = new Error(data?.error ? String(data.error).slice(0, 120) : 'Respons instance kosong.');
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Semua instance Piped tidak dapat dijangkau.');
+}
+
+/**
+ * Searches YouTube videos via Piped API. Returns up to `limit` video entries:
+ * [{ videoId, title, uploader, duration, cover }]
+ */
+export async function pipedSearchVideos(query = '', limit = 5) {
+  const q = String(query || '').trim();
+  if (!q) return [];
+  const data = await pipedGet(`/search?q=${encodeURIComponent(q)}&filter=videos`);
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const results = [];
+  for (const item of items) {
+    const watchUrl = String(item?.url || '');
+    const m = watchUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+    if (!m) continue;
+    const videoId = m[1];
+    results.push({
+      videoId,
+      title: item?.title || `YouTube Video (${videoId})`,
+      uploader: item?.uploaderName || 'YouTube',
+      duration: typeof item?.duration === 'number' ? item.duration : null,
+      cover: item?.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    });
+    if (results.length >= limit) break;
+  }
+  return results;
+}
+
+/**
+ * Fetches stream metadata for a YouTube video via Piped API.
+ * Returns { title, uploader, duration, thumbnailUrl, audioStreams, videoStreams }.
+ */
+export async function pipedGetStreams(videoId = '') {
+  const vid = String(videoId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(vid)) {
+    throw new Error('Video ID YouTube tidak valid.');
+  }
+  return pipedGet(`/streams/${vid}`);
+}
+
+/**
+ * Numeric rank for quality labels ("1080p" -> 1080). Unknown -> 0.
+ */
+export function pipedQualityRank(quality = '') {
+  const m = String(quality || '').match(/(\d{3,4})/);
+  return m ? Number(m[1]) : 0;
+}
+
+/**
+ * Picks progressive (audio+video muxed) MP4 streams, proxy URLs first.
+ * Pure function — safe for unit tests.
+ */
+export function pickPipedProgressiveStreams(data) {
+  const list = Array.isArray(data?.videoStreams) ? data.videoStreams : [];
+  return list
+    .filter((s) => s && s.videoOnly === false && typeof s.url === 'string' && s.url.startsWith('http'))
+    .map((s) => ({
+      quality: s.quality || '',
+      format: s.format || '',
+      codec: s.codec || null,
+      url: s.url,
+      contentLength: Number(s.contentLength) > 0 ? Number(s.contentLength) : null,
+    }))
+    .sort((a, b) => {
+      const aProxy = /piped-proxy|videoplayback/i.test(a.url) ? 0 : 1;
+      const bProxy = /piped-proxy|videoplayback/i.test(b.url) ? 0 : 1;
+      if (aProxy !== bProxy) return aProxy - bProxy;
+      return pipedQualityRank(b.quality) - pipedQualityRank(a.quality);
+    });
+}
+
+/**
+ * Picks the best direct audio stream URL (highest bitrate first).
+ * Falls back to the best progressive MP4 URL (contains an audio track)
+ * when the instance serves no audio-only streams.
+ * Pure function — safe for unit tests.
+ */
+export function pickPipedAudioUrl(data) {
+  const list = Array.isArray(data?.audioStreams) ? data.audioStreams : [];
+  const withUrl = list.filter((s) => s && typeof s.url === 'string' && s.url.startsWith('http'));
+  if (withUrl.length > 0) {
+    withUrl.sort((a, b) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0));
+    return withUrl[0].url;
+  }
+  const progressive = pickPipedProgressiveStreams(data);
+  return progressive[0]?.url || null;
+}
+
+/**
+ * Formats seconds into m:ss duration string.
+ */
+export function formatPipedDuration(sec) {
+  const n = Number(sec);
+  if (!n || isNaN(n) || n <= 0) return null;
+  const m = Math.floor(n / 60);
+  const s = Math.floor(n % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Resolves a direct playable/downloadable audio URL for a query, video ID, or watch URL.
+ * Strategy: direct video ID/URL -> Piped streams; otherwise Piped search -> first hit -> streams.
+ * Replaces the dead ymcdn (ytmp3.mobi) conversion engine.
+ */
+export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url = '' } = {}) {
+  const rawQuery = String(query || '').trim();
+  let vid = extractPipedVideoId(String(videoId || '')) || extractPipedVideoId(String(url || '')) || extractPipedVideoId(rawQuery);
+
+  if (!vid) {
+    if (!rawQuery) throw new Error('Kueri pencarian kosong.');
+    const results = await pipedSearchVideosSafe(rawQuery);
+    vid = results[0]?.videoId || null;
+  }
+  if (!vid) {
+    throw new Error(`Tidak dapat menemukan stream audio untuk "${rawQuery || url}".`);
+  }
+  const streams = await pipedGetStreams(vid);
+  const audioUrl = pickPipedAudioUrl(streams);
+  if (!audioUrl) {
+    throw new Error('Stream audio tidak tersedia untuk video ini. Coba lagu lain.');
+  }
+  return audioUrl;
+}
+
+async function pipedSearchVideosSafe(rawQuery) {
+  try {
+    return await pipedSearchVideos(rawQuery, 5);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Scrapes YouTube playlist metadata & track listing
  */
 export async function scrapeYouTubePlaylist(url = '') {
@@ -185,9 +373,13 @@ export async function scrapeYouTubePlaylist(url = '') {
   };
 }
 
-function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aData, isLocal }) {
+function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aData, isLocal, pipedAudioUrl = null, pipedVideoUrl = null }) {
   const thumbHq = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const thumbSd = `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`;
+
+  // Remote (non-local) resolution order: ymcdn conversion URL -> Piped direct stream -> null.
+  const remoteVideoUrl = vData?.downloadURL || pipedVideoUrl || null;
+  const remoteAudioUrl = aData?.downloadURL || pipedAudioUrl || null;
 
   const mp4Options = [
     {
@@ -200,7 +392,7 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       quality: 'Full HD • Kualitas Terbaik',
       estimatedSize: '~ 48.5 MB',
       bytes: 50855936,
-      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '1080p') : (vData?.downloadURL || null),
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '1080p') : remoteVideoUrl,
     },
     {
       id: 'yt-video-720p',
@@ -212,7 +404,7 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       quality: 'HD • Standar Seimbang',
       estimatedSize: '~ 26.2 MB',
       bytes: 27472691,
-      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '720p') : (vData?.downloadURL || null),
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '720p') : remoteVideoUrl,
     },
     {
       id: 'yt-video-480p',
@@ -224,7 +416,7 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       quality: 'SD • Hemat Kuota',
       estimatedSize: '~ 14.8 MB',
       bytes: 15518924,
-      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '480p') : (vData?.downloadURL || null),
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '480p') : remoteVideoUrl,
     },
     {
       id: 'yt-video-360p',
@@ -236,7 +428,7 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       quality: 'Low • Sangat Hemat',
       estimatedSize: '~ 8.1 MB',
       bytes: 8493465,
-      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '360p') : (vData?.downloadURL || null),
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '360p') : remoteVideoUrl,
     },
   ];
 
@@ -251,7 +443,7 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       quality: 'Audio HD • Suara Jernih Maksimal',
       estimatedSize: '~ 8.5 MB',
       bytes: 8912896,
-      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '320k') : (aData?.downloadURL || null),
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '320k') : remoteAudioUrl,
     },
     {
       id: 'yt-audio-256k',
@@ -263,7 +455,7 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       quality: 'Audio High • Suara Jernih',
       estimatedSize: '~ 6.8 MB',
       bytes: 7130316,
-      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '256k') : (aData?.downloadURL || null),
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '256k') : remoteAudioUrl,
     },
     {
       id: 'yt-audio-192k',
@@ -275,7 +467,7 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       quality: 'Audio Medium • Standar Musik',
       estimatedSize: '~ 5.1 MB',
       bytes: 5347737,
-      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '192k') : (aData?.downloadURL || null),
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '192k') : remoteAudioUrl,
     },
     {
       id: 'yt-audio-128k',
@@ -287,7 +479,7 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       quality: 'Audio Low • Ukuran Ringan',
       estimatedSize: '~ 3.4 MB',
       bytes: 3565158,
-      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '128k') : (aData?.downloadURL || null),
+      url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '128k') : remoteAudioUrl,
     },
   ];
 
@@ -368,46 +560,73 @@ export async function scrapeYouTube(url = '') {
     };
   }
 
-  // Step 1: Initialize session with ytmp3.mobi conversion engine
-  const initRes = await httpClient({
-    url: 'https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471',
-    headers: {
-      Origin: 'https://ytmp3.mobi',
-      Referer: 'https://ytmp3.mobi/',
-    },
-  });
+  // Remote resolution: Piped direct streams first, ymcdn conversion as fallback.
+  let pipedAudioUrl = null;
+  let pipedVideoUrl = null;
+  let pipedTitle = null;
+  let pipedUploader = null;
+  let pipedDuration = null;
+  let pipedCover = null;
+  try {
+    const streams = await pipedGetStreams(videoId);
+    pipedAudioUrl = pickPipedAudioUrl(streams);
+    const progressive = pickPipedProgressiveStreams(streams);
+    pipedVideoUrl = progressive[0]?.url || null;
+    pipedTitle = streams?.title || null;
+    pipedUploader = streams?.uploader || streams?.uploaderName || null;
+    pipedDuration = formatPipedDuration(streams?.duration) || null;
+    pipedCover = streams?.thumbnailUrl || null;
+  } catch (err) {
+    console.warn('Piped streams gagal, coba fallback konversi:', err?.message || err);
+  }
 
-  if (!initRes || !initRes.convertURL) {
-    const reason = initRes?.error?.message || initRes?.message || 'tidak ada sesi konversi yang diberikan';
+  // Step 1: Initialize session with ytmp3.mobi conversion engine (fallback)
+  let vData = null;
+  let aData = null;
+  try {
+    const initRes = await httpClient({
+      url: 'https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471',
+      headers: {
+        Origin: 'https://ytmp3.mobi',
+        Referer: 'https://ytmp3.mobi/',
+      },
+    });
+
+    if (initRes?.convertURL) {
+      const convertBase = initRes.convertURL;
+
+      // Step 2: Request conversion for MP4 Video and MP3 Audio
+      const [videoConv, audioConv] = await Promise.allSettled([
+        httpClient({
+          url: `${convertBase}&v=${videoId}&f=mp4`,
+          headers: {
+            Origin: 'https://ytmp3.mobi',
+            Referer: 'https://ytmp3.mobi/',
+          },
+        }),
+        httpClient({
+          url: `${convertBase}&v=${videoId}&f=mp3`,
+          headers: {
+            Origin: 'https://ytmp3.mobi',
+            Referer: 'https://ytmp3.mobi/',
+          },
+        }),
+      ]);
+
+      vData = videoConv.status === 'fulfilled' ? videoConv.value : null;
+      aData = audioConv.status === 'fulfilled' ? audioConv.value : null;
+    }
+  } catch (err) {
+    console.warn('Fallback konversi ymcdn gagal:', err?.message || err);
+  }
+
+  if (!pipedAudioUrl && !pipedVideoUrl && !vData?.downloadURL && !aData?.downloadURL) {
     throw new Error(
-      `Konversi YouTube tidak tersedia dari penyedia saat ini (${reason}). Gunakan tautan resmi YouTube atau konfigurasi penyedia yang memiliki izin API.`
+      'Konversi YouTube tidak tersedia dari penyedia saat ini. Gunakan tautan resmi YouTube atau coba lagi beberapa saat.'
     );
   }
 
-  const convertBase = initRes.convertURL;
-
-  // Step 2: Request conversion for MP4 Video and MP3 Audio
-  const [videoConv, audioConv] = await Promise.allSettled([
-    httpClient({
-      url: `${convertBase}&v=${videoId}&f=mp4`,
-      headers: {
-        Origin: 'https://ytmp3.mobi',
-        Referer: 'https://ytmp3.mobi/',
-      },
-    }),
-    httpClient({
-      url: `${convertBase}&v=${videoId}&f=mp3`,
-      headers: {
-        Origin: 'https://ytmp3.mobi',
-        Referer: 'https://ytmp3.mobi/',
-      },
-    }),
-  ]);
-
-  const vData = videoConv.status === 'fulfilled' ? videoConv.value : null;
-  const aData = audioConv.status === 'fulfilled' ? audioConv.value : null;
-
-  const title = vData?.title || aData?.title || `YouTube Video (${videoId})`;
+  const title = vData?.title || aData?.title || pipedTitle || `YouTube Video (${videoId})`;
   const downloadOptions = buildYouTubeDownloadOptions({
     cleanUrl,
     videoId,
@@ -415,19 +634,21 @@ export async function scrapeYouTube(url = '') {
     vData,
     aData,
     isLocal: false,
+    pipedAudioUrl,
+    pipedVideoUrl,
   });
 
   return {
     platform: 'youtube',
     id: videoId,
     title,
-    cover: thumbUrl,
+    cover: pipedCover || thumbUrl,
     author: {
-      name: 'YouTube Video',
+      name: pipedUploader || 'YouTube Video',
       username: `@${videoId}`,
       avatar: null,
     },
-    duration: null,
+    duration: pipedDuration,
     options: downloadOptions,
   };
 }

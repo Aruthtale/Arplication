@@ -5,6 +5,7 @@ import HomeHub from './components/modules/HomeHub';
 import ArloaderModule from './components/modules/arloader/ArloaderModule';
 import ArdoroModule from './components/modules/ardoro/ArdoroModule';
 import ArNoteModule from './components/modules/arnote/ArNoteModule';
+import ArMusicModule from './components/modules/armusic/ArMusicModule';
 import AruthtaleInfo from './components/modules/AruthtaleInfo';
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
         {activeTab === 'arloader' && <ArloaderModule setActiveTab={setActiveTab} />}
         {activeTab === 'ardoro' && <ArdoroModule setActiveTab={setActiveTab} />}
         {activeTab === 'arnote' && <ArNoteModule setActiveTab={setActiveTab} />}
+        {activeTab === 'armusic' && <ArMusicModule setActiveTab={setActiveTab} />}
         {activeTab === 'aruthtale' && <AruthtaleInfo setActiveTab={setActiveTab} />}
       </main>
 
