@@ -12,6 +12,7 @@ import {
 } from '../../../utils/pomodoro.js';
 import { sendPomodoroPhaseNotification, checkNotificationPermission, requestNotificationPermission } from '../../../utils/notification.js';
 import { startForegroundTimer, stopForegroundTimer } from '../../../services/timerService.js';
+import { startAmbientSound, stopAmbientSound, setAmbientVolume, getNoiseTypes, isAmbientPlaying } from '../../../utils/ambientSound.js';
 
 const PHASE_META = {
   focus: { label: 'FOKUS', chip: 'DEEP FOCUS MODE', color: '#FFE600' },
@@ -184,6 +185,21 @@ export default function ArdoroModule({ setActiveTab }) {
   const R = 84;
   const CIRC = 2 * Math.PI * R;
 
+  // Tambahkan state untuk ambient sound
+  const [ambientEnabled, setAmbientEnabled] = useState(false);
+  const [ambientType, setAmbientType] = useState('pink');
+  const [ambientVolume, setAmbientVolume] = useState(0.3);
+
+  // Hook untuk sync ambient dengan timer
+  useEffect(() => {
+    if (running && phase === 'focus' && ambientEnabled) {
+      startAmbientSound(ambientType, ambientVolume);
+    } else {
+      stopAmbientSound();
+    }
+    return () => stopAmbientSound();
+  }, [running, phase, ambientEnabled, ambientType, ambientVolume]);
+
   return (
     <div className="space-y-4 font-sans">
       {/* Top Navigation */}
@@ -271,7 +287,7 @@ export default function ArdoroModule({ setActiveTab }) {
                 }`}
               />
             ))}
-            <span className="text-[10px] font-mono-code font-bold text-gray-600 ml-1">
+            <span className="text-[10px] font-mono-code font-black text-gray-600 ml-1">
               {focusDone} sesi
             </span>
           </div>
@@ -399,6 +415,60 @@ export default function ArdoroModule({ setActiveTab }) {
                 <p className="text-[10px] text-gray-600">
                   Izin ditolak. Buka Pengaturan Android → Aplikasi → Arplication → Notifikasi.
                 </p>
+              )}
+            </div>
+
+            {/* Ambient Sound (NEW) */}
+            <div className="nb-card p-3 bg-[#F8F5EE] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase text-gray-600">Suara Ambient (Fokus)</span>
+                <button
+                  onClick={() => setAmbientEnabled(!ambientEnabled)}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded border border-[#121212] ${
+                    ambientEnabled ? 'bg-[#C4FAF8]' : 'bg-white'
+                  }`}
+                >
+                  {ambientEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
+              
+              {ambientEnabled && (
+                <>
+                  <div className="flex gap-1.5">
+                    {Object.entries(getNoiseTypes()).map(([key, { label }]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setAmbientType(key);
+                          if (isAmbientPlaying()) {
+                            stopAmbientSound();
+                            startAmbientSound(key, ambientVolume);
+                          }
+                        }}
+                        className={`nb-btn flex-1 px-2 py-1.5 text-[10px] font-black ${
+                          ambientType === key ? 'bg-[#C4FAF8]' : 'bg-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-600">Volume: {Math.round(ambientVolume * 100)}%</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={ambientVolume * 100}
+                      onChange={(e) => {
+                        const v = Number(e.target.value) / 100;
+                        setAmbientVolume(v);
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                </>
               )}
             </div>
           </div>

@@ -8,7 +8,7 @@ let channelCreated = false;
  * Returns { granted, canRequest, denied }
  */
 export async function checkNotificationPermission() {
-  if (!isNative()) return { granted: false, canRequest: false, denied: false };
+  if (!isNative()) return { granted: false, canRequest: false };
   try {
     const perm = await LocalNotifications.checkPermissions();
     return {
@@ -17,7 +17,7 @@ export async function checkNotificationPermission() {
       denied: perm.display === 'denied',
     };
   } catch {
-    return { granted: false, canRequest: false, denied: false };
+    return { granted: false, canRequest: false };
   }
 }
 
@@ -125,7 +125,7 @@ export async function sendDownloadErrorNotification({ title = '', platform = '',
       notifications: [
         {
           title: `❌ Unduhan ${platName} Gagal`,
-          body: `Gagal mengunduh "${cleanTitle}". ${error || ''}`,
+          body: `Gagal mengunduh \"${cleanTitle}\". ${error || ''}`,
           id: Math.floor(Date.now() % 100000) + Math.floor(Math.random() * 1000),
           schedule: { at: new Date(Date.now() + 500) },
           channelId: 'arloader_downloads',
