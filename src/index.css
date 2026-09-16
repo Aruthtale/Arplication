@@ -19,6 +19,17 @@
 
 :root {
   color-scheme: light;
+  /* Fullscreen edge-to-edge: isi notch/status-bar & gesture bar HP modern */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+/* Helper safe-area untuk header sticky & bottom nav fixed */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 body {

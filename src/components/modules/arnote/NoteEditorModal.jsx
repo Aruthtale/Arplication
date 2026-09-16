@@ -102,7 +102,7 @@ export default function NoteEditorModal({ isOpen, onClose, editingNote, onSave }
   return (
     <div className="fixed inset-0 z-50 bg-[#F8F5EE] flex flex-col w-full h-full overflow-hidden">
       {/* Full Screen Header */}
-      <header className={`flex items-center justify-between px-4 py-3 border-b-2 border-[#121212] ${previewBg} transition-colors shrink-0`}>
+      <header className={`flex items-center justify-between px-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3 border-b-2 border-[#121212] ${previewBg} transition-colors shrink-0`}>
         <div className="flex items-center gap-2">
           <button
             type="button"

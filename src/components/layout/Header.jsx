@@ -23,7 +23,7 @@ export default function Header({ activeTab, setActiveTab }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-[#F8F5EE] border-b-[2.5px] border-[#121212] text-[#121212] select-none">
+    <header className="safe-top sticky top-0 z-40 w-full bg-[#F8F5EE] border-b-[2.5px] border-[#121212] text-[#121212] select-none">
       <div className="max-w-4xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between">
         {/* Brand Logo & Name */}
         <div 
