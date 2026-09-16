@@ -561,3 +561,49 @@ test('formatDownloadError maps HTML block page to anti-bot guidance', () => {
   );
   assert.ok(msg.includes('memblokir'), `should mention block, got: ${msg}`);
 });
+
+test('security: error logs never leak full cookie/error objects (message only)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const ig = readFileSync(new URL('../src/services/scrapers/instagram.js', import.meta.url), 'utf8');
+  // Tidak boleh ada console.* yang mencetak objek error mentah / cookieHeader langsung
+  assert.ok(!/console\.\w+\([^)]*sessionErr\s*\)/.test(ig), 'must not log raw sessionErr object');
+  assert.ok(!/console\.\w+\([^)]*apiErr\s*\)/.test(ig), 'must not log raw apiErr object');
+  assert.ok(!/console\.\w+\([^)]*cookieHeader/.test(ig), 'must never log cookieHeader');
+  const http = readFileSync(new URL('../src/services/http.js', import.meta.url), 'utf8');
+  assert.ok(!/console\.\w+\([^)]*\bwebErr\s*\)/.test(http), 'must not log raw webErr object');
+});
+
+test('security: index.html ships a Content-Security-Policy meta tag', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(/http-equiv="Content-Security-Policy"/.test(html), 'CSP meta tag must exist');
+  assert.ok(/frame-src 'none'/.test(html), 'CSP must block iframes');
+  assert.ok(/object-src 'none'/.test(html), 'CSP must block objects/plugins');
+});
+
+test('security: FileProvider paths expose only Download/Arloader (no broad roots)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const xmlRaw = readFileSync(new URL('../android/app/src/main/res/xml/file_paths.xml', import.meta.url), 'utf8');
+  // Strip komentar XML agar dokumentasi tidak memicu false positive.
+  const xml = xmlRaw.replace(/<!--[\s\S]*?-->/g, '');
+  assert.ok(!/<root-path/.test(xml), 'must not use <root-path> (too broad)');
+  assert.ok(!/<external-path[^>]*path="\."/.test(xml), 'must not expose whole external storage');
+  assert.ok(/path="Download\/Arloader\/"/.test(xml), 'must scope share to Download/Arloader/');
+});
+
+test('stability: ArMusicService handles AUDIO_BECOMING_NOISY with lifecycle-aware receiver', async () => {
+  const { readFileSync } = await import('node:fs');
+  const svc = readFileSync(new URL('../android/app/src/main/java/com/aruthtale/arplication/ArMusicService.java', import.meta.url), 'utf8');
+  assert.ok(/ACTION_AUDIO_BECOMING_NOISY/.test(svc), 'must listen for becoming-noisy');
+  assert.ok(/noisyReceiverRegistered/.test(svc), 'must track receiver lifecycle');
+  assert.ok(/unregisterReceiver/.test(svc), 'must unregister receiver on pause/stop/destroy');
+});
+
+test('stability: scanLocalAudio yields to event loop in chunks', async () => {
+  const { SCAN_BATCH_SIZE } = await import('../src/services/localMusic.js');
+  assert.ok(Number.isInteger(SCAN_BATCH_SIZE) && SCAN_BATCH_SIZE > 0 && SCAN_BATCH_SIZE <= 100,
+    'SCAN_BATCH_SIZE must be a sane positive chunk size');
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/services/localMusic.js', import.meta.url), 'utf8');
+  assert.ok(/yieldToEventLoop|setTimeout/.test(src), 'scan must yield to event loop between chunks');
+});

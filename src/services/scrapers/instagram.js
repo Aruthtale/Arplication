@@ -465,7 +465,7 @@ export async function scrapeInstagramStoryOrHighlight(details, originalUrl) {
         }
       }
     } catch (sessionErr) {
-      console.warn('Instagram session fetch failed, falling back to public gateways:', sessionErr);
+      console.warn('Instagram session fetch failed, falling back to public gateways:', sessionErr?.message || 'unknown error');
     }
   }
 
@@ -655,7 +655,7 @@ export async function scrapeInstagram(url = '') {
         }
       }
     } catch (apiErr) {
-      console.warn('Instagram Media Info API fetch failed, falling back to public layers:', apiErr);
+      console.warn('Instagram Media Info API fetch failed, falling back to public layers:', apiErr?.message || 'unknown error');
     }
   }
 

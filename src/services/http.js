@@ -109,7 +109,7 @@ export async function httpClient({
       if (raw) return res;
       return safeJsonParse(res.data);
     } catch (err) {
-      console.error('[HTTP-Native] Error:', err);
+      console.error('[HTTP-Native] Error:', err?.message || 'network error');
       throw new Error(`Native request failed: ${err.message || 'Unknown network error'}`);
     }
   }
@@ -137,7 +137,7 @@ export async function httpClient({
     return safeJsonParse(textData);
   } catch (webErr) {
     // If browser CORS error, attempt with public CORS gateway for Web dev
-    console.warn('[HTTP-Web] Direct fetch failed, trying proxy fallback...', webErr);
+    console.warn('[HTTP-Web] Direct fetch failed, trying proxy fallback...', webErr?.message || 'network error');
     try {
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(fullUrl)}`;
       const proxyRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(timeout) });

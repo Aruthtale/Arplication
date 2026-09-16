@@ -5,8 +5,12 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
+import android.media.AudioManager;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
@@ -64,6 +68,37 @@ public class ArMusicService extends Service {
 
     private MediaSession mediaSession;
     private ExoPlayer player;
+
+    /**
+     * Headset/Bluetooth dicabut saat musik bunyi (ACTION_AUDIO_BECOMING_NOISY):
+     * pause otomatis agar audio tidak bocor ke speaker. Receiver didaftar
+     * hanya saat playback aktif dan dilepas saat pause/stop/destroy — hemat
+     * baterai, tanpa receiver statis di Manifest.
+     */
+    private BroadcastReceiver becomingNoisyReceiver;
+    private boolean noisyReceiverRegistered = false;
+
+    private void setNoisyReceiverRegistered(boolean enable) {
+        if (enable && !noisyReceiverRegistered) {
+            if (becomingNoisyReceiver == null) {
+                becomingNoisyReceiver = new BroadcastReceiver() {
+                    @Override public void onReceive(Context context, Intent intent) {
+                        if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+                            doPause(true);
+                        }
+                    }
+                };
+            }
+            try {
+                registerReceiver(becomingNoisyReceiver,
+                    new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+                noisyReceiverRegistered = true;
+            } catch (Exception ignored) {}
+        } else if (!enable && noisyReceiverRegistered) {
+            try { unregisterReceiver(becomingNoisyReceiver); } catch (Exception ignored) {}
+            noisyReceiverRegistered = false;
+        }
+    }
 
     /** Queue paralel dengan playlist ExoPlayer (untuk meta + broadcast). */
     private final List<QueueItem> queue = new ArrayList<>();
@@ -225,6 +260,7 @@ public class ArMusicService extends Service {
     }
 
     private void teardown() {
+        setNoisyReceiverRegistered(false);
         try {
             if (player != null) {
                 player.removeListener(playerListener);
@@ -288,6 +324,7 @@ public class ArMusicService extends Service {
             player.setMediaItems(mediaItems, index, startPos);
             player.prepare();
             player.setPlayWhenReady(true);
+            setNoisyReceiverRegistered(true);
         } catch (Exception e) {
             sendError("Gagal memutar: " + e.getMessage());
             return;
@@ -339,6 +376,7 @@ public class ArMusicService extends Service {
     private void doPause(boolean broadcast) {
         if (player == null) return;
         player.setPlayWhenReady(false);
+        setNoisyReceiverRegistered(false);
         syncNotifAndSession();
         if (broadcast) sendControl("toggle", null);
     }
@@ -347,6 +385,7 @@ public class ArMusicService extends Service {
         if (player == null) return;
         if (player.getPlaybackState() == Player.STATE_IDLE) return;
         player.setPlayWhenReady(true);
+        setNoisyReceiverRegistered(true);
         syncNotifAndSession();
         if (broadcast) sendControl("toggle", null);
     }
@@ -409,6 +448,7 @@ public class ArMusicService extends Service {
             }
         } catch (Exception ignored) {}
         queue.clear();
+        setNoisyReceiverRegistered(false);
         try {
             stopForeground(true);
         } catch (Exception ignored) {}
@@ -462,8 +502,8 @@ public class ArMusicService extends Service {
     };
 
     private final MediaSession.Callback sessionCallback = new MediaSession.Callback() {
-        @Override public void onPlay() { doResume(true); }
-        @Override public void onPause() { doPause(true); }
+        @Override public void onPlay() { doResume(true); setNoisyReceiverRegistered(true); }
+        @Override public void onPause() { doPause(true); setNoisyReceiverRegistered(false); }
         @Override public void onSkipToNext() { doNext(true); }
         @Override public void onSkipToPrevious() { doPrev(true); }
         @Override public void onStop() { doStop(true); }

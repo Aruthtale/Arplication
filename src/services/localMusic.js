@@ -106,6 +106,17 @@ export function removeTrack(tracks = [], id) {
  * Scan folder hasil unduhan Arloader di storage HP (native only).
  * Menjelajah Download/Arloader/* dan folder Music, kedalaman maks 3 level.
  */
+/**
+ * Jumlah file per batch sebelum yield ke event loop.
+ * Mencegah ANR/jank UI saat folder berisi ratusan file: tiap batch beri
+ * kesempatan ke render loop + izinkan onProgress update.
+ */
+export const SCAN_BATCH_SIZE = 25;
+
+function yieldToEventLoop() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 export async function scanLocalAudio({ onProgress } = {}) {
   if (!isNative()) {
     throw new Error('Scan storage hanya tersedia di aplikasi Android.');
@@ -160,7 +171,13 @@ export async function scanLocalAudio({ onProgress } = {}) {
             uri,
             source: 'scan',
           });
-          if (onProgress) onProgress(found.length, name);
+          // Chunked: tiap batch yield ke event loop agar UI tetap responsif.
+          if (found.length % SCAN_BATCH_SIZE === 0) {
+            if (onProgress) onProgress(found.length, name);
+            await yieldToEventLoop();
+          } else if (onProgress) {
+            onProgress(found.length, name);
+          }
         }
       }
     }
