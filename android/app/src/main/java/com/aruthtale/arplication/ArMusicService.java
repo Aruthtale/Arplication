@@ -11,6 +11,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.media.AudioManager;
+import android.media.audiofx.Equalizer;
+import android.os.Handler;
+import android.os.Looper;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
@@ -104,6 +107,23 @@ public class ArMusicService extends Service {
     private final List<QueueItem> queue = new ArrayList<>();
     private boolean repeatOne = false;
 
+    // ------------------------------------------------------------------ Fase 2: EQ + sleep timer
+
+    private static volatile ArMusicService instance;
+
+    /** EQ 5-band via AudioEffect, terikat ke audioSessionId ExoPlayer. */
+    private Equalizer equalizer;
+    private int eqSessionId = 0;
+    private boolean eqEnabled = false;
+    private int eqPresetIndex = -1; // -1 = kurva custom
+    private short[] eqCustomGains;
+
+    /** Sleep timer: Handler main-looper + deadline elapsedRealtime (tahan Doze ringan). */
+    private Handler sleepHandler;
+    private Runnable sleepRunnable;
+    public static volatile long sleepEndsAtMs = 0;
+    public static volatile int sleepTotalMin = 0;
+
     // Snapshot terbaca plugin getState() agar JS bisa poll posisi/index.
     // lastStampMs = elapsedRealtime saat snapshot → plugin ekstrapolasi posisi.
     public static volatile boolean lastPlaying = false;
@@ -140,6 +160,277 @@ public class ArMusicService extends Service {
         String album = "ArMusic";
     }
 
+    // ------------------------------------------------------------------ Fase 2: EQ native
+
+    public static ArMusicService getInstance() { return instance; }
+
+    private void restoreEqPrefs() {
+        try {
+            android.content.SharedPreferences p = getSharedPreferences("armusic_eq", MODE_PRIVATE);
+            eqEnabled = p.getBoolean("enabled", false);
+            eqPresetIndex = p.getInt("preset", -1);
+            String gains = p.getString("gains", "");
+            if (gains != null && !gains.isEmpty()) {
+                String[] parts = gains.split(",");
+                eqCustomGains = new short[parts.length];
+                for (int k = 0; k < parts.length; k++) {
+                    try { eqCustomGains[k] = Short.parseShort(parts[k].trim()); } catch (Exception ignored) {}
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void persistEqPrefs() {
+        try {
+            android.content.SharedPreferences.Editor e = getSharedPreferences("armusic_eq", MODE_PRIVATE).edit();
+            e.putBoolean("enabled", eqEnabled);
+            e.putInt("preset", eqPresetIndex);
+            if (eqCustomGains != null) {
+                StringBuilder sb = new StringBuilder();
+                for (int k = 0; k < eqCustomGains.length; k++) {
+                    if (k > 0) sb.append(',');
+                    sb.append(eqCustomGains[k]);
+                }
+                e.putString("gains", sb.toString());
+            }
+            e.apply();
+        } catch (Exception ignored) {}
+    }
+
+    /** Ikat Equalizer ke audioSessionId ExoPlayer (dipanggil saat READY/play). */
+    private synchronized boolean ensureEqualizer() {
+        if (player == null) return false;
+        int sid;
+        try { sid = player.getAudioSessionId(); } catch (Exception e) { return false; }
+        if (sid == 0 || sid == C.AUDIO_SESSION_ID_UNSET) return false;
+        if (equalizer != null && eqSessionId == sid) return true;
+        releaseEqualizerLocked();
+        try {
+            equalizer = new Equalizer(0, sid);
+            eqSessionId = sid;
+            int bands = 0;
+            try { bands = equalizer.getNumberOfBands(); } catch (Exception ignored) {}
+            if (bands > 0) {
+                if (eqCustomGains == null || eqCustomGains.length != bands) {
+                    eqCustomGains = new short[bands];
+                    try {
+                        for (short b = 0; b < bands; b++) eqCustomGains[b] = equalizer.getBandLevel(b);
+                    } catch (Exception ignored) {}
+                }
+                if (eqPresetIndex >= 0) {
+                    try {
+                        if (eqPresetIndex < equalizer.getNumberOfPresets()) {
+                            equalizer.usePreset((short) eqPresetIndex);
+                        } else { eqPresetIndex = -1; }
+                    } catch (Exception ignored) { eqPresetIndex = -1; }
+                }
+                if (eqPresetIndex < 0) {
+                    try {
+                        short[] range = equalizer.getBandLevelRange();
+                        for (short b = 0; b < bands && b < eqCustomGains.length; b++) {
+                            short g = eqCustomGains[b];
+                            if (g < range[0]) g = range[0];
+                            if (g > range[1]) g = range[1];
+                            equalizer.setBandLevel(b, g);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+            try { equalizer.setEnabled(eqEnabled); } catch (Exception ignored) {}
+            return true;
+        } catch (Exception e) {
+            releaseEqualizerLocked();
+            return false;
+        }
+    }
+
+    private void releaseEqualizerLocked() {
+        try {
+            if (equalizer != null) {
+                try { equalizer.setEnabled(false); } catch (Exception ignored) {}
+                equalizer.release();
+            }
+        } catch (Exception ignored) {}
+        equalizer = null;
+        eqSessionId = 0;
+    }
+
+    public synchronized JSONObject getEqualizerInfo() {
+        JSONObject o = new JSONObject();
+        try {
+            boolean attached = ensureEqualizer();
+            o.put("supported", true);
+            o.put("attached", attached);
+            o.put("enabled", eqEnabled);
+            o.put("sessionId", eqSessionId);
+            if (equalizer != null) {
+                int bands = 0;
+                try { bands = equalizer.getNumberOfBands(); } catch (Exception ignored) {}
+                o.put("bandCount", bands);
+                try {
+                    short[] range = equalizer.getBandLevelRange();
+                    o.put("minGainMb", range[0]);
+                    o.put("maxGainMb", range[1]);
+                } catch (Exception ignored) { o.put("minGainMb", -1500); o.put("maxGainMb", 1500); }
+                JSONArray freqs = new JSONArray();
+                JSONArray gains = new JSONArray();
+                for (short b = 0; b < bands; b++) {
+                    try { freqs.put(equalizer.getCenterFreq(b)); } catch (Exception ignored) { freqs.put(0); }
+                    try { gains.put(equalizer.getBandLevel(b)); } catch (Exception ignored) { gains.put(0); }
+                }
+                o.put("centerFreqs", freqs);
+                o.put("gains", gains);
+                int presets = 0;
+                try { presets = equalizer.getNumberOfPresets(); } catch (Exception ignored) {}
+                o.put("presetCount", presets);
+                o.put("presetIndex", eqPresetIndex);
+                JSONArray names = new JSONArray();
+                for (short p = 0; p < presets; p++) {
+                    try { names.put(equalizer.getPresetName(p)); } catch (Exception ignored) { names.put("Preset " + p); }
+                }
+                o.put("presetNames", names);
+            } else {
+                o.put("bandCount", 5);
+                o.put("minGainMb", -1500);
+                o.put("maxGainMb", 1500);
+                o.put("presetCount", 0);
+                o.put("presetIndex", eqPresetIndex);
+            }
+        } catch (Exception ignored) {}
+        return o;
+    }
+
+    public synchronized boolean setEqEnabled(boolean enabled) {
+        eqEnabled = enabled;
+        boolean ok = ensureEqualizer();
+        if (equalizer != null) {
+            try { equalizer.setEnabled(enabled); } catch (Exception ignored) {}
+        }
+        persistEqPrefs();
+        return ok || !enabled;
+    }
+
+    public synchronized boolean setEqBandGain(int band, int gainMb) {
+        if (!ensureEqualizer() || equalizer == null) return false;
+        try {
+            int bands = equalizer.getNumberOfBands();
+            if (band < 0 || band >= bands) return false;
+            short[] range = equalizer.getBandLevelRange();
+            short g = (short) Math.max(range[0], Math.min(range[1], gainMb));
+            equalizer.setBandLevel((short) band, g);
+            eqPresetIndex = -1;
+            if (eqCustomGains == null || eqCustomGains.length != bands) eqCustomGains = new short[bands];
+            eqCustomGains[band] = g;
+            persistEqPrefs();
+            return true;
+        } catch (Exception ignored) { return false; }
+    }
+
+    public synchronized boolean applyEqPreset(int preset) {
+        if (!ensureEqualizer() || equalizer == null) return false;
+        try {
+            if (preset < 0 || preset >= equalizer.getNumberOfPresets()) return false;
+            equalizer.usePreset((short) preset);
+            eqPresetIndex = preset;
+            int bands = equalizer.getNumberOfBands();
+            if (eqCustomGains == null || eqCustomGains.length != bands) eqCustomGains = new short[bands];
+            for (short b = 0; b < bands; b++) {
+                try { eqCustomGains[b] = equalizer.getBandLevel(b); } catch (Exception ignored) {}
+            }
+            persistEqPrefs();
+            return true;
+        } catch (Exception ignored) { return false; }
+    }
+
+    // ------------------------------------------------------------------ Fase 2: sleep timer
+
+    public static long getSleepRemainingMs() {
+        if (sleepEndsAtMs <= 0) return 0;
+        long left = sleepEndsAtMs - android.os.SystemClock.elapsedRealtime();
+        return Math.max(0, left);
+    }
+
+    public synchronized void setSleepTimerMinutes(int minutes) {
+        cancelSleepLocked();
+        if (minutes <= 0) return;
+        sleepTotalMin = minutes;
+        sleepEndsAtMs = android.os.SystemClock.elapsedRealtime() + minutes * 60L * 1000L;
+        if (sleepHandler == null) sleepHandler = new Handler(Looper.getMainLooper());
+        sleepRunnable = new Runnable() {
+            @Override public void run() {
+                long left = getSleepRemainingMs();
+                if (left <= 0) { onSleepExpired(); return; }
+                // Re-check tiap 10 detik — tahan terhadap Doze ringan & jeda eksekusi.
+                long next = Math.min(left, 10000L);
+                try { sleepHandler.postDelayed(this, next); } catch (Exception ignored) {}
+            }
+        };
+        try { sleepHandler.postDelayed(sleepRunnable, Math.min(minutes * 60L * 1000L, 10000L)); } catch (Exception ignored) {}
+    }
+
+    public synchronized void cancelSleepTimer() {
+        cancelSleepLocked();
+        sleepEndsAtMs = 0;
+        sleepTotalMin = 0;
+    }
+
+    private void cancelSleepLocked() {
+        try {
+            if (sleepHandler != null && sleepRunnable != null) sleepHandler.removeCallbacks(sleepRunnable);
+        } catch (Exception ignored) {}
+        sleepRunnable = null;
+    }
+
+    /** Jadwalkan ulang cek periodik dari deadline statik (dipakai onCreate restart). */
+    private synchronized void rescheduleSleepLocked() {
+        cancelSleepLocked();
+        long left = getSleepRemainingMs();
+        if (left <= 0) { sleepEndsAtMs = 0; sleepTotalMin = 0; return; }
+        if (sleepHandler == null) sleepHandler = new Handler(Looper.getMainLooper());
+        sleepRunnable = new Runnable() {
+            @Override public void run() {
+                long l = getSleepRemainingMs();
+                if (l <= 0) { onSleepExpired(); return; }
+                try { sleepHandler.postDelayed(this, Math.min(l, 10000L)); } catch (Exception ignored) {}
+            }
+        };
+        try { sleepHandler.postDelayed(sleepRunnable, Math.min(left, 10000L)); } catch (Exception ignored) {}
+    }
+
+    private void onSleepExpired() {
+        sleepEndsAtMs = 0;
+        sleepTotalMin = 0;
+        sleepRunnable = null;
+        // Fade-out 3 detik lalu pause — halus di telinga, bukan stop mendadak.
+        try {
+            if (player == null || !player.isPlaying()) {
+                doPause(true);
+                sendControl("sleep-ended", null);
+                return;
+            }
+            player.setVolume(1.0f);
+            final int steps = 10;
+            final Handler h = sleepHandler != null ? sleepHandler : new Handler(Looper.getMainLooper());
+            for (int k = 1; k <= steps; k++) {
+                final int step = k;
+                h.postDelayed(() -> {
+                    try {
+                        if (player == null) return;
+                        player.setVolume(Math.max(0f, 1.0f - (step / (float) steps)));
+                        if (step == steps) {
+                            doPause(true);
+                            try { player.setVolume(1.0f); } catch (Exception ignored) {}
+                            sendControl("sleep-ended", null);
+                        }
+                    } catch (Exception ignored) {}
+                }, k * 300L);
+            }
+        } catch (Exception e) {
+            try { doPause(true); } catch (Exception ignored) {}
+            sendControl("sleep-ended", null);
+        }
+    }
+
     // ------------------------------------------------------------------ lifecycle
 
     @Override
@@ -155,6 +446,12 @@ public class ArMusicService extends Service {
         player.setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true);
         player.setWakeMode(C.WAKE_MODE_LOCAL);
         player.addListener(playerListener);
+
+        instance = this;
+        sleepHandler = new Handler(Looper.getMainLooper());
+        restoreEqPrefs();
+        // Service restart (kill sistem) saat timer aktif → jadwalkan ulang sisa waktu.
+        if (sleepEndsAtMs > 0) rescheduleSleepLocked();
 
         mediaSession = new MediaSession(this, "ArMusicSession");
         mediaSession.setFlags(
@@ -213,6 +510,14 @@ public class ArMusicService extends Service {
             case "SEEK":
                 doSeek(intent.getLongExtra("positionMs", 0));
                 return START_STICKY;
+            case "SLEEP_TIMER": {
+                // Dipakai plugin setSleepTimer — tahan bila service baru start.
+                int minutes = intent.getIntExtra("minutes", 0);
+                if (minutes > 0) setSleepTimerMinutes(minutes);
+                else cancelSleepTimer();
+                snapshotFromPlayer();
+                return START_STICKY;
+            }
             case "STOP":
                 doStop(true);
                 return START_NOT_STICKY;
@@ -260,6 +565,11 @@ public class ArMusicService extends Service {
     }
 
     private void teardown() {
+        cancelSleepTimer();
+        sleepEndsAtMs = 0;
+        sleepTotalMin = 0;
+        releaseEqualizerLocked();
+        instance = null;
         setNoisyReceiverRegistered(false);
         try {
             if (player != null) {
@@ -474,6 +784,9 @@ public class ArMusicService extends Service {
                 sendQueueEnded();
             } else if (state == Player.STATE_READY) {
                 syncNotifAndSession();
+                // Audio session kini valid → ikat ulang EQ agar efek tetap menempel
+                // tiap ganti output / resume setelah idle.
+                try { ensureEqualizer(); } catch (Exception ignored) {}
             }
         }
 

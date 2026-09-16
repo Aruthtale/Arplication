@@ -156,6 +156,124 @@ public class ArMusicPlugin extends Plugin {
         call.resolve();
     }
 
+    // ------------------------------------------------------------------ Fase 2: EQ + sleep timer
+
+    private void sendEqSvc(String method, JSONObject payload) {
+        ArMusicService svc = ArMusicService.getInstance();
+        if (svc == null) return;
+        try {
+            switch (method) {
+                case "enable": svc.setEqEnabled(payload.optBoolean("enabled", false)); break;
+                case "band": svc.setEqBandGain(payload.optInt("band", 0), payload.optInt("gainMb", 0)); break;
+                case "preset": svc.applyEqPreset(payload.optInt("preset", 0)); break;
+                default: break;
+            }
+        } catch (Exception ignored) {}
+    }
+
+    @PluginMethod
+    public void getEqualizer(PluginCall call) {
+        ArMusicService svc = ArMusicService.getInstance();
+        JSObject ret = new JSObject();
+        try {
+            if (svc != null) {
+                org.json.JSONObject info = svc.getEqualizerInfo();
+                java.util.Iterator<String> keys = info.keys();
+                while (keys.hasNext()) {
+                    String k = keys.next();
+                    Object v = info.opt(k);
+                    if (v instanceof org.json.JSONArray) ret.put(k, (org.json.JSONArray) v);
+                    else if (v instanceof org.json.JSONObject) ret.put(k, (org.json.JSONObject) v);
+                    else if (v instanceof Integer) ret.put(k, (Integer) v);
+                    else if (v instanceof Long) ret.put(k, (Long) v);
+                    else if (v instanceof Boolean) ret.put(k, (Boolean) v);
+                    else ret.put(k, String.valueOf(v));
+                }
+            } else {
+                // Service belum hidup — kembalikan default agar UI tetap render.
+                ret.put("supported", true);
+                ret.put("attached", false);
+                ret.put("enabled", false);
+                ret.put("bandCount", 5);
+                ret.put("minGainMb", -1500);
+                ret.put("maxGainMb", 1500);
+                ret.put("presetCount", 0);
+                ret.put("presetIndex", -1);
+            }
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("getEqualizer gagal: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void setEqualizerEnabled(PluginCall call) {
+        try {
+            JSONObject p = new JSONObject();
+            p.put("enabled", Boolean.TRUE.equals(call.getBoolean("enabled", false)));
+            sendEqSvc("enable", p);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("setEqualizerEnabled gagal: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void setEqualizerBand(PluginCall call) {
+        try {
+            JSONObject p = new JSONObject();
+            p.put("band", call.getData().optInt("band", 0));
+            p.put("gainMb", call.getData().optInt("gainMb", 0));
+            sendEqSvc("band", p);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("setEqualizerBand gagal: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void setEqualizerPreset(PluginCall call) {
+        try {
+            JSONObject p = new JSONObject();
+            p.put("preset", call.getData().optInt("preset", 0));
+            sendEqSvc("preset", p);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("setEqualizerPreset gagal: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void setSleepTimer(PluginCall call) {
+        int minutes = call.getData().optInt("minutes", 0);
+        ArMusicService svc = ArMusicService.getInstance();
+        if (svc != null) {
+            try {
+                if (minutes > 0) svc.setSleepTimerMinutes(minutes);
+                else svc.cancelSleepTimer();
+                call.resolve();
+                return;
+            } catch (Exception e) {
+                call.reject("setSleepTimer gagal: " + e.getMessage());
+                return;
+            }
+        }
+        // Service belum hidup — kirim via Intent agar tetap terjadwal saat start.
+        Intent i = svcIntent("SLEEP_TIMER");
+        i.putExtra("minutes", minutes);
+        startSvc(i);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getSleepTimer(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("remainingMs", ArMusicService.getSleepRemainingMs());
+        ret.put("totalMin", ArMusicService.sleepTotalMin);
+        ret.put("active", ArMusicService.sleepEndsAtMs > 0);
+        call.resolve(ret);
+    }
+
     /**
      * Baca posisi/index terakhir dari snapshot service.
      * Posisi diekstrapolasi: snapshot + (now - stamp) bila playing.

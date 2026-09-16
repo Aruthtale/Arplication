@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Music, Play, Pause, SkipBack, SkipForward, Search, FolderOpen,
   FileUp, ScanLine, Trash2, ListMusic, Loader2, AlertCircle,
-  Shuffle, Repeat, Home, Clock3, Mic, ChevronDown,
+  Shuffle, Repeat, Home, Clock3, Mic, ChevronDown, ChevronRight,
+  SlidersHorizontal, Timer, TimerOff, ListPlus, Plus, X, Pencil, Check,
 } from 'lucide-react';
 import { isNative } from '../../../services/http.js';
 import {
@@ -18,7 +19,15 @@ import {
   playNativeQueue, updateNativeQueue, pauseNativePlayback, resumeNativePlayback,
   nextNativeTrack, prevNativeTrack, stopNativePlayback,
   seekNativePlayback, getNativePlaybackState,
+  getNativeEqualizer, setNativeEqualizerEnabled, setNativeEqualizerBand,
+  setNativeEqualizerPreset, setNativeSleepTimer, getNativeSleepTimer,
+  formatEqFreq, formatEqGain, formatSleepRemaining,
 } from '../../../services/armusicNative.js';
+import {
+  loadPlaylists, savePlaylists, createPlaylist, renamePlaylist, deletePlaylist,
+  addTrackToPlaylist, removeTrackFromPlaylist, resolvePlaylistTracks,
+  purgeTrackFromPlaylists, isTrackInPlaylist, groupTracksBy,
+} from '../../../services/playlistManager.js';
 import {
   fetchLyrics, activeLyricIndex,
 } from '../../../services/lyrics.js';
@@ -117,9 +126,23 @@ export default function ArMusicModule({ setActiveTab }) {
   const [elapsed, setElapsed] = useState(0);
   const [duration, setDuration] = useState(0);
   const [order, setOrder] = useState([]); // index order untuk shuffle
-  const [musicView, setMusicView] = useState('semua'); // semua | artis | folder — sub-navbar ala Spotify
+  const [musicView, setMusicView] = useState('semua'); // semua | artis | folder | playlist — sub-navbar ala Spotify
   const [showLyrics, setShowLyrics] = useState(false);
   const [lyricsState, setLyricsState] = useState({ status: 'idle', synced: [], plain: '', instrumental: false }); // idle | loading | ready | notfound | error
+  // Fase 2: EQ + sleep timer + playlist
+  const [playlists, setPlaylists] = useState(() => loadPlaylists());
+  const [openPlaylistId, setOpenPlaylistId] = useState(null);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [editingPlaylistId, setEditingPlaylistId] = useState(null);
+  const [editingName, setEditingName] = useState('');
+  const [addToPickTrack, setAddToPickTrack] = useState(null); // track yg mau dimasukkan playlist
+  const [groupOpen, setGroupOpen] = useState({}); // artis/folder collapsible: { key: true }
+  const [showEq, setShowEq] = useState(false);
+  const [eqInfo, setEqInfo] = useState(null);
+  const [eqLoading, setEqLoading] = useState(false);
+  const [showSleep, setShowSleep] = useState(false);
+  const [sleepStatus, setSleepStatus] = useState({ active: false, remainingMs: 0, totalMin: 0 });
+  const SLEEP_OPTIONS = [0, 15, 30, 45, 60, 90];
 
   const audioRef = useRef(null);
   const fileRef = useRef(null);
@@ -263,7 +286,7 @@ export default function ArMusicModule({ setActiveTab }) {
     }
   };
 
-  const playTrack = async (track, forceReplay = false) => {
+  const playTrack = async (track, forceReplay = false, queueOverride = null) => {
     if (!track || track.unavailable) return;
     setError(null);
     const src = toPlayableSrc(track.uri);
@@ -296,7 +319,12 @@ export default function ArMusicModule({ setActiveTab }) {
     }
     // Matikan fallback WebView agar tidak bunyi ganda
     try { audioRef.current?.pause(); } catch { /* abaikan */ }
-    let ordered = buildOrdered(effectiveList(), shuffle);
+    // queueOverride dipakai putar-dari-playlist: queue native = isi playlist,
+    // bukan list search/library aktif.
+    const baseList = (Array.isArray(queueOverride) && queueOverride.length > 0)
+      ? queueOverride
+      : effectiveList();
+    let ordered = buildOrdered(baseList, shuffle);
     let idx = ordered.findIndex((t) => t.id === track.id);
     if (idx < 0) { ordered = [track, ...ordered]; idx = 0; }
     const ok = await playNativeQueue(ordered, idx, { repeatOne });
@@ -517,6 +545,12 @@ export default function ArMusicModule({ setActiveTab }) {
       }
       // Mode native: service sudah eksekusi, JS sinkron UI via poll.
       if (action === 'stop') { stopRef.current?.(); return; }
+      if (action === 'sleep-ended' || action === 'sleepended') {
+        setPlaying(false);
+        setPlaybackState(false);
+        refreshSleepStatus();
+        return;
+      }
       if (action === 'queue-ended' || action === 'queueended') {
         setPlaying(false);
         setPlaybackState(false);
@@ -684,7 +718,121 @@ export default function ArMusicModule({ setActiveTab }) {
       }
     }
     persist(removeTrack(loadLibrary(), id));
+    // Sinkron: keluarkan dari semua playlist agar tak ada track yatim
+    setPlaylists((prev) => savePlaylists(purgeTrackFromPlaylists(prev, id)));
   };
+
+  // ---------------------------------------------------------- Fase 2: playlist
+
+  const persistPlaylists = (next) => {
+    const clean = savePlaylists(next);
+    setPlaylists(clean);
+    return clean;
+  };
+
+  const handleCreatePlaylist = () => {
+    const { next } = createPlaylist(playlists, newPlaylistName);
+    persistPlaylists(next);
+    setNewPlaylistName('');
+    const created = next[next.length - 1];
+    if (created) setOpenPlaylistId(created.id);
+  };
+
+  const handleRenamePlaylist = (id) => {
+    persistPlaylists(renamePlaylist(playlists, id, editingName));
+    setEditingPlaylistId(null);
+    setEditingName('');
+  };
+
+  const handleDeletePlaylist = (id) => {
+    persistPlaylists(deletePlaylist(playlists, id));
+    if (openPlaylistId === id) setOpenPlaylistId(null);
+  };
+
+  const handleAddTrackToPlaylist = (playlistId, trackId) => {
+    persistPlaylists(addTrackToPlaylist(playlists, playlistId, trackId));
+    setAddToPickTrack(null);
+  };
+
+  const handleRemoveTrackFromPlaylist = (playlistId, trackId) => {
+    persistPlaylists(removeTrackFromPlaylist(playlists, playlistId, trackId));
+  };
+
+  const handlePlayPlaylist = (playlistId) => {
+    const list = resolvePlaylistTracks(playlists, playlistId, tracks);
+    if (list.length > 0) playTrack(list[0], false, list);
+  };
+
+  const handleEqReset = async () => {
+    const n = eqInfo?.bandCount || 0;
+    for (let b = 0; b < n; b++) {
+      // eslint-disable-next-line no-await-in-loop
+      await setNativeEqualizerBand(b, 0).catch(() => {});
+    }
+    await refreshEqInfo();
+  };
+
+  // ---------------------------------------------------------- Fase 2: sleep timer
+
+  const refreshSleepStatus = async () => {
+    const s = await getNativeSleepTimer().catch(() => null);
+    if (s) setSleepStatus(s);
+    else setSleepStatus({ active: false, remainingMs: 0, totalMin: 0 });
+  };
+
+  const handleSetSleep = async (minutes) => {
+    await setNativeSleepTimer(minutes).catch(() => {});
+    await refreshSleepStatus();
+    setShowSleep(false);
+  };
+
+  // ---------------------------------------------------------- Fase 2: equalizer
+
+  const refreshEqInfo = async () => {
+    setEqLoading(true);
+    try {
+      const info = await getNativeEqualizer().catch(() => null);
+      if (info) setEqInfo(info);
+    } finally {
+      setEqLoading(false);
+    }
+  };
+
+  const handleEqToggle = async () => {
+    const nextVal = !(eqInfo?.enabled ?? false);
+    await setNativeEqualizerEnabled(nextVal).catch(() => {});
+    setEqInfo((prev) => (prev ? { ...prev, enabled: nextVal } : prev));
+  };
+
+  const handleEqBand = async (band, gainMb) => {
+    // Optimistic UI agar slider responsif, native menyusul
+    setEqInfo((prev) => {
+      if (!prev) return prev;
+      const gains = [...(prev.gains || [])];
+      gains[band] = gainMb;
+      return { ...prev, gains, presetIndex: -1, enabled: true };
+    });
+    await setNativeEqualizerBand(band, gainMb).catch(() => {});
+  };
+
+  const handleEqPreset = async (preset) => {
+    await setNativeEqualizerPreset(preset).catch(() => {});
+    await refreshEqInfo();
+  };
+
+  // Countdown badge timer — refresh tiap 5 detik saat aktif agar label hidup.
+  useEffect(() => {
+    if (!sleepStatus.active) return undefined;
+    const t = setInterval(() => { refreshSleepStatus(); }, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sleepStatus.active]);
+
+  // Ambil status timer sekali saat modul dibuka (native tahan restart service).
+  useEffect(() => {
+    refreshSleepStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onLoadedMeta = (e) => {
     // Simpan durasi hasil file-picker ke library
@@ -719,6 +867,13 @@ export default function ArMusicModule({ setActiveTab }) {
             {formatTrackDuration(track.durationSec)}
           </span>
         )}
+        <button
+          onClick={(e) => { e.stopPropagation(); setAddToPickTrack(track); }}
+          className="w-7 h-7 rounded-lg bg-white hover:bg-yellow-100 border border-black flex items-center justify-center text-[#121212] transition-colors shadow-[1px_1px_0px_#121212] shrink-0"
+          title="Tambah ke playlist"
+        >
+          <ListPlus className="w-3.5 h-3.5" />
+        </button>
         <button
           onClick={(e) => { e.stopPropagation(); handleRemove(track.id); }}
           className="w-7 h-7 rounded-lg bg-white hover:bg-red-100 border border-black flex items-center justify-center text-red-600 transition-colors shadow-[1px_1px_0px_#121212] shrink-0"
@@ -873,7 +1028,26 @@ export default function ArMusicModule({ setActiveTab }) {
             >
               <Repeat className="w-4 h-4" />
             </button>
+            <button
+              onClick={() => { refreshEqInfo(); setShowEq(true); }}
+              title="Equalizer"
+              className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${eqInfo?.enabled ? 'bg-[#FFE600] text-[#121212] border-[#FFE600]' : 'bg-transparent text-white/60 border-white/30'}`}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => { refreshSleepStatus(); setShowSleep(true); }}
+              title="Sleep timer"
+              className={`relative w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${sleepStatus.active ? 'bg-[#FFE600] text-[#121212] border-[#FFE600]' : 'bg-transparent text-white/60 border-white/30'}`}
+            >
+              {sleepStatus.active ? <TimerOff className="w-4 h-4" /> : <Timer className="w-4 h-4" />}
+            </button>
           </div>
+          {sleepStatus.active && sleepStatus.remainingMs > 0 && (
+            <p className="text-center text-[10px] font-mono-code font-bold text-[#FFE600]">
+              Tidur dalam {formatSleepRemaining(sleepStatus.remainingMs)} — ketuk ikon timer untuk batalkan
+            </p>
+          )}
           {showLyrics && (
             <LyricsPanel
               lyricsState={lyricsState}
@@ -884,44 +1058,407 @@ export default function ArMusicModule({ setActiveTab }) {
         </div>
       )}
 
-      {/* Track List */}
+      {/* Koleksi — sub-navbar: SEMUA | ARTIS | FOLDER | PLAYLIST */}
       <div className="nb-card p-4 bg-white space-y-3 shadow-[3px_3px_0px_#121212]">
-        <div className="flex items-center justify-between border-b-2 border-black pb-2">
+        <div className="flex items-center justify-between border-b-2 border-black pb-2 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <FolderOpen className="w-4 h-4 text-[#121212]" />
             <h3 className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wider">
-              KOLEKSI ({filtered.length})
+              KOLEKSI ({tracks.length})
             </h3>
           </div>
-          {filtered.length > 0 && (
-            <button
-              onClick={() => playTrack(filtered[0])}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#38E54D] border border-black text-[10px] font-black uppercase shadow-[1.5px_1.5px_0px_#121212]"
-            >
-              <Play className="w-3 h-3" />
-              <span>Putar</span>
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[['semua', 'Semua'], ['artis', 'Artis'], ['folder', 'Folder'], ['playlist', `Playlist (${playlists.length})`]].map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setMusicView(v)}
+                className={`px-2 py-1 rounded-lg border border-black text-[10px] font-black uppercase shadow-[1.5px_1.5px_0px_#121212] ${musicView === v ? 'bg-[#121212] text-[#FFE600]' : 'bg-white text-[#121212]'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {filtered.length === 0 ? (
-          <div className="text-center py-8 space-y-2">
-            <Music className="w-10 h-10 mx-auto text-[#121212]/20" />
-            <p className="text-sm font-black text-[#121212]">
-              {tracks.length === 0 ? 'Belum ada lagu' : 'Tidak ada hasil'}
-            </p>
-            <p className="text-xs font-medium text-gray-500 max-w-xs mx-auto">
-              {tracks.length === 0
-                ? 'Ketuk "Scan Storage" untuk memindai hasil unduhan Arloader, atau "Pilih File" untuk menambah manual.'
-                : 'Coba kata kunci lain.'}
-            </p>
+        {musicView === 'semua' && (
+          <>
+            {filtered.length > 0 && (
+              <button
+                onClick={() => playTrack(filtered[0])}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#38E54D] border border-black text-[10px] font-black uppercase shadow-[1.5px_1.5px_0px_#121212]"
+              >
+                <Play className="w-3 h-3" />
+                <span>Putar{query ? ' hasil' : ''} ({filtered.length})</span>
+              </button>
+            )}
+            {filtered.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <Music className="w-10 h-10 mx-auto text-[#121212]/20" />
+                <p className="text-sm font-black text-[#121212]">
+                  {tracks.length === 0 ? 'Belum ada lagu' : 'Tidak ada hasil'}
+                </p>
+                <p className="text-xs font-medium text-gray-500 max-w-xs mx-auto">
+                  {tracks.length === 0
+                    ? 'Ketuk "Scan Storage" untuk memindai hasil unduhan Arloader, atau "Pilih File" untuk menambah manual.'
+                    : 'Coba kata kunci lain.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-1">
+                {filtered.map((track) => renderTrackCard(track))}
+              </div>
+            )}
+          </>
+        )}
+
+        {(musicView === 'artis' || musicView === 'folder') && (
+          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            {groupTracksBy(filtered, musicView === 'artis' ? 'artist' : 'folder').map(({ name, items }) => {
+              const key = `${musicView}:${name}`;
+              const open = groupOpen[key] ?? false;
+              return (
+                <div key={key} className="rounded-xl border-2 border-black overflow-hidden">
+                  <button
+                    onClick={() => setGroupOpen((p) => ({ ...p, [key]: !open }))}
+                    className="w-full flex items-center gap-2 px-3 py-2 bg-[#F8F5EE] hover:bg-[#FFE600]/40 transition-colors"
+                  >
+                    {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    <span className="flex-1 text-left text-xs font-black text-[#121212] truncate">{name}</span>
+                    <span className="text-[10px] font-mono-code font-bold text-gray-500">{items.length} lagu</span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); if (items[0]) playTrack(items[0], false, items); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); if (items[0]) playTrack(items[0], false, items); } }}
+                      className="w-7 h-7 rounded-lg bg-[#38E54D] border border-black flex items-center justify-center shadow-[1px_1px_0px_#121212]"
+                      title={`Putar semua dari ${name}`}
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="p-2 space-y-2 bg-white border-t-2 border-black">
+                      {items.map((track) => renderTrackCard(track))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {filtered.length === 0 && (
+              <p className="text-center text-xs font-bold text-gray-500 py-6">Belum ada lagu untuk dikelompokkan.</p>
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-1">
-            {filtered.map((track) => renderTrackCard(track))}
+        )}
+
+        {musicView === 'playlist' && (
+          <div className="space-y-3">
+            {/* Buat playlist baru */}
+            <div className="flex gap-2">
+              <input
+                value={newPlaylistName}
+                onChange={(e) => setNewPlaylistName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreatePlaylist(); }}
+                placeholder="Nama playlist baru..."
+                maxLength={60}
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white border-2 border-[#121212] shadow-[2px_2px_0px_#121212] text-xs font-bold text-[#121212] placeholder:text-gray-400 outline-none"
+              />
+              <button
+                onClick={handleCreatePlaylist}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-[#38E54D] border-2 border-[#121212] shadow-[2px_2px_0px_#121212] text-xs font-black uppercase"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Buat</span>
+              </button>
+            </div>
+            {playlists.length === 0 ? (
+              <div className="text-center py-6 space-y-2">
+                <ListMusic className="w-10 h-10 mx-auto text-[#121212]/20" />
+                <p className="text-sm font-black text-[#121212]">Belum ada playlist</p>
+                <p className="text-xs font-medium text-gray-500 max-w-xs mx-auto">
+                  Buat playlist di atas, lalu ketuk ikon tambah di tiap lagu untuk mengisinya.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                {playlists.map((pl) => {
+                  const list = resolvePlaylistTracks(playlists, pl.id, tracks);
+                  const open = openPlaylistId === pl.id;
+                  const editing = editingPlaylistId === pl.id;
+                  return (
+                    <div key={pl.id} className="rounded-xl border-2 border-black overflow-hidden">
+                      <button
+                        onClick={() => setOpenPlaylistId(open ? null : pl.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 transition-colors ${open ? 'bg-[#FFE600]' : 'bg-[#F8F5EE] hover:bg-[#FFE600]/40'}`}
+                      >
+                        {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {editing ? (
+                          <span className="flex-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleRenamePlaylist(pl.id); if (e.key === 'Escape') setEditingPlaylistId(null); }}
+                              autoFocus
+                              maxLength={60}
+                              className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-black text-xs font-bold outline-none"
+                            />
+                            <span role="button" tabIndex={0} onClick={() => handleRenamePlaylist(pl.id)} onKeyDown={(e) => { if (e.key === 'Enter') handleRenamePlaylist(pl.id); }} className="w-7 h-7 rounded-lg bg-[#38E54D] border border-black flex items-center justify-center" title="Simpan">
+                              <Check className="w-3.5 h-3.5" />
+                            </span>
+                          </span>
+                        ) : (
+                          <>
+                            <span className="flex-1 text-left text-xs font-black text-[#121212] truncate">{pl.name}</span>
+                            <span className="text-[10px] font-mono-code font-bold text-gray-500">{list.length} lagu</span>
+                          </>
+                        )}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); handlePlayPlaylist(pl.id); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handlePlayPlaylist(pl.id); } }}
+                          className="w-7 h-7 rounded-lg bg-[#38E54D] border border-black flex items-center justify-center shadow-[1px_1px_0px_#121212]"
+                          title={`Putar ${pl.name}`}
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                        </span>
+                      </button>
+                      {open && (
+                        <div className="p-2 space-y-2 bg-white border-t-2 border-black">
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => { setEditingPlaylistId(pl.id); setEditingName(pl.name); }}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-black text-[10px] font-black uppercase"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Ubah nama</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeletePlaylist(pl.id)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-black text-[10px] font-black uppercase text-red-600"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Hapus</span>
+                            </button>
+                          </div>
+                          {list.length === 0 ? (
+                            <p className="text-[11px] font-bold text-gray-500 py-2 text-center">
+                              Playlist kosong — ketuk ikon tambah di daftar Semua untuk mengisi.
+                            </p>
+                          ) : (
+                            list.map((track) => (
+                              <div
+                                key={track.id}
+                                onClick={() => playTrack(track, false, list)}
+                                className={`nb-card p-2 flex items-center gap-2 transition-all cursor-pointer shadow-[1.5px_1.5px_0px_#121212] ${track.id === currentId ? 'bg-[#FFE600]' : 'bg-[#F8F5EE] hover:bg-white'}`}
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-[#121212] truncate">{track.title}</p>
+                                  <p className="text-[10px] font-mono-code font-bold text-gray-500 truncate">{track.artist}</p>
+                                </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleRemoveTrackFromPlaylist(pl.id, track.id); }}
+                                  className="w-7 h-7 rounded-lg bg-white hover:bg-red-100 border border-black flex items-center justify-center text-red-600 shrink-0"
+                                  title="Keluarkan dari playlist"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Modal Equalizer */}
+      {showEq && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-3" onClick={() => setShowEq(false)}>
+          <div
+            className="w-full max-w-md bg-white rounded-2xl border-[2.5px] border-[#121212] shadow-[4px_4px_0px_#121212] p-4 space-y-3 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-2 border-black pb-2">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4" />
+                <h3 className="font-black text-sm uppercase">Equalizer</h3>
+              </div>
+              <button onClick={() => setShowEq(false)} className="w-8 h-8 rounded-lg bg-white border-2 border-black flex items-center justify-center shadow-[1.5px_1.5px_0px_#121212]" title="Tutup">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {!isNative() ? (
+              <p className="text-xs font-bold text-gray-500">Equalizer hanya tersedia di aplikasi Android.</p>
+            ) : eqLoading && !eqInfo ? (
+              <p className="flex items-center gap-2 text-xs font-bold text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Memuat equalizer...</p>
+            ) : !eqInfo || eqInfo.supported === false || !(eqInfo.bandCount > 0) ? (
+              <p className="text-xs font-bold text-gray-500">Perangkat ini tidak mendukung equalizer native.</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black uppercase">{eqInfo.enabled ? 'Aktif' : 'Mati'}</span>
+                  <button
+                    onClick={handleEqToggle}
+                    className={`px-3 py-1.5 rounded-xl border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0px_#121212] ${eqInfo.enabled ? 'bg-[#FFE600]' : 'bg-white'}`}
+                  >
+                    {eqInfo.enabled ? 'Matikan' : 'Nyalakan'}
+                  </button>
+                </div>
+                {eqInfo.presetNames?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-mono-code font-black uppercase text-gray-500 mb-1.5">Preset</p>
+                    <div className="flex gap-1.5 overflow-x-auto pb-1">
+                      {eqInfo.presetNames.map((name, i) => (
+                        <button
+                          key={name}
+                          onClick={() => handleEqPreset(i)}
+                          className={`px-2.5 py-1.5 rounded-lg border border-black text-[11px] font-black whitespace-nowrap shadow-[1.5px_1.5px_0px_#121212] ${eqInfo.presetIndex === i ? 'bg-[#121212] text-[#FFE600]' : 'bg-[#F8F5EE]'}`}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2.5">
+                  {Array.from({ length: eqInfo.bandCount }).map((_, b) => (
+                    <div key={b} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black">{formatEqFreq(eqInfo.centerFreqs?.[b])}</span>
+                        <span className="text-[11px] font-mono-code font-bold text-gray-600">{formatEqGain(eqInfo.gains?.[b] ?? 0)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={eqInfo.minGainMb}
+                        max={eqInfo.maxGainMb}
+                        step={100}
+                        value={eqInfo.gains?.[b] ?? 0}
+                        onChange={(e) => handleEqBand(b, Number(e.target.value))}
+                        disabled={!eqInfo.enabled}
+                        className="w-full accent-[#121212] disabled:opacity-40"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleEqReset}
+                  className="w-full px-3 py-2 rounded-xl bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0px_#121212]"
+                >
+                  Reset ke Flat
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Sleep Timer */}
+      {showSleep && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-3" onClick={() => setShowSleep(false)}>
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl border-[2.5px] border-[#121212] shadow-[4px_4px_0px_#121212] p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-2 border-black pb-2">
+              <div className="flex items-center gap-2">
+                <Timer className="w-4 h-4" />
+                <h3 className="font-black text-sm uppercase">Sleep Timer</h3>
+              </div>
+              <button onClick={() => setShowSleep(false)} className="w-8 h-8 rounded-lg bg-white border-2 border-black flex items-center justify-center shadow-[1.5px_1.5px_0px_#121212]" title="Tutup">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {!isNative() ? (
+              <p className="text-xs font-bold text-gray-500">Sleep timer hanya tersedia di aplikasi Android.</p>
+            ) : (
+              <>
+                <p className="text-xs font-bold text-gray-700">
+                  {sleepStatus.active && sleepStatus.remainingMs > 0
+                    ? `Musik berhenti dalam ${formatSleepRemaining(sleepStatus.remainingMs)} (fade-out 3 detik).`
+                    : 'Musik berhenti otomatis + fade-out 3 detik saat waktu habis.'}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {SLEEP_OPTIONS.map((m) => {
+                    const active = m === 0
+                      ? !sleepStatus.active
+                      : sleepStatus.active && sleepStatus.totalMin === m;
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => handleSetSleep(m)}
+                        className={`px-2 py-2.5 rounded-xl border-2 border-black text-xs font-black shadow-[2px_2px_0px_#121212] ${active ? 'bg-[#121212] text-[#FFE600]' : 'bg-[#F8F5EE]'}`}
+                      >
+                        {m === 0 ? 'Mati' : `${m} mnt`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah ke Playlist */}
+      {addToPickTrack && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-3" onClick={() => setAddToPickTrack(null)}>
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl border-[2.5px] border-[#121212] shadow-[4px_4px_0px_#121212] p-4 space-y-3 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-2 border-black pb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <ListPlus className="w-4 h-4 shrink-0" />
+                <h3 className="font-black text-sm uppercase truncate">Tambah ke Playlist</h3>
+              </div>
+              <button onClick={() => setAddToPickTrack(null)} className="w-8 h-8 rounded-lg bg-white border-2 border-black flex items-center justify-center shadow-[1.5px_1.5px_0px_#121212] shrink-0" title="Tutup">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs font-bold text-gray-600 truncate">{addToPickTrack.title} — {addToPickTrack.artist}</p>
+            <div className="flex gap-2">
+              <input
+                value={newPlaylistName}
+                onChange={(e) => setNewPlaylistName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreatePlaylist(); }}
+                placeholder="Playlist baru..."
+                maxLength={60}
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-[#F8F5EE] border-2 border-black text-xs font-bold outline-none placeholder:text-gray-400"
+              />
+              <button
+                onClick={handleCreatePlaylist}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-[#38E54D] border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0px_#121212]"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+            {playlists.length === 0 ? (
+              <p className="text-xs font-bold text-gray-500 text-center py-2">Belum ada playlist — buat dulu di atas.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {playlists.map((pl) => {
+                  const inList = isTrackInPlaylist(playlists, pl.id, addToPickTrack.id);
+                  return (
+                    <button
+                      key={pl.id}
+                      onClick={() => handleAddTrackToPlaylist(pl.id, addToPickTrack.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-black text-left shadow-[1.5px_1.5px_0px_#121212] ${inList ? 'bg-[#FFE600]' : 'bg-[#F8F5EE] hover:bg-white'}`}
+                    >
+                      <span className="flex-1 min-w-0 text-xs font-black truncate">{pl.name}</span>
+                      {inList && <Check className="w-4 h-4 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Hidden probe untuk durasi file-picker */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}

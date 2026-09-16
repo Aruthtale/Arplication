@@ -75,6 +75,7 @@ export function onNativeMediaControl(cb) {
       if ([
         'toggle', 'next', 'prev', 'stop',
         'advanced', 'queue-ended', 'queueended', 'error',
+        'sleep-ended', 'sleepended',
       ].includes(action)) cb({ ...(ev || {}), action });
     });
     // addListener Capacitor 7 mengembalikan Promise<PluginListenerHandle>
@@ -220,4 +221,113 @@ export async function getNativePlaybackState() {
   } catch {
     return null;
   }
+}
+
+// ------------------------------------------------------------------ Fase 2: EQ + sleep timer
+
+/** Label frekuensi ramah-baca: 60000 mHz -> "60 Hz", 1400000 -> "1.4 kHz". */
+export function formatEqFreq(milliHz) {
+  const hz = Number(milliHz || 0) / 1000;
+  if (!Number.isFinite(hz) || hz <= 0) return '--';
+  if (hz >= 1000) {
+    const k = hz / 1000;
+    return `${Number(k.toFixed(k >= 10 ? 0 : 1))} kHz`;
+  }
+  return `${Math.round(hz)} Hz`;
+}
+
+/** dB dari millibel: 1200 -> "+12 dB". */
+export function formatEqGain(milliBel) {
+  const db = Number(milliBel || 0) / 100;
+  const sign = db > 0 ? '+' : '';
+  return `${sign}${Number(db.toFixed(1))} dB`;
+}
+
+function toArray(v) {
+  if (Array.isArray(v)) return v;
+  try {
+    if (v && typeof v.length === 'number') return Array.from(v);
+  } catch { /* abaikan */ }
+  return [];
+}
+
+/**
+ * Baca info EQ native: { supported, attached, enabled, bandCount, minGainMb,
+ * maxGainMb, centerFreqs[], gains[], presetCount, presetNames[], presetIndex }.
+ * @returns null bila bukan native / plugin lama.
+ */
+export async function getNativeEqualizer() {
+  if (!isNative()) return null;
+  try {
+    const s = await ArMusic.getEqualizer();
+    return {
+      supported: s?.supported !== false,
+      attached: Boolean(s?.attached),
+      enabled: Boolean(s?.enabled),
+      sessionId: Number(s?.sessionId ?? 0),
+      bandCount: Math.max(0, Number(s?.bandCount ?? 0)),
+      minGainMb: Number(s?.minGainMb ?? -1500),
+      maxGainMb: Number(s?.maxGainMb ?? 1500),
+      centerFreqs: toArray(s?.centerFreqs).map(Number),
+      gains: toArray(s?.gains).map(Number),
+      presetCount: Math.max(0, Number(s?.presetCount ?? 0)),
+      presetNames: toArray(s?.presetNames).map(String),
+      presetIndex: Number(s?.presetIndex ?? -1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function setNativeEqualizerEnabled(enabled) {
+  return callNativeVoid('setEqualizerEnabled', { enabled: Boolean(enabled) });
+}
+
+export function setNativeEqualizerBand(band, gainMb) {
+  return callNativeVoid('setEqualizerBand', {
+    band: Math.max(0, Math.floor(Number(band) || 0)),
+    gainMb: Math.floor(Number(gainMb) || 0),
+  });
+}
+
+export function setNativeEqualizerPreset(preset) {
+  return callNativeVoid('setEqualizerPreset', {
+    preset: Math.max(0, Math.floor(Number(preset) || 0)),
+  });
+}
+
+/**
+ * Atur sleep timer native (menit). 0 = batalkan.
+ * Timer hidup di service + fade-out 3 detik saat habis.
+ */
+export function setNativeSleepTimer(minutes) {
+  return callNativeVoid('setSleepTimer', {
+    minutes: Math.max(0, Math.floor(Number(minutes) || 0)),
+  });
+}
+
+/**
+ * Baca status timer: { active, remainingMs, totalMin }.
+ * @returns null bila bukan native / plugin lama.
+ */
+export async function getNativeSleepTimer() {
+  if (!isNative()) return null;
+  try {
+    const s = await ArMusic.getSleepTimer();
+    return {
+      active: Boolean(s?.active),
+      remainingMs: Math.max(0, Number(s?.remainingMs ?? 0)),
+      totalMin: Math.max(0, Number(s?.totalMin ?? 0)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Format sisa timer ms -> "24:59". Murni & testable. */
+export function formatSleepRemaining(remainingMs) {
+  const totalSec = Math.max(0, Math.ceil(Number(remainingMs || 0) / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
