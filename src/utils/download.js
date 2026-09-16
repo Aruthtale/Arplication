@@ -63,12 +63,89 @@ export function saveDownloadSettings(settings) {
 }
 
 /**
+ * Sanitize filename to prevent path traversal, null bytes, and illegal filesystem characters.
+ * Safe across Android, Linux, macOS, and Windows.
+ *
+ * @param {string} input - Raw filename or title
+ * @param {string} [fallback='media'] - Fallback name if input is empty or unsafe
+ * @returns {string} Clean, safe filename
+ */
+export function sanitizeFilename(input, fallback = 'media') {
+  if (typeof input !== 'string') {
+    input = String(input || '');
+  }
+
+  // 1. Decode URI components if encoded (e.g. %00, %2e%2e)
+  let clean = input;
+  try {
+    clean = decodeURIComponent(clean);
+  } catch (_) {
+    // If malformed URI, ignore decode error
+  }
+
+  // 2. Remove null bytes and control characters (ASCII 0-31, 127)
+  clean = clean.replace(/[\x00-\x1F\x7F]/g, '');
+
+  // 3. Normalize unicode (NFC)
+  if (typeof clean.normalize === 'function') {
+    clean = clean.normalize('NFC');
+  }
+
+  // 4. Remove path traversal sequences (../, ..\, .., ./)
+  let prev;
+  do {
+    prev = clean;
+    clean = clean.replace(/\.\.+[/\\]/g, '').replace(/[/\\]\.\.+/g, '');
+  } while (clean !== prev);
+
+  // 5. Replace slashes, backslashes, colons, and illegal filesystem characters
+  clean = clean.replace(/[/\\]/g, '_');
+  clean = clean.replace(/[:*?"<>|]/g, '_');
+
+  // 6. Replace non-printable / zero-width unicode chars
+  clean = clean.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+  // 7. Strip leading/trailing dots and whitespace
+  clean = clean.trim().replace(/^\.+/, '').replace(/\.+$/, '');
+
+  // 8. Collapse consecutive underscores/spaces
+  clean = clean.replace(/_+/g, '_').replace(/\s+/g, ' ');
+
+  // 9. Trim leading/trailing underscores
+  clean = clean.trim().replace(/^_+|_+$/g, '');
+
+  // 10. Protect against reserved Windows device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
+  const baseName = clean.split('.')[0]?.toUpperCase();
+  const reserved = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
+  if (reserved.test(baseName)) {
+    clean = `file_${clean}`;
+  }
+
+  // 11. Enforce maximum byte/character length (Android/Linux filesystem max single component is 255)
+  if (clean.length > 200) {
+    const extIdx = clean.lastIndexOf('.');
+    if (extIdx > 0 && clean.length - extIdx <= 10) {
+      const ext = clean.slice(extIdx);
+      clean = clean.slice(0, 200 - ext.length) + ext;
+    } else {
+      clean = clean.slice(0, 200);
+    }
+  }
+
+  if (!clean || clean === '.' || clean.startsWith('.')) {
+    return fallback;
+  }
+
+  return clean;
+}
+
+/**
  * Build a tidy filename from media metadata + user pattern setting.
  * Patterns: 'title_id' | 'author_title' | 'platform_title_id'
  */
 export function buildFilename({ title, author, platform, optionId, ext, pattern }) {
   const clean = (s, len) =>
-    String(s || '')
+    sanitizeFilename(s, 'media')
       .replace(/[^\p{L}\p{N}._-]+/gu, '_')
       .replace(/_+/g, '_')
       .replace(/^_+|_+$/g, '')
@@ -224,7 +301,16 @@ export function resolveSubfolderPath(rawFolder, platformName = '') {
   ) {
     str = `Arloader/${safePlatform || 'General'}`;
   }
-  return str.replace(/^\/+|\/+$/g, '');
+
+  // Path traversal guard: split on slashes, strip relative dots, and sanitize each segment
+  const segments = str
+    .replace(/\\/g, '/')
+    .split('/')
+    .map((seg) => seg.trim())
+    .filter((seg) => seg && seg !== '.' && seg !== '..')
+    .map((seg) => sanitizeFilename(seg, 'folder'));
+
+  return segments.join('/');
 }
 
 /**
@@ -235,7 +321,7 @@ export async function saveTextFile({ text, filename, platform = '', targetDirect
   const settings = getDownloadSettings();
   const dirChoice = targetDirectory || settings.directory || 'Downloads';
   const folderChoice = subfolder !== null ? subfolder : settings.subfolder;
-  const safeFilename = String(filename || 'caption.txt').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeFilename = sanitizeFilename(filename || 'caption.txt', 'caption.txt');
   const cleanSubfolder = resolveSubfolderPath(folderChoice, platform);
 
   if (isNative()) {
@@ -312,7 +398,7 @@ export async function downloadMedia({
   const folderChoice = subfolder !== null ? subfolder : settings.subfolder;
   const shouldShare = autoShare !== null ? autoShare : (settings.autoShare ?? false);
 
-  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeFilename = sanitizeFilename(filename, 'media.bin');
   const cleanSubfolder = resolveSubfolderPath(folderChoice, platform);
 
   // 1. Android Native Environment
