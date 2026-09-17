@@ -256,56 +256,71 @@ async function searchYouTubeDirect(query) {
 }
 
 /**
- * Resolves MP3 audio URL via Convert1s / ytmp3.gg converter cluster (same engine Mori uses).
+ * Resolves MP3 or MP4 download URL via Convert1s / ytmp3.gg cluster (Mori engine).
  */
-async function resolveConvert1sAudio(videoId) {
+async function resolveConvert1sMedia({ videoId, format = 'mp3', quality = '128', onProgress = null, maxPolls = 30 }) {
   if (!videoId) return null;
-  const convertHeaders = {
+  const headers = {
     Origin: 'https://media.ytmp3.gg',
     Referer: 'https://media.ytmp3.gg/',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    Accept: 'application/json, text/plain, */*',
+    'Content-Type': 'application/json',
   };
-  try {
-    const convRes = await httpClient({
-      url: 'https://hub.convert1s.com/api/download',
-      method: 'POST',
-      headers: convertHeaders,
-      data: {
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        os: 'android',
-        output: {
-          type: 'audio',
-          format: 'mp3',
-          quality: '128',
+
+  const isVideo = format === 'mp4';
+  const outQuality = isVideo ? (quality ? (quality.endsWith('p') ? quality : `${quality}p`) : '720p') : '128';
+
+  let conv = null;
+  for (let initAttempt = 1; initAttempt <= 2; initAttempt += 1) {
+    try {
+      if (initAttempt > 1) await sleep(1500);
+      const convRes = await httpClient({
+        url: 'https://hub.convert1s.com/api/download',
+        method: 'POST',
+        headers,
+        data: {
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          os: 'macos',
+          output: {
+            type: isVideo ? 'video' : 'audio',
+            format,
+            quality: outQuality,
+          },
+          audio: { bitrate: '128k' },
         },
-        audio: { bitrate: '128k' },
-      },
-      timeout: 12000,
-    });
-
-    const statusUrl = convRes?.statusUrl;
-    if (!statusUrl) return null;
-
-    for (let i = 0; i < 15; i += 1) {
-      await sleep(1000);
-      try {
-        const pollRes = await httpClient({
-          url: statusUrl,
-          headers: convertHeaders,
-          timeout: 8000,
-        });
-        if (pollRes?.status === 'completed' && pollRes?.downloadUrl) {
-          return pollRes.downloadUrl;
-        }
-        if (pollRes?.status === 'failed') {
-          break;
-        }
-      } catch (err) {
-        console.warn('[Convert1s] Poll error:', err.message);
+        timeout: 25000,
+      });
+      if (convRes && !convRes.error && convRes.statusUrl) {
+        conv = convRes;
+        break;
       }
+    } catch (_) {}
+  }
+
+  if (!conv?.statusUrl) return null;
+
+  for (let i = 0; i < maxPolls; i += 1) {
+    await sleep(1500);
+    try {
+      const pollData = await httpClient({
+        url: conv.statusUrl,
+        headers,
+        timeout: 15000,
+      });
+      if (typeof onProgress === 'function') {
+        const pct = Math.min(95, 25 + Math.round((i / maxPolls) * 70));
+        onProgress(pct, `Mengonversi ${format.toUpperCase()} (convert1s)...`);
+      }
+      if (pollData?.status === 'completed' && pollData?.downloadUrl) {
+        return pollData.downloadUrl;
+      }
+      if (pollData?.status === 'error' || pollData?.status === 'failed') {
+        break;
+      }
+    } catch (err) {
+      console.warn('[Convert1s] Poll error:', err.message);
     }
-  } catch (err) {
-    console.warn('[Convert1s] Conversion error:', err.message);
   }
   return null;
 }
@@ -365,7 +380,7 @@ async function resolveYtDlpRemoteVideoUrl(videoId, quality = '') {
  * It initiates the conversion session AND polls progress until progress === 3 (ready),
  * ensuring the returned downloadURL is 100% active and won't return HTTP 410.
  */
-async function resolveYmcdnConvert({ videoId, format = 'mp3', onProgress = null, maxWaitSeconds = 25 }) {
+async function resolveYmcdnConvert({ videoId, format = 'mp3', onProgress = null, maxWaitSeconds = 30 }) {
   if (!videoId) return null;
   const ymHeaders = {
     Origin: 'https://ytmp3.mobi',
@@ -376,39 +391,47 @@ async function resolveYmcdnConvert({ videoId, format = 'mp3', onProgress = null,
     const initRes = await httpClient({
       url: 'https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471',
       headers: ymHeaders,
-      timeout: 10000,
+      timeout: 30000,
     });
     if (!initRes?.convertURL) return null;
 
     const convRes = await httpClient({
       url: `${initRes.convertURL}&v=${videoId}&f=${format}`,
       headers: ymHeaders,
-      timeout: 10000,
+      timeout: 30000,
     });
 
     if (!convRes?.progressURL) return null;
 
     const progressUrl = convRes.progressURL;
-    const fallbackDlUrl = convRes.downloadURL;
+    let fallbackDlUrl = convRes.downloadURL;
+    let progress = 0;
 
     for (let i = 0; i < maxWaitSeconds; i += 1) {
-      await sleep(1000);
+      await sleep(1500);
       try {
         const pollData = await httpClient({
           url: progressUrl,
           headers: ymHeaders,
-          timeout: 8000,
+          timeout: 15000,
         });
         if (pollData?.error && pollData.error !== 0) {
           console.warn('[Ymcdn] Conversion server error:', pollData.error);
           break;
         }
+        progress = pollData?.progress ?? 0;
+        if (pollData?.downloadURL) fallbackDlUrl = pollData.downloadURL;
+
         if (typeof onProgress === 'function') {
           const pct = Math.min(95, 20 + Math.round((i / maxWaitSeconds) * 75));
-          onProgress(pct, `Mengonversi ${format.toUpperCase()} di server (${pct}%)...`);
+          onProgress(pct, `Mengonversi ${format.toUpperCase()} (ytmp3)...`);
         }
-        if (pollData?.progress === 3 || pollData?.downloadURL) {
-          return pollData.downloadURL || fallbackDlUrl;
+
+        if (progress >= 3 && fallbackDlUrl) {
+          let dlUrl = fallbackDlUrl;
+          if (dlUrl.startsWith('//')) dlUrl = `https:${dlUrl}`;
+          if (dlUrl.startsWith('/')) dlUrl = `https://ytmp3.mobi${dlUrl}`;
+          return dlUrl;
         }
       } catch (pollErr) {
         console.warn('[Ymcdn] Progress poll warning:', pollErr.message);
@@ -454,7 +477,7 @@ export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url =
   // PRIORITAS 1.2: Convert1s Cloud Converter (Mori Engine)
   if (directVid) {
     try {
-      const convertAudioUrl = await resolveConvert1sAudio(directVid);
+      const convertAudioUrl = await resolveConvert1sMedia({ videoId: directVid, format: 'mp3', onProgress });
       if (convertAudioUrl) {
         return convertAudioUrl;
       }
@@ -549,7 +572,17 @@ export async function resolveYouTubeVideoUrl({ videoId = null, url = '', onProgr
     console.warn('[YouTube] ymcdn video resolution failed, falling back:', err.message);
   }
 
-  // PRIORITAS 1.2: Local yt-dlp server (if in Vite dev web mode)
+  // PRIORITAS 1.2: Convert1s Cloud Converter (Mori Engine)
+  try {
+    const convertVideoUrl = await resolveConvert1sMedia({ videoId: vid, format: 'mp4', quality: '720p', onProgress });
+    if (convertVideoUrl) {
+      return convertVideoUrl;
+    }
+  } catch (err) {
+    console.warn('[YouTube] Convert1s video resolution failed, falling back:', err.message);
+  }
+
+  // PRIORITAS 1.3: Local yt-dlp server (if in Vite dev web mode)
   if (isLocalWeb()) {
     try {
       const localRes = await httpClient({

@@ -384,6 +384,45 @@ function blobToBase64(blob) {
 }
 
 /**
+ * Builds appropriate Referer, Origin, and User-Agent headers for specific platforms and converter CDNs (Mori pattern).
+ */
+export function buildPlatformDownloadHeaders(actualDownloadUrl = '', platform = '') {
+  const isYtmp3GG =
+    actualDownloadUrl.includes('ytmp3.gg') ||
+    actualDownloadUrl.includes('convert1s.com') ||
+    actualDownloadUrl.includes('lilillliiillliillii.shop') ||
+    actualDownloadUrl.includes('.shop/files/');
+
+  const isYoutube =
+    isYtmp3GG ||
+    actualDownloadUrl.includes('ytmp3.mobi') ||
+    actualDownloadUrl.includes('ytdown') ||
+    actualDownloadUrl.includes('ymcdn.org') ||
+    actualDownloadUrl.includes('youtube.com') ||
+    actualDownloadUrl.includes('youtu.be') ||
+    platform === 'youtube';
+
+  const downloadHeaders = {};
+
+  if (isYtmp3GG) {
+    downloadHeaders.Referer = 'https://media.ytmp3.gg/';
+    downloadHeaders.Origin = 'https://media.ytmp3.gg';
+  } else if (isYoutube) {
+    downloadHeaders.Referer = 'https://ytmp3.mobi/';
+    if (actualDownloadUrl.includes('ymcdn.org') || actualDownloadUrl.includes('ytmp3.mobi')) {
+      downloadHeaders.Origin = 'https://ytmp3.mobi';
+    }
+  }
+
+  if (actualDownloadUrl.includes('spotidown') || platform === 'spotify') {
+    downloadHeaders.Referer = 'https://spotidown.app/';
+    downloadHeaders.Origin = 'https://spotidown.app';
+  }
+
+  return downloadHeaders;
+}
+
+/**
  * Initiates file download across Web and Native Mobile
  */
 export async function downloadMedia({
@@ -404,6 +443,7 @@ export async function downloadMedia({
 
   const safeFilename = sanitizeFilename(filename, 'media.bin');
   const cleanSubfolder = resolveSubfolderPath(folderChoice, platform);
+  const downloadHeaders = buildPlatformDownloadHeaders(url, platform);
 
   // 1. Android Native Environment
   if (isNative()) {
@@ -461,6 +501,7 @@ export async function downloadMedia({
           directory: directoryEnum,
           recursive: true,
           progress: true,
+          headers: downloadHeaders,
         });
         resPath = res.path;
       } catch (dlErr) {
@@ -476,6 +517,7 @@ export async function downloadMedia({
         try {
           const capRes = await CapacitorHttp.get({
             url,
+            headers: downloadHeaders,
             responseType: 'blob',
           });
           if (capRes.data) {
@@ -491,7 +533,7 @@ export async function downloadMedia({
           }
         } catch (capErr) {
           console.warn('CapacitorHttp fallback failed, trying fetch:', capErr);
-          const response = await fetch(url);
+          const response = await fetch(url, { headers: downloadHeaders });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           blob = await response.blob();
           const base64 = await blobToBase64(blob);
