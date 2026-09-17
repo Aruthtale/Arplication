@@ -7,6 +7,19 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.2.20] - 2026-09-17
+
+### 🐛 Fixed
+- **DNS / Dead Host Resolution Error**:
+  - Menghapus host mati (`pipedapi.mha.fi`, `pipedapi.tokhmi.xyz`, `pipedapi.garudalinux.org`) dari failover list.
+  - Memetakan error DNS/jaringan (`unable to resolve host`) ke pesan ramah bahasa Indonesia.
+
+### 📦 Build
+- **versionCode**: 20 → **21**
+- **versionName**: "0.2.19" → **"0.2.20"**
+
+---
+
 ## [0.2.19] - 2026-09-17
 
 ### 🐛 Fixed

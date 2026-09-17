@@ -66,9 +66,6 @@ export function extractPipedVideoId(text = '') {
 export const PIPED_API_INSTANCES = [
   'https://pipedapi.ducks.party',
   'https://api.piped.private.coffee',
-  'https://pipedapi.tokhmi.xyz',
-  'https://pipedapi.garudalinux.org',
-  'https://pipedapi.mha.fi',
 ];
 
 /**
@@ -81,7 +78,7 @@ export async function pipedGet(path = '') {
     try {
       const data = await httpClient({
         url: `${base}${path}`,
-        timeout: 15000,
+        timeout: 10000,
       });
       if (data && !data.error && (data.title || data.name || data.items || data.audioStreams || data.videoStreams)) {
         return data;
@@ -90,6 +87,10 @@ export async function pipedGet(path = '') {
     } catch (err) {
       lastError = err;
     }
+  }
+  const errText = String(lastError?.message || lastError || '');
+  if (/unable to resolve host|no address|eai_again|enotfound|dns/i.test(errText)) {
+    throw new Error('Server Piped sedang offline atau mengalami gangguan jaringan.');
   }
   throw lastError || new Error('Semua instance Piped tidak dapat dijangkau.');
 }
@@ -215,8 +216,8 @@ export function formatResolverError(err, query = '') {
   if (/tidak dapat menemukan|not found|404/i.test(raw)) {
     return `Tidak dapat menemukan stream audio untuk "${q}". Coba kata kunci lain atau pakai link YouTube langsung.`;
   }
-  if (/network|timeout|fetch|failed to fetch|econn|socket|tidak dapat dijangkau/i.test(raw)) {
-    return 'Jaringan bermasalah atau semua instance Piped offline. Periksa koneksi lalu coba lagi.';
+  if (/network|timeout|fetch|failed to fetch|econn|socket|tidak dapat dijangkau|unable to resolve host|no address/i.test(raw)) {
+    return 'Jaringan bermasalah atau server penyedia offline. Periksa koneksi lalu coba lagi.';
   }
   if (/stream audio tidak tersedia/i.test(raw)) {
     return `Video ditemukan tapi stream audio-nya kosong untuk "${q}". Coba lagu lain.`;
