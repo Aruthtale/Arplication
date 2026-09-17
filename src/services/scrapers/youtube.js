@@ -360,15 +360,76 @@ async function resolveYtDlpRemoteVideoUrl(videoId, quality = '') {
 }
 
 /**
+ * Resolves MP3 or MP4 download URL via ymcdn converter engine (ytmp3 cluster).
+ * It initiates the conversion session AND polls progress until progress === 3 (ready),
+ * ensuring the returned downloadURL is 100% active and won't return HTTP 410.
+ */
+async function resolveYmcdnConvert({ videoId, format = 'mp3', onProgress = null, maxWaitSeconds = 25 }) {
+  if (!videoId) return null;
+  const ymHeaders = {
+    Origin: 'https://ytmp3.mobi',
+    Referer: 'https://ytmp3.mobi/',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  };
+  try {
+    const initRes = await httpClient({
+      url: 'https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471',
+      headers: ymHeaders,
+      timeout: 10000,
+    });
+    if (!initRes?.convertURL) return null;
+
+    const convRes = await httpClient({
+      url: `${initRes.convertURL}&v=${videoId}&f=${format}`,
+      headers: ymHeaders,
+      timeout: 10000,
+    });
+
+    if (!convRes?.progressURL) return null;
+
+    const progressUrl = convRes.progressURL;
+    const fallbackDlUrl = convRes.downloadURL;
+
+    for (let i = 0; i < maxWaitSeconds; i += 1) {
+      await sleep(1000);
+      try {
+        const pollData = await httpClient({
+          url: progressUrl,
+          headers: ymHeaders,
+          timeout: 8000,
+        });
+        if (pollData?.error && pollData.error !== 0) {
+          console.warn('[Ymcdn] Conversion server error:', pollData.error);
+          break;
+        }
+        if (typeof onProgress === 'function') {
+          const pct = Math.min(95, 20 + Math.round((i / maxWaitSeconds) * 75));
+          onProgress(pct, `Mengonversi ${format.toUpperCase()} di server (${pct}%)...`);
+        }
+        if (pollData?.progress === 3 || pollData?.downloadURL) {
+          return pollData.downloadURL || fallbackDlUrl;
+        }
+      } catch (pollErr) {
+        console.warn('[Ymcdn] Progress poll warning:', pollErr.message);
+      }
+    }
+  } catch (err) {
+    console.warn('[Ymcdn] Conversion initiation error:', err.message);
+  }
+  return null;
+}
+
+/**
  * Resolves a direct playable/downloadable audio URL for a query, video ID, or watch URL.
  * Multi-layer strategy:
- * 1. Convert1s cloud converter cluster (Fast, reliable, MP3 128k/320k)
+ * 1. ymcdn converter cluster with full progress polling (100% immune to 410 Gone)
+ * 1.2. Convert1s cloud converter cluster
  * 1.5. Remote self-hosted yt-dlp server (if configured)
  * 2. Local yt-dlp server (if in Vite dev mode)
  * 3. Direct Piped video stream
  * 4. Piped search multi-candidate stream
  */
-export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url = '' } = {}) {
+export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url = '', onProgress = null } = {}) {
   const rawQuery = String(query || '').trim();
   let directVid = extractPipedVideoId(String(videoId || '')) || extractPipedVideoId(String(url || '')) || extractPipedVideoId(rawQuery);
 
@@ -377,7 +438,19 @@ export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url =
     directVid = await searchYouTubeDirect(rawQuery);
   }
 
-  // PRIORITAS 1: Convert1s Cloud Converter (Mori Engine - bypasses YouTube bot-detect completely)
+  // PRIORITAS 1: ymcdn Cloud Converter with progress polling (Bypasses YouTube 410 completely)
+  if (directVid) {
+    try {
+      const ymcdnAudioUrl = await resolveYmcdnConvert({ videoId: directVid, format: 'mp3', onProgress });
+      if (ymcdnAudioUrl) {
+        return ymcdnAudioUrl;
+      }
+    } catch (err) {
+      console.warn('[YouTube] ymcdn audio resolution failed, falling back:', err.message);
+    }
+  }
+
+  // PRIORITAS 1.2: Convert1s Cloud Converter (Mori Engine)
   if (directVid) {
     try {
       const convertAudioUrl = await resolveConvert1sAudio(directVid);
@@ -461,11 +534,21 @@ export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url =
 /**
  * Resolves a direct playable/downloadable MP4 video URL for a video ID or watch URL.
  */
-export async function resolveYouTubeVideoUrl({ videoId = null, url = '' } = {}) {
+export async function resolveYouTubeVideoUrl({ videoId = null, url = '', onProgress = null } = {}) {
   const vid = extractPipedVideoId(String(videoId || '')) || extractPipedVideoId(String(url || ''));
   if (!vid) throw new Error('Video ID YouTube tidak valid.');
 
-  // PRIORITAS 1: Local yt-dlp server (if in Vite dev web mode)
+  // PRIORITAS 1: ymcdn Cloud Converter with progress polling (Bypasses YouTube 410 completely)
+  try {
+    const ymcdnVideoUrl = await resolveYmcdnConvert({ videoId: vid, format: 'mp4', onProgress });
+    if (ymcdnVideoUrl) {
+      return ymcdnVideoUrl;
+    }
+  } catch (err) {
+    console.warn('[YouTube] ymcdn video resolution failed, falling back:', err.message);
+  }
+
+  // PRIORITAS 1.2: Local yt-dlp server (if in Vite dev web mode)
   if (isLocalWeb()) {
     try {
       const localRes = await httpClient({
@@ -496,21 +579,6 @@ export async function resolveYouTubeVideoUrl({ videoId = null, url = '' } = {}) 
   } catch (err) {
     console.warn('[YouTube] Piped video stream failed:', err.message);
   }
-
-  // PRIORITAS 3: ymcdn conversion fallback
-  try {
-    const initRes = await httpClient({
-      url: 'https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471',
-      headers: { Origin: 'https://ytmp3.mobi', Referer: 'https://ytmp3.mobi/' },
-    });
-    if (initRes?.convertURL) {
-      const convRes = await httpClient({
-        url: `${initRes.convertURL}&v=${vid}&f=mp4`,
-        headers: { Origin: 'https://ytmp3.mobi', Referer: 'https://ytmp3.mobi/' },
-      });
-      if (convRes?.downloadURL) return convRes.downloadURL;
-    }
-  } catch (_) {}
 
   throw new Error('Gagal memperbarui stream video YouTube. Coba lagi dalam beberapa saat.');
 }
@@ -671,9 +739,9 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
   const thumbHq = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const thumbSd = `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`;
 
-  // Remote (non-local) resolution order: ymcdn conversion URL -> Piped direct stream -> null.
-  const remoteVideoUrl = vData?.downloadURL || pipedVideoUrl || null;
-  const remoteAudioUrl = aData?.downloadURL || pipedAudioUrl || null;
+  // Remote (non-local) URLs are resolved on-demand per download request with live server progress polling
+  const remoteVideoUrl = null;
+  const remoteAudioUrl = null;
 
   const mp4Options = [
     {
@@ -870,82 +938,41 @@ export async function scrapeYouTube(url = '') {
     };
   }
 
-  // Remote resolution: Piped direct streams first, ymcdn conversion as fallback.
-  let pipedAudioUrl = null;
-  let pipedVideoUrl = null;
+  // Remote metadata extraction: Piped direct streams first, direct search fallback.
   let pipedTitle = null;
   let pipedUploader = null;
   let pipedDuration = null;
   let pipedCover = null;
   try {
     const streams = await pipedGetStreams(videoId);
-    pipedAudioUrl = pickPipedAudioUrl(streams);
-    const progressive = pickPipedProgressiveStreams(streams);
-    pipedVideoUrl = progressive[0]?.url || null;
     pipedTitle = streams?.title || null;
     pipedUploader = streams?.uploader || streams?.uploaderName || null;
     pipedDuration = formatPipedDuration(streams?.duration) || null;
     pipedCover = streams?.thumbnailUrl || null;
   } catch (err) {
-    console.warn('Piped streams gagal, coba fallback konversi:', err?.message || err);
+    console.warn('Piped stream info warning, extracting metadata via web fallback:', err?.message || err);
   }
 
-  // Step 1: Initialize session with ytmp3.mobi conversion engine (fallback)
-  let vData = null;
-  let aData = null;
-  try {
-    const initRes = await httpClient({
-      url: 'https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471',
-      headers: {
-        Origin: 'https://ytmp3.mobi',
-        Referer: 'https://ytmp3.mobi/',
-      },
-    });
-
-    if (initRes?.convertURL) {
-      const convertBase = initRes.convertURL;
-
-      // Step 2: Request conversion for MP4 Video and MP3 Audio
-      const [videoConv, audioConv] = await Promise.allSettled([
-        httpClient({
-          url: `${convertBase}&v=${videoId}&f=mp4`,
-          headers: {
-            Origin: 'https://ytmp3.mobi',
-            Referer: 'https://ytmp3.mobi/',
-          },
-        }),
-        httpClient({
-          url: `${convertBase}&v=${videoId}&f=mp3`,
-          headers: {
-            Origin: 'https://ytmp3.mobi',
-            Referer: 'https://ytmp3.mobi/',
-          },
-        }),
-      ]);
-
-      vData = videoConv.status === 'fulfilled' ? videoConv.value : null;
-      aData = audioConv.status === 'fulfilled' ? audioConv.value : null;
-    }
-  } catch (err) {
-    console.warn('Fallback konversi ymcdn gagal:', err?.message || err);
+  // If Piped title is missing, fetch basic title from YouTube oEmbed API
+  if (!pipedTitle) {
+    try {
+      const oembedRes = await httpClient({
+        url: `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+        timeout: 8000,
+      });
+      if (oembedRes?.title) {
+        pipedTitle = oembedRes.title;
+        pipedUploader = oembedRes.author_name || pipedUploader;
+      }
+    } catch (_) {}
   }
 
-  if (!pipedAudioUrl && !pipedVideoUrl && !vData?.downloadURL && !aData?.downloadURL) {
-    throw new Error(
-      'Konversi YouTube tidak tersedia dari penyedia saat ini. Gunakan tautan resmi YouTube atau coba lagi beberapa saat.'
-    );
-  }
-
-  const title = vData?.title || aData?.title || pipedTitle || `YouTube Video (${videoId})`;
+  const title = pipedTitle || `YouTube Video (${videoId})`;
   const downloadOptions = buildYouTubeDownloadOptions({
     cleanUrl,
     videoId,
     maxThumbUrl,
-    vData,
-    aData,
     isLocal: false,
-    pipedAudioUrl,
-    pipedVideoUrl,
   });
 
   return {

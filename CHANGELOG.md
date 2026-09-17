@@ -7,6 +7,21 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.2.19] - 2026-09-17
+
+### 🐛 Fixed
+- **Root-Cause Fix YouTube 410 Gone**:
+  - ymcdn converter kini menunggu polling progress hingga selesai (`progress === 3`) sebelum mengunduh link stream.
+  - Opsi unduh YouTube di-resolve on-demand secara real-time saat user menekan tombol download dengan status progress visual.
+- **Notifikasi Menumpuk (Spam Notification Tray)**:
+  - Notifikasi download error & complete kini menggunakan ID tetap (fixed ID) dan auto-cancel notifikasi lama sehingga tidak menumpuk di status bar Android.
+
+### 📦 Build
+- **versionCode**: 19 → **20**
+- **versionName**: "0.2.18" → **"0.2.19"**
+
+---
+
 ## [0.2.18] - 2026-09-17
 
 ### 🐛 Fixed

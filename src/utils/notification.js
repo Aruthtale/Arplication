@@ -81,6 +81,9 @@ export async function ensureNotificationChannel() {
   }
 }
 
+const NOTIF_ID_DOWNLOAD_COMPLETE = 8001;
+const NOTIF_ID_DOWNLOAD_ERROR = 8002;
+
 /**
  * Triggers a native Android notification upon download completion
  */
@@ -93,13 +96,18 @@ export async function sendDownloadCompleteNotification({ title = '', platform = 
     const cleanTitle = title ? (title.length > 35 ? title.slice(0, 35) + '...' : title) : 'Media';
     const platName = platform ? (platform.charAt(0).toUpperCase() + platform.slice(1)) : 'Arloader';
 
+    // Hapus notifikasi error sebelumnya agar tidak menumpuk
+    await LocalNotifications.cancel({
+      notifications: [{ id: NOTIF_ID_DOWNLOAD_ERROR }, { id: NOTIF_ID_DOWNLOAD_COMPLETE }],
+    }).catch(() => {});
+
     await LocalNotifications.schedule({
       notifications: [
         {
           title: `🎬 Unduhan ${platName} Selesai`,
           body: `"${cleanTitle}" berhasil diunduh.`,
-          id: Math.floor(Date.now() % 100000) + Math.floor(Math.random() * 1000),
-          schedule: { at: new Date(Date.now() + 500) },
+          id: NOTIF_ID_DOWNLOAD_COMPLETE,
+          schedule: { at: new Date(Date.now() + 300) },
           channelId: 'arloader_downloads',
         },
       ],
@@ -121,13 +129,18 @@ export async function sendDownloadErrorNotification({ title = '', platform = '',
     const cleanTitle = title ? (title.length > 30 ? title.slice(0, 30) + '...' : title) : 'Media';
     const platName = platform ? (platform.charAt(0).toUpperCase() + platform.slice(1)) : 'Arloader';
 
+    // Batalkan notifikasi error sebelumnya agar selalu update di 1 notifikasi tunggal (tidak menumpuk)
+    await LocalNotifications.cancel({
+      notifications: [{ id: NOTIF_ID_DOWNLOAD_ERROR }],
+    }).catch(() => {});
+
     await LocalNotifications.schedule({
       notifications: [
         {
           title: `❌ Unduhan ${platName} Gagal`,
-          body: `Gagal mengunduh \"${cleanTitle}\". ${error || ''}`,
-          id: Math.floor(Date.now() % 100000) + Math.floor(Math.random() * 1000),
-          schedule: { at: new Date(Date.now() + 500) },
+          body: `Gagal mengunduh "${cleanTitle}". ${error || ''}`,
+          id: NOTIF_ID_DOWNLOAD_ERROR,
+          schedule: { at: new Date(Date.now() + 300) },
           channelId: 'arloader_downloads',
         },
       ],

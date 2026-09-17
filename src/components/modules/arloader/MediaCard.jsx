@@ -95,16 +95,27 @@ export default function MediaCard({ media, onDownloadComplete }) {
 
     // Direct YouTube dynamic resolution if targetUrl is missing or on-demand
     if (isYT && !targetUrl) {
+      const updateProgress = (pct, msg) => {
+        setDownloadState((prev) => ({
+          ...prev,
+          [option.id]: { ...(prev[option.id] || {}), progress: pct, message: msg, failed: false },
+        }));
+      };
+
       if (option.type === 'audio' || option.category === 'mp3') {
+        updateProgress(10, 'Menghubungkan ke converter audio...');
         targetUrl = await resolveYouTubeAudioUrl({
           videoId: ytId,
           query: customTitle || media?.title || option.query || '',
           url: media?.sourceUrl || '',
+          onProgress: updateProgress,
         });
       } else if (option.type === 'video' || option.category === 'mp4') {
+        updateProgress(10, 'Menghubungkan ke converter video...');
         targetUrl = await resolveYouTubeVideoUrl({
           videoId: ytId,
           url: media?.sourceUrl || '',
+          onProgress: updateProgress,
         });
       }
     }
@@ -128,13 +139,16 @@ export default function MediaCard({ media, onDownloadComplete }) {
         },
       });
     } catch (dlErr) {
-      // Auto-retry once for YouTube if stream URL expired or failed with HTTP 403/HTML error
+      // Auto-retry once for YouTube if stream URL expired or failed with HTTP 403/410
       if (isYT && (option.type === 'audio' || option.category === 'mp3' || option.type === 'video' || option.category === 'mp4')) {
         console.warn('[MediaCard] YouTube stream error, refreshing URL link on-the-fly:', dlErr.message);
-        setDownloadState((prev) => ({
-          ...prev,
-          [option.id]: { progress: 15, message: 'Merefresh stream URL YouTube...', failed: false },
-        }));
+        const updateProgress = (pct, msg) => {
+          setDownloadState((prev) => ({
+            ...prev,
+            [option.id]: { ...(prev[option.id] || {}), progress: pct, message: msg, failed: false },
+          }));
+        };
+        updateProgress(15, 'URL kedaluwarsa, merefresh stream YouTube...');
         let refreshedUrl = null;
         try {
           if (option.type === 'audio' || option.category === 'mp3') {
@@ -142,11 +156,13 @@ export default function MediaCard({ media, onDownloadComplete }) {
               videoId: ytId,
               query: customTitle || media?.title || option.query || '',
               url: media?.sourceUrl || '',
+              onProgress: updateProgress,
             });
           } else {
             refreshedUrl = await resolveYouTubeVideoUrl({
               videoId: ytId,
               url: media?.sourceUrl || '',
+              onProgress: updateProgress,
             });
           }
         } catch (_) {}
