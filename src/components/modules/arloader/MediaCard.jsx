@@ -11,6 +11,7 @@ import {
   probeFileSize, formatFileSize, saveTextFile 
 } from '../../../utils/download.js';
 import { resolveSpotifyTrackAudio } from '../../../services/scrapers/spotify.js';
+import { resolveYouTubeAudioUrl, resolveYouTubeVideoUrl } from '../../../services/scrapers/youtube.js';
 import PreviewModal from './PreviewModal.jsx';
 
 export default function MediaCard({ media, onDownloadComplete }) {
@@ -85,8 +86,27 @@ export default function MediaCard({ media, onDownloadComplete }) {
     let targetUrl = option.url;
 
     // Dynamically resolve audio URL if query is provided (Spotify full MP3 fallback)
-    if (!targetUrl && option.query) {
+    if (!targetUrl && option.query && media?.platform === 'spotify') {
       targetUrl = await resolveSpotifyTrackAudio({ query: option.query });
+    }
+
+    const isYT = media?.platform === 'youtube' || option.platform === 'youtube';
+    const ytId = option.videoId || media?.id;
+
+    // Direct YouTube dynamic resolution if targetUrl is missing or on-demand
+    if (isYT && !targetUrl) {
+      if (option.type === 'audio' || option.category === 'mp3') {
+        targetUrl = await resolveYouTubeAudioUrl({
+          videoId: ytId,
+          query: customTitle || media?.title || option.query || '',
+          url: media?.sourceUrl || '',
+        });
+      } else if (option.type === 'video' || option.category === 'mp4') {
+        targetUrl = await resolveYouTubeVideoUrl({
+          videoId: ytId,
+          url: media?.sourceUrl || '',
+        });
+      }
     }
 
     if (!targetUrl) {
@@ -94,17 +114,63 @@ export default function MediaCard({ media, onDownloadComplete }) {
     }
 
     const filename = makeFilename(option, customTitle);
-    const res = await downloadMedia({
-      url: targetUrl,
-      filename,
-      platform: media?.platform || '',
-      onProgress: (pct, msg) => {
+    let res;
+    try {
+      res = await downloadMedia({
+        url: targetUrl,
+        filename,
+        platform: media?.platform || '',
+        onProgress: (pct, msg) => {
+          setDownloadState((prev) => ({
+            ...prev,
+            [option.id]: { ...(prev[option.id] || {}), progress: pct, message: msg, failed: false },
+          }));
+        },
+      });
+    } catch (dlErr) {
+      // Auto-retry once for YouTube if stream URL expired or failed with HTTP 403/HTML error
+      if (isYT && (option.type === 'audio' || option.category === 'mp3' || option.type === 'video' || option.category === 'mp4')) {
+        console.warn('[MediaCard] YouTube stream error, refreshing URL link on-the-fly:', dlErr.message);
         setDownloadState((prev) => ({
           ...prev,
-          [option.id]: { ...(prev[option.id] || {}), progress: pct, message: msg, failed: false },
+          [option.id]: { progress: 15, message: 'Merefresh stream URL YouTube...', failed: false },
         }));
-      },
-    });
+        let refreshedUrl = null;
+        try {
+          if (option.type === 'audio' || option.category === 'mp3') {
+            refreshedUrl = await resolveYouTubeAudioUrl({
+              videoId: ytId,
+              query: customTitle || media?.title || option.query || '',
+              url: media?.sourceUrl || '',
+            });
+          } else {
+            refreshedUrl = await resolveYouTubeVideoUrl({
+              videoId: ytId,
+              url: media?.sourceUrl || '',
+            });
+          }
+        } catch (_) {}
+
+        if (refreshedUrl && refreshedUrl !== targetUrl) {
+          res = await downloadMedia({
+            url: refreshedUrl,
+            filename,
+            platform: media?.platform || '',
+            onProgress: (pct, msg) => {
+              setDownloadState((prev) => ({
+                ...prev,
+                [option.id]: { ...(prev[option.id] || {}), progress: pct, message: msg, failed: false },
+              }));
+            },
+          });
+        } else {
+          throw dlErr;
+        }
+      } else {
+        throw dlErr;
+      }
+    }
+
     return { res, filename };
   };
 

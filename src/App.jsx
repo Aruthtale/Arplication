@@ -24,7 +24,11 @@ export default function App() {
       {/* Main View Area with comfortable safe margins from screen edge */}
       <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 pt-3.5 sm:pt-6 pb-28">
         {activeTab === 'home' && <HomeHub setActiveTab={setActiveTab} />}
-        {activeTab === 'arloader' && <ArloaderModule setActiveTab={setActiveTab} />}
+        {/* Arloader SELALU mounted (hidden saat tab lain aktif) agar state
+            ekstraksi, input URL, dan progress download tidak ter-reset saat navigasi. */}
+        <div className={activeTab === 'arloader' ? '' : 'hidden'}>
+          <ArloaderModule setActiveTab={setActiveTab} />
+        </div>
         {activeTab === 'ardoro' && <ArdoroModule setActiveTab={setActiveTab} />}
         {activeTab === 'arnote' && <ArNoteModule setActiveTab={setActiveTab} />}
         {/* ArMusic SELALU mounted (hidden saat tab lain aktif) agar audio + state

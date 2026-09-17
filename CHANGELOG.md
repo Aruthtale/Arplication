@@ -7,6 +7,25 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.2.18] - 2026-09-17
+
+### 🐛 Fixed
+- **YouTube HTTP 410 (Gone) Stream Expiration**:
+  - Implementasi lazy & on-demand resolver saat tombol download ditekan agar URL stream YouTube selalu fresh.
+  - Penanganan auto-retry otomatis jika URL stream kadaluarsa saat proses download berlangsung.
+  - Deteksi dan pesan error ramah pengguna untuk status `410 Gone`.
+
+### ✨ Added
+- **YT-DLP Self-Hosted Server Support**:
+  - Dukungan koneksi server yt-dlp remote pribadi melalui menu Pengaturan Arloader.
+  - Endpoint resolver & stream downloader cadangan via yt-dlp backend.
+
+### 📦 Build
+- **versionCode**: 18 → **19**
+- **versionName**: "0.2.17" → **"0.2.18"**
+
+---
+
 ## [0.2.10] - 2026-09-15
 
 ### 🐛 Fixed

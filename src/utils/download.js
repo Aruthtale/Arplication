@@ -11,6 +11,7 @@ export const DEFAULT_DOWNLOAD_SETTINGS = {
   igSessionId: '',        // optional Instagram sessionid cookie (legacy key)
   instagramSessionId: '', // optional Instagram sessionid cookie (kunci dipakai UI Pengaturan)
   filenamePattern: 'title_id', // 'title_id' | 'clean_title' | 'id_only'
+  ytDlpServerUrl: '',     // optional self-hosted yt-dlp API server URL (e.g. http://192.168.1.100:8787)
 };
 
 export function formatPlatformFolderName(plat) {
@@ -193,7 +194,10 @@ export function formatDownloadError(err) {
   if (/401|403|session|login|cookie/i.test(msg)) {
     return 'Akses ditolak — sesi kedaluwarsa. Perbarui IG Session ID di Pengaturan lalu coba lagi.';
   }
-  if (/404|expired|gone|not found/i.test(msg)) {
+  if (/410|gone/i.test(msg)) {
+    return 'Tautan stream kedaluwarsa (410 Gone). Arloader sedang merefresh link YouTube otomatis — coba klik lagi jika belum tersimpan.';
+  }
+  if (/404|expired|not found/i.test(msg)) {
     return 'Tautan kedaluwarsa atau media sudah dihapus. Ambil ulang link terbaru lalu coba lagi.';
   }
   if (/network|timeout|fetch|failed to fetch|econn|socket/i.test(msg)) {
@@ -460,6 +464,10 @@ export async function downloadMedia({
         });
         resPath = res.path;
       } catch (dlErr) {
+        const dlMsg = String(dlErr?.message || dlErr || '');
+        if (/\b410\b|Gone/i.test(dlMsg)) {
+          throw new Error(`HTTP 410 Gone (stream URL kedaluwarsa): ${dlMsg}`);
+        }
         console.warn('downloadFile failed, attempting internal blob-write fallback:', dlErr);
 
         if (onProgress) onProgress(45, 'Mengambil data media...');
@@ -551,6 +559,7 @@ export async function downloadMedia({
 
   try {
     const response = await fetch(url);
+    if (response.status === 410) throw new Error('HTTP 410 Gone — tautan stream kedaluwarsa.');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const contentLength = Number(response.headers.get('content-length') || 0);

@@ -66,6 +66,9 @@ export function extractPipedVideoId(text = '') {
 export const PIPED_API_INSTANCES = [
   'https://pipedapi.ducks.party',
   'https://api.piped.private.coffee',
+  'https://pipedapi.tokhmi.xyz',
+  'https://pipedapi.garudalinux.org',
+  'https://pipedapi.mha.fi',
 ];
 
 /**
@@ -307,9 +310,60 @@ async function resolveConvert1sAudio(videoId) {
 }
 
 /**
+ * Resolves audio URL via a remote self-hosted yt-dlp API server.
+ * Server URL is read from download settings (localStorage).
+ * Expected server endpoint: GET /api/yt-dlp/audio-url?q=<videoUrl>
+ * Expected response: { ok: true, audioUrl: "https://..." }
+ */
+async function resolveYtDlpRemoteAudio(videoId) {
+  if (!videoId) return null;
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('arloader_settings') : null;
+    const settings = raw ? JSON.parse(raw) : {};
+    const serverUrl = String(settings.ytDlpServerUrl || '').trim();
+    if (!serverUrl) return null;
+
+    const base = serverUrl.replace(/\/+$/, '');
+    const res = await httpClient({
+      url: `${base}/api/yt-dlp/audio-url?q=${encodeURIComponent(`https://youtube.com/watch?v=${videoId}`)}`,
+      timeout: 20000,
+    });
+    if (res?.ok && res?.audioUrl) return res.audioUrl;
+  } catch (err) {
+    console.warn('[YouTube] Remote yt-dlp audio failed:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Resolves video URL via a remote self-hosted yt-dlp API server.
+ * Server URL is read from download settings (localStorage).
+ * Expected server endpoint: GET /download?url=<videoUrl>&format=video&quality=<quality>
+ */
+async function resolveYtDlpRemoteVideoUrl(videoId, quality = '') {
+  if (!videoId) return null;
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('arloader_settings') : null;
+    const settings = raw ? JSON.parse(raw) : {};
+    const serverUrl = String(settings.ytDlpServerUrl || '').trim();
+    if (!serverUrl) return null;
+
+    const base = serverUrl.replace(/\/+$/, '');
+    const params = new URLSearchParams({
+      url: `https://youtube.com/watch?v=${videoId}`,
+      format: 'video',
+    });
+    if (quality) params.set('quality', quality);
+    return `${base}/download?${params.toString()}`;
+  } catch (_) {}
+  return null;
+}
+
+/**
  * Resolves a direct playable/downloadable audio URL for a query, video ID, or watch URL.
  * Multi-layer strategy:
  * 1. Convert1s cloud converter cluster (Fast, reliable, MP3 128k/320k)
+ * 1.5. Remote self-hosted yt-dlp server (if configured)
  * 2. Local yt-dlp server (if in Vite dev mode)
  * 3. Direct Piped video stream
  * 4. Piped search multi-candidate stream
@@ -332,6 +386,18 @@ export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url =
       }
     } catch (err) {
       console.warn('[YouTube] Convert1s resolution failed, falling back:', err.message);
+    }
+  }
+
+  // PRIORITAS 1.5: Remote self-hosted yt-dlp server (if configured in settings)
+  if (directVid) {
+    try {
+      const remoteAudioUrl = await resolveYtDlpRemoteAudio(directVid);
+      if (remoteAudioUrl) {
+        return remoteAudioUrl;
+      }
+    } catch (err) {
+      console.warn('[YouTube] Remote yt-dlp audio resolution failed, falling back:', err.message);
     }
   }
 
@@ -390,6 +456,63 @@ export async function resolveYouTubeAudioUrl({ query = '', videoId = null, url =
     if (i < attempts.length - 1) await sleep(800);
   }
   throw new Error(formatResolverError(lastError, rawQuery));
+}
+
+/**
+ * Resolves a direct playable/downloadable MP4 video URL for a video ID or watch URL.
+ */
+export async function resolveYouTubeVideoUrl({ videoId = null, url = '' } = {}) {
+  const vid = extractPipedVideoId(String(videoId || '')) || extractPipedVideoId(String(url || ''));
+  if (!vid) throw new Error('Video ID YouTube tidak valid.');
+
+  // PRIORITAS 1: Local yt-dlp server (if in Vite dev web mode)
+  if (isLocalWeb()) {
+    try {
+      const localRes = await httpClient({
+        url: `/api/yt-dlp/video-url?q=${encodeURIComponent(`https://youtube.com/watch?v=${vid}`)}`,
+        timeout: 15000,
+      });
+      if (localRes?.videoUrl) {
+        return localRes.videoUrl;
+      }
+    } catch (_) {}
+  }
+
+  // PRIORITAS 1.5: Remote self-hosted yt-dlp server (if configured in settings)
+  try {
+    const remoteVideoUrl = await resolveYtDlpRemoteVideoUrl(vid);
+    if (remoteVideoUrl) {
+      return remoteVideoUrl;
+    }
+  } catch (_) {}
+
+  // PRIORITAS 2: Piped progressive video stream
+  try {
+    const streams = await pipedGetStreams(vid);
+    const progressive = pickPipedProgressiveStreams(streams);
+    if (progressive.length > 0 && progressive[0].url) {
+      return progressive[0].url;
+    }
+  } catch (err) {
+    console.warn('[YouTube] Piped video stream failed:', err.message);
+  }
+
+  // PRIORITAS 3: ymcdn conversion fallback
+  try {
+    const initRes = await httpClient({
+      url: 'https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471',
+      headers: { Origin: 'https://ytmp3.mobi', Referer: 'https://ytmp3.mobi/' },
+    });
+    if (initRes?.convertURL) {
+      const convRes = await httpClient({
+        url: `${initRes.convertURL}&v=${vid}&f=mp4`,
+        headers: { Origin: 'https://ytmp3.mobi', Referer: 'https://ytmp3.mobi/' },
+      });
+      if (convRes?.downloadURL) return convRes.downloadURL;
+    }
+  } catch (_) {}
+
+  throw new Error('Gagal memperbarui stream video YouTube. Coba lagi dalam beberapa saat.');
 }
 
 async function pipedSearchVideosSafe(rawQuery, limit = 5) {
@@ -564,6 +687,8 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       estimatedSize: '~ 48.5 MB',
       bytes: 50855936,
       url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '1080p') : remoteVideoUrl,
+      videoId,
+      platform: 'youtube',
     },
     {
       id: 'yt-video-720p',
@@ -576,6 +701,8 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       estimatedSize: '~ 26.2 MB',
       bytes: 27472691,
       url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '720p') : remoteVideoUrl,
+      videoId,
+      platform: 'youtube',
     },
     {
       id: 'yt-video-480p',
@@ -588,6 +715,8 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       estimatedSize: '~ 14.8 MB',
       bytes: 15518924,
       url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '480p') : remoteVideoUrl,
+      videoId,
+      platform: 'youtube',
     },
     {
       id: 'yt-video-360p',
@@ -600,6 +729,8 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       estimatedSize: '~ 8.1 MB',
       bytes: 8493465,
       url: isLocal ? createLocalDownloadUrl(cleanUrl, 'video', '360p') : remoteVideoUrl,
+      videoId,
+      platform: 'youtube',
     },
   ];
 
@@ -615,6 +746,8 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       estimatedSize: '~ 8.5 MB',
       bytes: 8912896,
       url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '320k') : remoteAudioUrl,
+      videoId,
+      platform: 'youtube',
     },
     {
       id: 'yt-audio-256k',
@@ -627,6 +760,8 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       estimatedSize: '~ 6.8 MB',
       bytes: 7130316,
       url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '256k') : remoteAudioUrl,
+      videoId,
+      platform: 'youtube',
     },
     {
       id: 'yt-audio-192k',
@@ -639,6 +774,8 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       estimatedSize: '~ 5.1 MB',
       bytes: 5347737,
       url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '192k') : remoteAudioUrl,
+      videoId,
+      platform: 'youtube',
     },
     {
       id: 'yt-audio-128k',
@@ -651,6 +788,8 @@ function buildYouTubeDownloadOptions({ cleanUrl, videoId, maxThumbUrl, vData, aD
       estimatedSize: '~ 3.4 MB',
       bytes: 3565158,
       url: isLocal ? createLocalDownloadUrl(cleanUrl, 'audio', '128k') : remoteAudioUrl,
+      videoId,
+      platform: 'youtube',
     },
   ];
 
