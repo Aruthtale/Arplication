@@ -7,6 +7,20 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.2.21] - 2026-09-17
+
+### ⚡ Enhanced
+- **Mori Dual-Engine YouTube Converter**:
+  - Mengadopsi arsitektur converter dual-engine dari coflyn/Mori (`ytmp3.mobi` & `convert1s / ytmp3.gg`).
+  - Timeout konversi Cloudflare diperlonggar hingga 30s dengan auto-retry.
+  - Menambahkan platform custom download headers (`Origin` & `Referer`) agar stream download YouTube tidak ditolak CDN.
+
+### 📦 Build
+- **versionCode**: 21 → **22**
+- **versionName**: "0.2.20" → **"0.2.21"**
+
+---
+
 ## [0.2.20] - 2026-09-17
 
 ### 🐛 Fixed
