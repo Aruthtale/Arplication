@@ -700,7 +700,14 @@ export async function saveToolboxBlobFile({ data, filename, subfolder = 'Aruthta
 
       let base64Data = '';
       if (typeof data === 'string') {
-        base64Data = data.includes('base64,') ? data.split('base64,')[1] : data;
+        if (data.startsWith('blob:')) {
+          const fetchedBlob = await fetch(data).then((r) => r.blob());
+          base64Data = await blobToBase64(fetchedBlob);
+        } else if (data.includes('base64,')) {
+          base64Data = data.split('base64,')[1];
+        } else {
+          base64Data = data;
+        }
       } else if (data instanceof Blob) {
         base64Data = await blobToBase64(data);
       } else if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
