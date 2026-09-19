@@ -763,15 +763,6 @@ export default function ArMusicModule({ setActiveTab }) {
     if (list.length > 0) playTrack(list[0], false, list);
   };
 
-  const handleEqReset = async () => {
-    const n = eqInfo?.bandCount || 0;
-    for (let b = 0; b < n; b++) {
-      // eslint-disable-next-line no-await-in-loop
-      await setNativeEqualizerBand(b, 0).catch(() => {});
-    }
-    await refreshEqInfo();
-  };
-
   // ---------------------------------------------------------- Fase 2: sleep timer
 
   const refreshSleepStatus = async () => {
@@ -791,8 +782,24 @@ export default function ArMusicModule({ setActiveTab }) {
   const refreshEqInfo = async () => {
     setEqLoading(true);
     try {
-      const info = await getNativeEqualizer().catch(() => null);
-      if (info) setEqInfo(info);
+      if (isNative()) {
+        const info = await getNativeEqualizer().catch(() => null);
+        if (info) setEqInfo(info);
+      } else {
+        setEqInfo((prev) => prev || {
+          supported: true,
+          attached: true,
+          enabled: true,
+          bandCount: 5,
+          minGainMb: -1500,
+          maxGainMb: 1500,
+          centerFreqs: [60000, 230000, 910000, 3600000, 14000000],
+          gains: [0, 0, 0, 0, 0],
+          presetCount: 5,
+          presetNames: ['Flat', 'Bass Boost', 'Treble Boost', 'Vocal', 'Rock'],
+          presetIndex: 0,
+        });
+      }
     } finally {
       setEqLoading(false);
     }
@@ -805,7 +812,6 @@ export default function ArMusicModule({ setActiveTab }) {
   };
 
   const handleEqBand = async (band, gainMb) => {
-    // Optimistic UI agar slider responsif, native menyusul
     setEqInfo((prev) => {
       if (!prev) return prev;
       const gains = [...(prev.gains || [])];
@@ -816,8 +822,31 @@ export default function ArMusicModule({ setActiveTab }) {
   };
 
   const handleEqPreset = async (preset) => {
-    await setNativeEqualizerPreset(preset).catch(() => {});
-    await refreshEqInfo();
+    if (isNative()) {
+      await setNativeEqualizerPreset(preset).catch(() => {});
+      await refreshEqInfo();
+    } else {
+      const presetsMap = [
+        [0, 0, 0, 0, 0], // Flat
+        [600, 400, 0, -200, -300], // Bass Boost
+        [-200, 0, 100, 400, 600], // Treble Boost
+        [-100, 200, 500, 200, -100], // Vocal
+        [500, 200, -100, 300, 500], // Rock
+      ];
+      const gains = presetsMap[preset] || [0, 0, 0, 0, 0];
+      setEqInfo((prev) => (prev ? { ...prev, gains, presetIndex: preset, enabled: true } : prev));
+    }
+  };
+
+  const handleEqReset = async () => {
+    if (isNative()) {
+      for (let b = 0; b < (eqInfo?.bandCount || 5); b++) {
+        await setNativeEqualizerBand(b, 0).catch(() => {});
+      }
+      await refreshEqInfo();
+    } else {
+      setEqInfo((prev) => (prev ? { ...prev, gains: [0, 0, 0, 0, 0], presetIndex: 0 } : prev));
+    }
   };
 
   // Countdown badge timer — refresh tiap 5 detik saat aktif agar label hidup.
@@ -1292,12 +1321,10 @@ export default function ArMusicModule({ setActiveTab }) {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            {!isNative() ? (
-              <p className="text-xs font-bold text-gray-500">Equalizer hanya tersedia di aplikasi Android.</p>
-            ) : eqLoading && !eqInfo ? (
+            {eqLoading && !eqInfo ? (
               <p className="flex items-center gap-2 text-xs font-bold text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Memuat equalizer...</p>
-            ) : !eqInfo || eqInfo.supported === false || !(eqInfo.bandCount > 0) ? (
-              <p className="text-xs font-bold text-gray-500">Perangkat ini tidak mendukung equalizer native.</p>
+            ) : !eqInfo || eqInfo.supported === false ? (
+              <p className="text-xs font-bold text-gray-500">Perangkat ini tidak mendukung equalizer.</p>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2">

@@ -297,6 +297,33 @@ test('parsePinterestRelayHtml extracts original image and metadata', () => {
   globalThis.window = originalWindow;
 });
 
+test('parsePinterestRelayHtml extracts GIF correctly without forcing jpg', () => {
+  const gifPinHtml = `<script data-relay-completed-request="true">
+    window.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__("test", {
+      "data": {
+        "v3GetPinQueryv2": {
+          "data": {
+            "entityId": "999888777",
+            "title": "Funny Animation GIF",
+            "images_orig": {
+              "url": "https://i.pinimg.com/originals/ab/cd/ef/funny.gif",
+              "width": 480,
+              "height": 480
+            },
+            "gifs": {
+              "realOriginal": { "url": "https://i.pinimg.com/originals/ab/cd/ef/funny.gif" }
+            }
+          }
+        }
+      }
+    });
+  </script>`;
+  const result = parsePinterestRelayHtml(gifPinHtml, 'https://www.pinterest.com/pin/999888777/');
+  assert.equal(result.id, '999888777');
+  assert.equal(result.options[0].ext, 'gif');
+  assert.equal(result.options[0].label, 'Animated GIF (HD)');
+});
+
 test('isInstagramUrl recognizes post, reel, tv, share, story, and highlight links', () => {
   assert.equal(isInstagramUrl('https://www.instagram.com/reel/DVBukMrgPAk/'), true);
   assert.equal(isInstagramUrl('https://www.instagram.com/p/DZT71H-BJuK/'), true);

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import ToolboxBentoGrid from './ToolboxBentoGrid';
 import QrSuiteView from './tools/QrSuiteView';
-import TextDevView from './tools/TextDevView';
-import QuickCalcView from './tools/QuickCalcView';
+import ImageStudioView from './tools/ImageStudioView';
+import PdfMakerView from './tools/PdfMakerView';
 import ColorStudioView from './tools/ColorStudioView';
 import ToolboxHistoryModal from './tools/ToolboxHistoryModal';
 import { getToolboxHistory } from '../../../services/toolboxDb';
 
 export default function ArToolboxModule() {
-  const [activeTool, setActiveTool] = useState(null); // null | 'qr' | 'text' | 'calc' | 'color'
+  const [activeTool, setActiveTool] = useState(null); // null | 'qr' | 'image' | 'pdf' | 'color'
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
 
@@ -41,12 +41,12 @@ export default function ArToolboxModule() {
         <QrSuiteView onBack={handleBackToBento} onRefreshHistory={refreshHistory} />
       )}
 
-      {activeTool === 'text' && (
-        <TextDevView onBack={handleBackToBento} onRefreshHistory={refreshHistory} />
+      {activeTool === 'image' && (
+        <ImageStudioView onBack={handleBackToBento} onRefreshHistory={refreshHistory} />
       )}
 
-      {activeTool === 'calc' && (
-        <QuickCalcView onBack={handleBackToBento} onRefreshHistory={refreshHistory} />
+      {activeTool === 'pdf' && (
+        <PdfMakerView onBack={handleBackToBento} onRefreshHistory={refreshHistory} />
       )}
 
       {activeTool === 'color' && (

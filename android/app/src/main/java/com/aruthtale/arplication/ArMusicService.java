@@ -878,13 +878,21 @@ public class ArMusicService extends Service {
     private void updateSession(String title, String artist, String album, boolean playing, long positionMs) {
         if (mediaSession == null) return;
         try {
-            MediaMetadata metadata = new MediaMetadata.Builder()
+            long dur = 0;
+            if (player != null) {
+                dur = player.getDuration();
+                if (dur < 0) dur = 0;
+            }
+            MediaMetadata.Builder metaBuilder = new MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, title)
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
                 .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
-                .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, title)
-                .build();
-            mediaSession.setMetadata(metadata);
+                .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, title);
+            if (dur > 0) {
+                metaBuilder.putLong(MediaMetadata.METADATA_KEY_DURATION, dur);
+            }
+            mediaSession.setMetadata(metaBuilder.build());
+
             long actions = PlaybackState.ACTION_PLAY
                 | PlaybackState.ACTION_PAUSE
                 | PlaybackState.ACTION_PLAY_PAUSE
@@ -972,6 +980,14 @@ public class ArMusicService extends Service {
             .setStyle(new Notification.MediaStyle()
                 .setMediaSession(mediaSession != null ? mediaSession.getSessionToken() : null)
                 .setShowActionsInCompactView(0, 1, 2));
+
+        if (player != null && player.getDuration() > 0) {
+            int totalSec = (int) (player.getDuration() / 1000);
+            int currentSec = (int) (Math.max(0, player.getCurrentPosition()) / 1000);
+            if (totalSec > 0) {
+                b.setProgress(totalSec, Math.min(currentSec, totalSec), false);
+            }
+        }
 
         return b.build();
     }

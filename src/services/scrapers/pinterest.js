@@ -124,6 +124,17 @@ export function parsePinterestRelayHtml(html = '', fallbackUrl = '') {
     avatar: pinData.pinner?.imageLargeUrl || pinData.originPinner?.imageLargeUrl || '',
   };
 
+  const detectExtension = (assetUrl, fallback = 'jpg') => {
+    if (!assetUrl || typeof assetUrl !== 'string') return fallback;
+    const clean = assetUrl.split('?')[0].toLowerCase();
+    if (clean.endsWith('.gif')) return 'gif';
+    if (clean.endsWith('.png')) return 'png';
+    if (clean.endsWith('.webp')) return 'webp';
+    if (clean.endsWith('.mp4')) return 'mp4';
+    if (clean.endsWith('.jpg') || clean.endsWith('.jpeg')) return 'jpg';
+    return fallback;
+  };
+
   const options = [];
   const seenUrls = new Set();
 
@@ -133,6 +144,23 @@ export function parsePinterestRelayHtml(html = '', fallbackUrl = '') {
     options.push({ ...option, url: normalizePinterestAssetUrl(option.url) });
   };
 
+  // 1. Ekstrak animasi GIF bila tersedia di struktur gifs Pinterest
+  if (pinData.gifs && typeof pinData.gifs === 'object') {
+    const gifList = pinData.gifs;
+    const bestGif = gifList.realOriginal?.url || gifList.real480x480?.url || gifList.real300x300?.url || gifList.real168x168?.url;
+    if (bestGif) {
+      pushOption({
+        id: 'pinterest-gif-best',
+        label: 'Animated GIF (HD)',
+        quality: 'Original',
+        type: 'image',
+        ext: 'gif',
+        url: bestGif,
+      });
+    }
+  }
+
+  // 2. Ekstrak video MP4
   if (pinData.videos) {
     const videoList = pinData.videos.video_list || pinData.videos;
     if (typeof videoList === 'object') {
@@ -153,25 +181,31 @@ export function parsePinterestRelayHtml(html = '', fallbackUrl = '') {
     }
   }
 
+  // 3. Ekstrak gambar / gif resolusi original
   if (pinData.images_orig?.url) {
+    const origUrl = pinData.images_orig.url;
+    const ext = detectExtension(origUrl, 'jpg');
     pushOption({
       id: 'pinterest-image-original',
-      label: 'Original Image',
+      label: ext === 'gif' ? 'Original GIF' : 'Original Image',
       quality: `${pinData.images_orig.width || 'Original'}x${pinData.images_orig.height || ''}`.replace(/x$/, ''),
       type: 'image',
-      ext: 'jpg',
-      url: pinData.images_orig.url,
+      ext,
+      url: origUrl,
     });
   }
 
+  // 4. Ekstrak gambar / gif 736p
   if (pinData.images_736x?.url) {
+    const u736 = pinData.images_736x.url;
+    const ext = detectExtension(u736, 'jpg');
     pushOption({
       id: 'pinterest-image-736p',
-      label: '736p Image',
+      label: ext === 'gif' ? '736p GIF' : '736p Image',
       quality: '736p',
       type: 'image',
-      ext: 'jpg',
-      url: pinData.images_736x.url,
+      ext,
+      url: u736,
     });
   }
 

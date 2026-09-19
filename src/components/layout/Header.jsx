@@ -1,8 +1,11 @@
-import React from 'react';
-import { LayoutGrid, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutGrid, Sparkles, Settings } from 'lucide-react';
 import { APP_VERSION } from '../../services/updater.js';
+import AppSettingsModal from '../modules/AppSettingsModal.jsx';
 
 export default function Header({ activeTab, setActiveTab }) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const getTabLabel = () => {
     switch (activeTab) {
       case 'home':
@@ -61,6 +64,15 @@ export default function Header({ activeTab, setActiveTab }) {
             </span>
           </div>
 
+          {/* Settings Button */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg border-2 border-[#121212] flex items-center justify-center transition-all shadow-[2px_2px_0px_#121212] overflow-hidden p-1.5 cursor-pointer bg-white hover:bg-yellow-100 text-[#121212] active:translate-y-0.5 active:shadow-[1px_1px_0px_#121212]"
+            title="Pengaturan Aplikasi"
+          >
+            <Settings className="w-4 h-4 text-[#121212]" />
+          </button>
+
           {/* Aruthtale Diagnostics / Info Button */}
           <button
             onClick={() => setActiveTab('aruthtale')}
@@ -75,6 +87,11 @@ export default function Header({ activeTab, setActiveTab }) {
           </button>
         </div>
       </div>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <AppSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      )}
     </header>
   );
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
-  QrCode, Type, Calculator, Palette, History, 
-  Sparkles, Zap, ArrowUpRight, ShieldCheck
+  QrCode, Sliders, FileText, Palette, History, 
+  Sparkles, Zap, ArrowUpRight, ShieldCheck 
 } from 'lucide-react';
 
 export default function ToolboxBentoGrid({ onSelectTool, onOpenHistory, historyCount = 0 }) {
@@ -18,26 +18,26 @@ export default function ToolboxBentoGrid({ onSelectTool, onOpenHistory, historyC
       tag: 'Kamera & File',
     },
     {
-      id: 'text',
-      title: 'Text & Dev Tools',
-      badge: 'Teks & Kode',
-      description: 'Konversi kapitalisasi teks, hitung kata, Base64/Hash, & JSON Beautifier.',
-      color: '#FFE600', // Kuning Terang
-      bgCard: 'bg-[#FFFDE6]',
-      badgeBg: 'bg-[#FFE600]',
-      icon: Type,
-      tag: 'Utilitas Teks',
+      id: 'image',
+      title: 'Image Studio & HD',
+      badge: 'Kompres & HD',
+      description: 'Kompres foto, ubah format JPG/PNG/WEBP, resize, & penajam foto HD.',
+      color: '#C4FAF8', // Biru Muda Neon
+      bgCard: 'bg-[#EBFDFC]',
+      badgeBg: 'bg-[#C4FAF8]',
+      icon: Sliders,
+      tag: 'Kompres & Tajamkan',
     },
     {
-      id: 'calc',
-      title: 'Quick Calculator',
-      badge: 'Hitung Cepat',
-      description: 'Kalkulator diskon, pajak, rasio aspek gambar, & konverter unit harian.',
+      id: 'pdf',
+      title: 'PDF Maker',
+      badge: 'Foto ke PDF',
+      description: 'Gabungkan foto/dokumen menjadi PDF rapi, atur urutan halaman & rotasi.',
       color: '#FF70A6', // Coral Pink
       bgCard: 'bg-[#FFEBF2]',
       badgeBg: 'bg-[#FF70A6]',
-      icon: Calculator,
-      tag: 'Diskon & Unit',
+      icon: FileText,
+      tag: 'Dokumen & Cetak',
     },
     {
       id: 'color',
