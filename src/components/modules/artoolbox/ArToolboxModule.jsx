@@ -7,7 +7,7 @@ import ColorStudioView from './tools/ColorStudioView';
 import ToolboxHistoryModal from './tools/ToolboxHistoryModal';
 import { getToolboxHistory } from '../../../services/toolboxDb';
 
-export default function ArToolboxModule({ setActiveTab }) {
+export default function ArToolboxModule() {
   const [activeTool, setActiveTool] = useState(null); // null | 'qr' | 'text' | 'calc' | 'color'
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);

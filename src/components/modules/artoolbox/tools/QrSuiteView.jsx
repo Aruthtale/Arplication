@@ -1,9 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { QrCode, Upload, Camera, X, Copy, Check, Download, Palette, RotateCcw, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { QrCode, Upload, Camera, X, Copy, Download, Trash2, ExternalLink, Check } from 'lucide-react';
 import { addToolboxHistory } from '../../../services/toolboxDb';
-
-// Import QR code library
 import QRCode from 'qrcode';
+import jsQR from 'jsqr';
 
 export default function QrSuiteView({ onBack, onRefreshHistory }) {
   const [activeTab, setActiveTab] = useState('generator'); // 'generator' | 'scanner'
@@ -13,9 +12,14 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
   const [qrBgColor, setQrBgColor] = useState('#FFFFFF');
   const [generatedImage, setGeneratedImage] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [scanError, setScanError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const animFrameRef = useRef(null);
 
   // Generate QR Code
   const generateQrCode = async () => {
@@ -41,7 +45,7 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
         dataPayload: `Text: ${qrText}, Size: ${qrSize}, Dark: ${qrColor}, Bg: ${qrBgColor}`,
       });
 
-      onRefreshHistory();
+      if (onRefreshHistory) onRefreshHistory();
     } catch (error) {
       console.error('Gagal membuat QR Code:', error);
     }
@@ -66,96 +70,139 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
       await navigator.clipboard.write([
         new ClipboardItem({ 'image/png': blob })
       ]);
-    } catch (error) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
       // Fallback: salin teks
       await navigator.clipboard.writeText(qrText);
-    }
-  };
-
-  // Scan QR Code from camera
-  const startQrScan = async () => {
-    setIsScanning(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        await videoRef.current.play();
-      }
-    } catch (error) {
-      console.error('Gagal mengakses kamera:', error);
-      setIsScanning(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
   // Hentikan scan QR
-  const stopQrScan = () => {
+  const stopQrScan = useCallback(() => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
     setIsScanning(false);
-  };
+  }, []);
 
   // Deteksi QR dari video
-  const detectQrFromVideo = async () => {
-    if (!videoRef.current || !canvasRef.current || !isScanning) return;
+  const detectQrFromVideo = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    try {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      // TODO: Implement QR detection using a library like jsqr or similar
-      // Untuk sementara, hanya deteksi teks sederhana
-      console.log('Frame captured for QR detection');
-    } catch (error) {
-      console.error('Gagal mendeteksi QR:', error);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert',
+      });
+
+      if (code && code.data) {
+        setScanResult(code.data);
+        setScanError(null);
+        
+        // Simpan riwayat
+        addToolboxHistory({
+          toolType: 'qr',
+          title: `Scan QR: ${code.data.substring(0, 50)}${code.data.length > 50 ? '...' : ''}`,
+          dataPayload: code.data,
+        });
+        if (onRefreshHistory) onRefreshHistory();
+
+        stopQrScan();
+        return;
+      }
     }
 
-    // Terus deteksi selama pemindaian aktif
-    if (isScanning) {
-      requestAnimationFrame(detectQrFromVideo);
+    animFrameRef.current = requestAnimationFrame(detectQrFromVideo);
+  }, [onRefreshHistory, stopQrScan]);
+
+  // Scan QR Code from camera
+  const startQrScan = async () => {
+    setScanResult(null);
+    setScanError(null);
+    setIsScanning(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        await videoRef.current.play();
+        animFrameRef.current = requestAnimationFrame(detectQrFromVideo);
+      }
+    } catch (err) {
+      console.error('Gagal mengakses kamera:', err);
+      setScanError('Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.');
+      setIsScanning(false);
     }
   };
 
   // Upload QR dari file
   const handleQrUpload = (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
 
+    setScanError(null);
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // TODO: Implement QR decoding
-        console.log('Gambar diunggah:', img);
-        // Untuk sementara, simpan riwayat upload saja
-        addToolboxHistory({
-          toolType: 'qr',
-          title: `QR Upload: ${file.name}`,
-          dataPayload: `File: ${file.name}, Size: ${file.size} bytes`,
-        });
-        onRefreshHistory();
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if (code && code.data) {
+          setScanResult(code.data);
+          addToolboxHistory({
+            toolType: 'qr',
+            title: `QR Upload: ${file.name}`,
+            dataPayload: code.data,
+          });
+          if (onRefreshHistory) onRefreshHistory();
+        } else {
+          setScanError('Tidak menemukan kode QR pada gambar ini.');
+        }
       };
-      img.src = e.target.result;
+      img.src = e.target?.result;
     };
     reader.readAsDataURL(file);
   };
 
   useEffect(() => {
-    if (activeTab === 'scanner' && isScanning) {
-      detectQrFromVideo();
-    }
     return () => {
       stopQrScan();
     };
-  }, [activeTab, isScanning]);
+  }, [stopQrScan]);
+
+  const isUrl = (str) => {
+    try {
+      const url = new URL(str);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
 
   return (
     <div className="space-y-4 font-sans">
@@ -170,19 +217,19 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
 
         <h2 className="text-xl font-black text-[#121212] uppercase">QR & Barcode Suite</h2>
 
-        <div className="w-9" /> {/* Spacer for balance */}
+        <div className="w-9" />
       </div>
 
       {/* Tab Navigation */}
       <div className="flex bg-[#FFE600] rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] p-1">
         <button
-          onClick={() => setActiveTab('generator')}
+          onClick={() => { stopQrScan(); setActiveTab('generator'); }}
           className={`flex-1 py-2 px-4 rounded-lg font-black text-sm transition-all ${activeTab === 'generator' ? 'bg-white shadow-[1px_1px_0px_#121212] text-[#121212]' : 'text-[#121212]/70 hover:bg-white/50'}`}
         >
           Generator
         </button>
         <button
-          onClick={() => setActiveTab('scanner')}
+          onClick={() => { setActiveTab('scanner'); }}
           className={`flex-1 py-2 px-4 rounded-lg font-black text-sm transition-all ${activeTab === 'scanner' ? 'bg-white shadow-[1px_1px_0px_#121212] text-[#121212]' : 'text-[#121212]/70 hover:bg-white/50'}`}
         >
           Scanner
@@ -192,7 +239,6 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
       {/* Generator Tab */}
       {activeTab === 'generator' && (
         <div className="space-y-4">
-          {/* Input QR */}
           <div className="bg-[#FFFFFF] rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] p-4 space-y-3">
             <h3 className="text-lg font-black text-[#121212]">Teks/Input QR</h3>
             <textarea
@@ -213,14 +259,14 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
               </button>
 
               <button
-                onClick={() => document.getElementById('qr-upload').click()}
+                onClick={() => document.getElementById('qr-upload-gen').click()}
                 className="py-2 px-4 bg-[#A076F9] hover:bg-[#8B5CF6] active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black"
               >
                 <Upload className="w-4 h-4 inline mr-2" />
                 Upload
               </button>
               <input
-                id="qr-upload"
+                id="qr-upload-gen"
                 type="file"
                 accept="image/*"
                 className="hidden"
@@ -229,7 +275,6 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
             </div>
           </div>
 
-          {/* Pengaturan QR */}
           <div className="bg-[#FFFFFF] rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] p-4 space-y-3">
             <h3 className="text-lg font-black text-[#121212]">Pengaturan QR</h3>
 
@@ -269,7 +314,6 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
             </div>
           </div>
 
-          {/* Pratinjau & Aksi */}
           {generatedImage && (
             <div className="bg-[#FFFFFF] rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] p-4 space-y-3">
               <h3 className="text-lg font-black text-[#121212]">Pratinjau QR</h3>
@@ -294,8 +338,8 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
                   onClick={copyQrCode}
                   className="flex-1 py-2 px-4 bg-[#FFE600] hover:bg-[#FFD700] active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black"
                 >
-                  <Copy className="w-4 h-4 inline mr-2" />
-                  Salin
+                  {copied ? <Check className="w-4 h-4 inline mr-2 text-green-700" /> : <Copy className="w-4 h-4 inline mr-2" />}
+                  {copied ? 'Tersalin!' : 'Salin'}
                 </button>
 
                 <button
@@ -332,7 +376,7 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
               )}
               {!isScanning && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Camera className="w-16 h-16 text-[#121212]/30" />
+                  <Camera className="w-16 h-16 text-white/30" />
                 </div>
               )}
             </div>
@@ -374,10 +418,51 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
               />
             </div>
 
-            <div className="text-xs text-gray-600 font-mono">
-              Tips: Arahkan kamera ke QR Code. Tunggu hingga kotak pemindaian muncul.
-            </div>
+            {scanError && (
+              <div className="p-3 bg-[#FF70A6]/20 border-2 border-[#FF70A6] rounded-lg text-xs font-bold text-[#121212]">
+                {scanError}
+              </div>
+            )}
           </div>
+
+          {scanResult && (
+            <div className="bg-[#C4FAF8] rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-black text-[#121212]">Hasil Deteksi QR</h3>
+                <span className="px-2 py-0.5 bg-[#38E54D] border border-[#121212] rounded-md text-[10px] font-black uppercase">
+                  Terdeteksi
+                </span>
+              </div>
+
+              <div className="p-3 bg-white rounded-lg border-2 border-[#121212] font-mono text-sm break-all">
+                {scanResult}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(scanResult);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="flex-1 py-2 px-3 bg-[#FFE600] border-2 border-[#121212] shadow-[2px_2px_0px_#121212] rounded-lg font-black text-xs"
+                >
+                  {copied ? 'Tersalin!' : 'Salin Teks'}
+                </button>
+
+                {isUrl(scanResult) && (
+                  <a
+                    href={scanResult}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 py-2 px-3 bg-[#38E54D] border-2 border-[#121212] shadow-[2px_2px_0px_#121212] rounded-lg font-black text-xs text-center inline-flex items-center justify-center gap-1"
+                  >
+                    Buka Link <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
