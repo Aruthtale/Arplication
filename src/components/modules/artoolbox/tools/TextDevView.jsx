@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Save, Trash2, ArrowLeft, Download, Check, Type, FileText, Code, Shield, Braces } from 'lucide-react';
-import { addToolboxHistory } from '../../../services/toolboxDb';
+import { addToolboxHistory } from '../../../../services/toolboxDb';
 
 export default function TextDevView({ onBack, onRefreshHistory }) {
   const [activeTab, setActiveTab] = useState('case');

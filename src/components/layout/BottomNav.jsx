@@ -5,6 +5,7 @@ export default function BottomNav({ activeTab, setActiveTab }) {
     { id: 'home', label: 'Hub', iconUrl: '/logo.png', activeColor: 'bg-[#FFE600]' },
     { id: 'arloader', label: 'Arloader', iconUrl: '/arloader.png', badge: 'Active', activeColor: 'bg-[#38E54D]' },
     { id: 'armusic', label: 'ArMusic', iconUrl: '/armusic.png', activeColor: 'bg-[#D8B4FE]' },
+    { id: 'artoolbox', label: 'Toolbox', iconUrl: '/logo.png', activeColor: 'bg-[#C4FAF8]' },
   ];
 
   return (

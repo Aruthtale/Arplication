@@ -64,6 +64,20 @@ export default function HomeHub({ setActiveTab }) {
       isReady: true,
     },
     {
+      id: 'artoolbox',
+      title: 'ArToolbox',
+      tagline: 'Perkakas Praktis',
+      description: 'QR scanner/generator, dev text tools, kalkulator praktis, & color studio.',
+      iconUrl: '/logo.png',
+      status: 'Aktif',
+      statusColor: 'bg-[#C4FAF8]',
+      cardBg: 'bg-[#FFFFFF]',
+      accentColor: '#C4FAF8',
+      badgeBg: 'bg-[#C4FAF8]',
+      actionLabel: 'Buka',
+      isReady: true,
+    },
+    {
       id: 'aruthtale',
       title: 'Aruthtale',
       tagline: 'Info & Diagnostik',
@@ -130,7 +144,7 @@ export default function HomeHub({ setActiveTab }) {
             <span>DAFTAR MODUL APLIKASI</span>
           </h2>
           <span className="text-[9.5px] font-mono-code font-black bg-white px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#121212]">
-            5 MODUL
+            6 MODUL
           </span>
         </div>
 

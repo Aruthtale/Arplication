@@ -6,6 +6,7 @@ import ArloaderModule from './components/modules/arloader/ArloaderModule';
 import ArdoroModule from './components/modules/ardoro/ArdoroModule';
 import ArNoteModule from './components/modules/arnote/ArNoteModule';
 import ArMusicModule from './components/modules/armusic/ArMusicModule';
+import ArToolboxModule from './components/modules/artoolbox/ArToolboxModule';
 import AruthtaleInfo from './components/modules/AruthtaleInfo';
 import { ensureNotificationChannel } from './utils/notification';
 
@@ -36,6 +37,7 @@ export default function App() {
         <div className={activeTab === 'armusic' ? '' : 'hidden'}>
           <ArMusicModule setActiveTab={setActiveTab} />
         </div>
+        {activeTab === 'artoolbox' && <ArToolboxModule setActiveTab={setActiveTab} />}
         {activeTab === 'aruthtale' && <AruthtaleInfo setActiveTab={setActiveTab} />}
       </main>
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { QrCode, Upload, Camera, X, Copy, Download, Trash2, ExternalLink, Check } from 'lucide-react';
-import { addToolboxHistory } from '../../../services/toolboxDb';
+import { addToolboxHistory } from '../../../../services/toolboxDb';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
 

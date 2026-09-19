@@ -15,6 +15,8 @@ export default function Header({ activeTab, setActiveTab }) {
         return 'ARNOTE';
       case 'armusic':
         return 'ARMUSIC';
+      case 'artoolbox':
+        return 'TOOLBOX';
       case 'aruthtale':
         return 'ARUTHTALE';
       default:
