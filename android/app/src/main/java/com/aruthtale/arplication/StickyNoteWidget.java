@@ -69,7 +69,7 @@ public class StickyNoteWidget extends AppWidgetProvider {
                     Intent clickIntent = new Intent(context, MainActivity.class);
                     clickIntent.setAction("com.aruthtale.arplication.OPEN_NOTE");
                     clickIntent.putExtra("note_id", note.optString("id", ""));
-                    clickIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    clickIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                     android.app.PendingIntent pendingIntent = android.app.PendingIntent.getActivity(
                             context, appWidgetId, clickIntent,
                             android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
@@ -78,31 +78,32 @@ public class StickyNoteWidget extends AppWidgetProvider {
                     views.setViewVisibility(R.id.widget_sticky_empty, android.view.View.GONE);
                     views.setViewVisibility(R.id.widget_sticky_content_container, android.view.View.VISIBLE);
                 } else {
-                    showEmptyState(context, views);
+                    showEmptyState(context, views, appWidgetId);
                 }
             } catch (JSONException e) {
                 e.printStackTrace();
-                showEmptyState(context, views);
+                showEmptyState(context, views, appWidgetId);
             }
         } else {
-            showEmptyState(context, views);
+            showEmptyState(context, views, appWidgetId);
         }
 
         appWidgetManager.updateAppWidget(appWidgetId, views);
     }
 
-    private void showEmptyState(Context context, RemoteViews views) {
+    private void showEmptyState(Context context, RemoteViews views, int appWidgetId) {
         views.setTextViewText(R.id.widget_sticky_title, "ArNote");
         views.setTextViewText(R.id.widget_sticky_content, "Belum ada catatan yang di-pin. Buka aplikasi dan sematkan catatan!");
         views.setInt(R.id.widget_sticky_container, "setBackgroundResource", R.drawable.arnote_sticky_bg_yellow);
         views.setViewVisibility(R.id.widget_sticky_empty, android.view.View.VISIBLE);
         views.setViewVisibility(R.id.widget_sticky_content_container, android.view.View.GONE);
 
-        // Click to open app
+        // Click to open app to ArNote
         Intent clickIntent = new Intent(context, MainActivity.class);
-        clickIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        clickIntent.setAction("com.aruthtale.arplication.OPEN_NOTE");
+        clickIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         android.app.PendingIntent pendingIntent = android.app.PendingIntent.getActivity(
-                context, 0, clickIntent,
+                context, appWidgetId, clickIntent,
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
         views.setOnClickPendingIntent(R.id.widget_sticky_container, pendingIntent);
     }

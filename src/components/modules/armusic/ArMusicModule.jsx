@@ -31,6 +31,7 @@ import {
 import {
   fetchLyrics, activeLyricIndex,
 } from '../../../services/lyrics.js';
+import { registerBackHandler } from '../../../services/backHandler.js';
 
 function filterTracks(tracks, query) {
   const q = String(query || '').toLowerCase().trim();
@@ -143,6 +144,39 @@ export default function ArMusicModule({ setActiveTab }) {
   const [showSleep, setShowSleep] = useState(false);
   const [sleepStatus, setSleepStatus] = useState({ active: false, remainingMs: 0, totalMin: 0 });
   const SLEEP_OPTIONS = [0, 15, 30, 45, 60, 90];
+
+  const showEqRef = useRef(showEq);
+  const showSleepRef = useRef(showSleep);
+  const addToPickTrackRef = useRef(addToPickTrack);
+  const openPlaylistIdRef = useRef(openPlaylistId);
+
+  useEffect(() => { showEqRef.current = showEq; }, [showEq]);
+  useEffect(() => { showSleepRef.current = showSleep; }, [showSleep]);
+  useEffect(() => { addToPickTrackRef.current = addToPickTrack; }, [addToPickTrack]);
+  useEffect(() => { openPlaylistIdRef.current = openPlaylistId; }, [openPlaylistId]);
+
+  useEffect(() => {
+    const unregister = registerBackHandler(() => {
+      if (showEqRef.current) {
+        setShowEq(false);
+        return true;
+      }
+      if (showSleepRef.current) {
+        setShowSleep(false);
+        return true;
+      }
+      if (addToPickTrackRef.current) {
+        setAddToPickTrack(null);
+        return true;
+      }
+      if (openPlaylistIdRef.current) {
+        setOpenPlaylistId(null);
+        return true;
+      }
+      return false;
+    });
+    return () => unregister();
+  }, []);
 
   const audioRef = useRef(null);
   const fileRef = useRef(null);

@@ -47,18 +47,18 @@ public class NoteListWidget extends AppWidgetProvider {
         // Set click for "Add Note" button
         Intent addIntent = new Intent(context, MainActivity.class);
         addIntent.setAction("com.aruthtale.arplication.CREATE_NOTE");
-        addIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        addIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         android.app.PendingIntent addPendingIntent = android.app.PendingIntent.getActivity(
-                context, appWidgetId, addIntent,
+                context, appWidgetId + 10000, addIntent,
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
         views.setOnClickPendingIntent(R.id.widget_list_add_button, addPendingIntent);
 
         // Set click template for list items
         Intent clickIntent = new Intent(context, MainActivity.class);
         clickIntent.setAction("com.aruthtale.arplication.OPEN_NOTE");
-        clickIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        clickIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         android.app.PendingIntent clickPendingIntent = android.app.PendingIntent.getActivity(
-                context, 0, clickIntent,
+                context, appWidgetId, clickIntent,
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
         views.setPendingIntentTemplate(R.id.widget_list_view, clickPendingIntent);
 

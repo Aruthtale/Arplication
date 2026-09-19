@@ -13,6 +13,7 @@ import {
 import { sendPomodoroPhaseNotification, checkNotificationPermission, requestNotificationPermission } from '../../../utils/notification.js';
 import { startForegroundTimer, stopForegroundTimer } from '../../../services/timerService.js';
 import { startAmbientSound, stopAmbientSound, setAmbientVolume, getNoiseTypes, isAmbientPlaying } from '../../../utils/ambientSound.js';
+import { registerBackHandler } from '../../../services/backHandler.js';
 
 const PHASE_META = {
   focus: { label: 'FOKUS', chip: 'DEEP FOCUS MODE', color: '#FFE600' },
@@ -55,6 +56,22 @@ export default function ArdoroModule({ setActiveTab }) {
   const [remaining, setRemaining] = useState(() => durationFor('focus', loadArdoroSettings()));
   const [showSettings, setShowSettings] = useState(false);
   const [notifStatus, setNotifStatus] = useState({ granted: false, canRequest: false, denied: false });
+
+  const showSettingsRef = useRef(showSettings);
+  useEffect(() => {
+    showSettingsRef.current = showSettings;
+  }, [showSettings]);
+
+  useEffect(() => {
+    const unregister = registerBackHandler(() => {
+      if (showSettingsRef.current) {
+        setShowSettings(false);
+        return true;
+      }
+      return false;
+    });
+    return () => unregister();
+  }, []);
 
   const endAtRef = useRef(0);
   const tickRef = useRef(null);

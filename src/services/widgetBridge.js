@@ -35,3 +35,15 @@ export async function syncNotesToWidget() {
     console.log('Widget sync skipped or not supported on this platform:', err.message);
   }
 }
+
+export async function getWidgetLaunchIntent() {
+  try {
+    if (ArNoteWidgetPlugin && typeof ArNoteWidgetPlugin.getLaunchIntent === 'function') {
+      const res = await ArNoteWidgetPlugin.getLaunchIntent();
+      return res || { action: '', noteId: '' };
+    }
+  } catch (err) {
+    console.log('Failed to fetch widget launch intent:', err.message);
+  }
+  return { action: '', noteId: '' };
+}

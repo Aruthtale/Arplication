@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Filter, Plus, Tag, X } from 'lucide-react';
 import NoteBentoCard from './NoteBentoCard';
 import NoteEditorModal from './NoteEditorModal';
@@ -7,6 +7,7 @@ import NeubrutalistFilterPicker from './NeubrutalistFilterPicker';
 import { getAllNotes, saveNote, deleteNote, togglePinNote } from '../../../services/notesDb';
 import { exportNoteToMd } from '../../../services/notesFileSync';
 import { syncNotesToWidget } from '../../../services/widgetBridge';
+import { registerBackHandler } from '../../../services/backHandler';
 
 const COLOR_OPTIONS = [
   { value: '', label: 'Semua Warna', colorBg: '' },
@@ -29,8 +30,67 @@ export default function ArNoteModule() {
   const [allTags, setAllTags] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
 
+  const isModalOpenRef = useRef(isModalOpen);
+  const deletingNoteRef = useRef(deletingNote);
+  const notesRef = useRef(notes);
+
+  useEffect(() => {
+    isModalOpenRef.current = isModalOpen;
+  }, [isModalOpen]);
+
+  useEffect(() => {
+    deletingNoteRef.current = deletingNote;
+  }, [deletingNote]);
+
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
+
   useEffect(() => {
     loadNotes();
+  }, []);
+
+  // Back button handler untuk modal ArNote (LIFO)
+  useEffect(() => {
+    const unregister = registerBackHandler(() => {
+      if (deletingNoteRef.current) {
+        setDeletingNote(null);
+        return true;
+      }
+      if (isModalOpenRef.current) {
+        setIsModalOpen(false);
+        setEditingNote(null);
+        return true;
+      }
+      return false;
+    });
+
+    return () => unregister();
+  }, []);
+
+  // Listener untuk Intent klik Widget ArNote
+  useEffect(() => {
+    const handleWidgetIntent = async (e) => {
+      const detail = e.detail || {};
+      const action = detail.action || '';
+      const noteId = detail.noteId || '';
+
+      if (action === 'com.aruthtale.arplication.CREATE_NOTE') {
+        openCreateModal();
+      } else if (action === 'com.aruthtale.arplication.OPEN_NOTE') {
+        if (noteId) {
+          // Cari catatan yang sesuai, jika belum ada di state, fetch dari DB
+          const currentList = notesRef.current.length > 0 ? notesRef.current : await getAllNotes();
+          const target = currentList.find(n => String(n.id) === String(noteId));
+          if (target) {
+            openEditModal(target);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('arNoteWidgetIntent', handleWidgetIntent);
+    return () => window.removeEventListener('arNoteWidgetIntent', handleWidgetIntent);
   }, []);
 
   useEffect(() => {
