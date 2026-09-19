@@ -30,8 +30,10 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
       await QRCode.toCanvas(canvas, qrText, {
         width: qrSize,
         height: qrSize,
-        colorDark: qrColor,
-        colorLight: qrBgColor,
+        color: {
+          dark: qrColor || '#000000',
+          light: qrBgColor || '#ffffff',
+        },
         margin: 2,
       });
 
@@ -137,10 +139,24 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
     setScanError(null);
     setIsScanning(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
-      if (videoRef.current) {
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        throw new Error('Kamera tidak didukung di perangkat atau browser ini.');
+      }
+
+      let stream = null;
+      try {
+        // Coba kamera belakang terlebih dahulu
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+        });
+      } catch {
+        // Fallback ke kamera default/depan jika environment gagal
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+      }
+
+      if (videoRef.current && stream) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         await videoRef.current.play();
@@ -148,7 +164,11 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
       }
     } catch (err) {
       console.error('Gagal mengakses kamera:', err);
-      setScanError('Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.');
+      setScanError(
+        err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+          ? 'Izin kamera ditolak. Silakan izinkan akses kamera di Pengaturan Aplikasi HP Anda.'
+          : `Tidak dapat membuka kamera (${err.message || 'Periksa izin kamera'}).`
+      );
       setIsScanning(false);
     }
   };

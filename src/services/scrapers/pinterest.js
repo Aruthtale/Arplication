@@ -98,7 +98,14 @@ export function parsePinterestRelayHtml(html = '', fallbackUrl = '') {
   let pinData = null;
   for (const payload of scripts) {
     const candidate = payload?.data?.v3GetPinQueryv2?.data;
-    if (candidate && (candidate.images_orig || candidate.images_736x || candidate.videos)) {
+    if (
+      candidate &&
+      (candidate.images_orig ||
+        candidate.images_736x ||
+        candidate.videos ||
+        candidate.storyPinData ||
+        candidate.story_pin_data)
+    ) {
       pinData = candidate;
       break;
     }
@@ -130,7 +137,7 @@ export function parsePinterestRelayHtml(html = '', fallbackUrl = '') {
     if (clean.endsWith('.gif')) return 'gif';
     if (clean.endsWith('.png')) return 'png';
     if (clean.endsWith('.webp')) return 'webp';
-    if (clean.endsWith('.mp4')) return 'mp4';
+    if (clean.endsWith('.mp4') || clean.endsWith('.m4v') || clean.endsWith('.mov')) return 'mp4';
     if (clean.endsWith('.jpg') || clean.endsWith('.jpeg')) return 'jpg';
     return fallback;
   };
@@ -160,50 +167,96 @@ export function parsePinterestRelayHtml(html = '', fallbackUrl = '') {
     }
   }
 
-  // 2. Ekstrak video MP4
+  // 2. Ekstrak video MP4 dari pinData.videos & storyPinData / story_pin_data
+  const videoSources = [];
   if (pinData.videos) {
-    const videoList = pinData.videos.video_list || pinData.videos;
-    if (typeof videoList === 'object') {
-      Object.entries(videoList).forEach(([qualityKey, vInfo]) => {
-        const url = vInfo?.url;
-        if (url && typeof url === 'string' && url.includes('.mp4')) {
-          const width = vInfo.width || qualityKey;
-          pushOption({
-            id: `pinterest-video-${qualityKey}`,
-            label: `Video (${width})`,
-            quality: String(width),
-            type: 'video',
-            ext: 'mp4',
-            url,
-          });
+    const list = pinData.videos.video_list || pinData.videos.videoList || pinData.videos;
+    if (typeof list === 'object') videoSources.push(list);
+  }
+
+  const storyData = pinData.storyPinData || pinData.story_pin_data;
+  if (storyData && Array.isArray(storyData.pages)) {
+    for (const page of storyData.pages) {
+      if (Array.isArray(page?.blocks)) {
+        for (const block of page.blocks) {
+          const vData = block.videoDataV2 || block.videoData || block.video;
+          if (vData && typeof vData === 'object') {
+            Object.values(vData).forEach((val) => {
+              if (val && typeof val === 'object') {
+                videoSources.push(val);
+              }
+            });
+          }
+          if (block.video_list && typeof block.video_list === 'object') {
+            videoSources.push(block.video_list);
+          }
         }
-      });
+      }
     }
   }
 
-  // 3. Ekstrak gambar / gif resolusi original
+  for (const vSource of videoSources) {
+    if (!vSource || typeof vSource !== 'object') continue;
+    // If vSource is a direct video object with url
+    if (vSource.url && typeof vSource.url === 'string') {
+      const url = vSource.url;
+      if (url.includes('.mp4') || detectExtension(url) === 'mp4') {
+        const qualityLabel = vSource.height ? `${vSource.height}p` : `${vSource.width || 'Video'}`;
+        pushOption({
+          id: `pinterest-video-${vSource.height || vSource.width || 'hd'}`,
+          label: `Video (${qualityLabel})`,
+          quality: vSource.width && vSource.height ? `${vSource.width}x${vSource.height}` : qualityLabel,
+          type: 'video',
+          ext: 'mp4',
+          url,
+        });
+      }
+      continue;
+    }
+    // Otherwise vSource is a map of quality keys -> video objects
+    Object.entries(vSource).forEach(([qualityKey, vInfo]) => {
+      const url = vInfo?.url;
+      if (url && typeof url === 'string' && (url.includes('.mp4') || detectExtension(url) === 'mp4')) {
+        const width = vInfo.width || qualityKey.replace(/^v/, '');
+        const height = vInfo.height ? `x${vInfo.height}` : '';
+        const qualityLabel = vInfo.height ? `${vInfo.height}p` : `${width}`;
+        pushOption({
+          id: `pinterest-video-${qualityKey.toLowerCase()}`,
+          label: `Video (${qualityLabel})`,
+          quality: `${width}${height}` || 'HD',
+          type: 'video',
+          ext: 'mp4',
+          url,
+        });
+      }
+    });
+  }
+
+  // 3. Ekstrak resolusi original (bisa berupa gambar, gif, atau mp4)
   if (pinData.images_orig?.url) {
     const origUrl = pinData.images_orig.url;
     const ext = detectExtension(origUrl, 'jpg');
+    const isVid = ext === 'mp4';
     pushOption({
-      id: 'pinterest-image-original',
-      label: ext === 'gif' ? 'Original GIF' : 'Original Image',
+      id: isVid ? 'pinterest-video-original' : 'pinterest-image-original',
+      label: isVid ? 'Video (Original)' : (ext === 'gif' ? 'Original GIF' : 'Original Image'),
       quality: `${pinData.images_orig.width || 'Original'}x${pinData.images_orig.height || ''}`.replace(/x$/, ''),
-      type: 'image',
+      type: isVid ? 'video' : 'image',
       ext,
       url: origUrl,
     });
   }
 
-  // 4. Ekstrak gambar / gif 736p
+  // 4. Ekstrak resolusi 736p (bisa berupa gambar, gif, atau mp4)
   if (pinData.images_736x?.url) {
     const u736 = pinData.images_736x.url;
     const ext = detectExtension(u736, 'jpg');
+    const isVid = ext === 'mp4';
     pushOption({
-      id: 'pinterest-image-736p',
-      label: ext === 'gif' ? '736p GIF' : '736p Image',
+      id: isVid ? 'pinterest-video-736p' : 'pinterest-image-736p',
+      label: isVid ? 'Video (736p)' : (ext === 'gif' ? '736p GIF' : '736p Image'),
       quality: '736p',
-      type: 'image',
+      type: isVid ? 'video' : 'image',
       ext,
       url: u736,
     });

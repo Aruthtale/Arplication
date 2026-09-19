@@ -1,9 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, Upload, FileText, Download, Trash2, ArrowUp, ArrowDown, 
   RotateCw, Plus, Check, Layers, Sparkles, FileCheck 
 } from 'lucide-react';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
+
+// IndexedDB Helper for PDF Maker Drafts (survives Android OS memory kills)
+const PDF_DB_NAME = 'artoolbox_pdf_maker_db';
+const PDF_STORE_NAME = 'draft_pages';
+
+function openPdfDb() {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') return resolve(null);
+    try {
+      const req = indexedDB.open(PDF_DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(PDF_STORE_NAME)) {
+          db.createObjectStore(PDF_STORE_NAME, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function loadSavedPages() {
+  try {
+    const db = await openPdfDb();
+    if (!db) return [];
+    return new Promise((resolve) => {
+      const tx = db.transaction(PDF_STORE_NAME, 'readonly');
+      const store = tx.objectStore(PDF_STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : []);
+      req.onerror = () => resolve([]);
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function savePagesToDb(pages) {
+  try {
+    const db = await openPdfDb();
+    if (!db) return;
+    const tx = db.transaction(PDF_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(PDF_STORE_NAME);
+    store.clear();
+    pages.forEach((p) => store.put(p));
+  } catch (err) {
+    console.warn('Gagal menyimpan draft PDF:', err);
+  }
+}
+
+async function clearPagesFromDb() {
+  try {
+    const db = await openPdfDb();
+    if (!db) return;
+    const tx = db.transaction(PDF_STORE_NAME, 'readwrite');
+    tx.objectStore(PDF_STORE_NAME).clear();
+  } catch (err) {
+    console.warn('Gagal membersihkan draft PDF:', err);
+  }
+}
 
 export default function PdfMakerView({ onBack, onRefreshHistory }) {
   const [pages, setPages] = useState([]); // Array of { id, dataUrl, name, size, rotation }
@@ -11,6 +74,27 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
   const [pdfTitle, setPdfTitle] = useState('Dokumen_Arplication');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPdfBlobUrl, setGeneratedPdfBlobUrl] = useState(null);
+  const isLoadedFromDbRef = useRef(false);
+
+  // Restore saved pages on mount
+  useEffect(() => {
+    let isMounted = true;
+    loadSavedPages().then((saved) => {
+      if (isMounted && saved && saved.length > 0) {
+        setPages(saved);
+      }
+      isLoadedFromDbRef.current = true;
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Save pages to IndexedDB whenever changed (after initial load)
+  useEffect(() => {
+    if (!isLoadedFromDbRef.current) return;
+    savePagesToDb(pages);
+  }, [pages]);
 
   const handleAddFiles = (e) => {
     const files = Array.from(e.target.files || []);
@@ -58,6 +142,7 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
   const clearAllPages = () => {
     setPages([]);
     setGeneratedPdfBlobUrl(null);
+    clearPagesFromDb();
   };
 
   // Pure JavaScript Client-Side PDF Generator for Images

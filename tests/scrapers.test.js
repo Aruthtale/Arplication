@@ -324,6 +324,44 @@ test('parsePinterestRelayHtml extracts GIF correctly without forcing jpg', () =>
   assert.equal(result.options[0].label, 'Animated GIF (HD)');
 });
 
+test('parsePinterestRelayHtml extracts video MP4 from storyPinData and direct videos correctly', () => {
+  const videoPinHtml = `<script data-relay-completed-request="true">
+    window.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__("test", {
+      "data": {
+        "v3GetPinQueryv2": {
+          "data": {
+            "entityId": "1084663891475263837",
+            "title": "Cool Tech Gadget Video",
+            "images_orig": {
+              "url": "https://i.pinimg.com/originals/76/64/90/thumb.jpg"
+            },
+            "storyPinData": {
+              "pages": [{
+                "blocks": [{
+                  "videoDataV2": {
+                    "videoList720P": {
+                      "url": "https://v1.pinimg.com/videos/mc/720p/cool.mp4",
+                      "width": 720,
+                      "height": 1280
+                    }
+                  }
+                }]
+              }]
+            }
+          }
+        }
+      }
+    });
+  </script>`;
+  const result = parsePinterestRelayHtml(videoPinHtml, 'https://www.pinterest.com/pin/1084663891475263837/');
+  assert.equal(result.id, '1084663891475263837');
+  assert.equal(result.isImages, false);
+  const videoOption = result.options.find((o) => o.type === 'video');
+  assert.ok(videoOption);
+  assert.equal(videoOption.ext, 'mp4');
+  assert.equal(videoOption.url, 'https://v1.pinimg.com/videos/mc/720p/cool.mp4');
+});
+
 test('isInstagramUrl recognizes post, reel, tv, share, story, and highlight links', () => {
   assert.equal(isInstagramUrl('https://www.instagram.com/reel/DVBukMrgPAk/'), true);
   assert.equal(isInstagramUrl('https://www.instagram.com/p/DZT71H-BJuK/'), true);
