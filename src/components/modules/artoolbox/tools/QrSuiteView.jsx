@@ -54,17 +54,29 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
     }
   };
 
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
   // Download QR Code
   const downloadQrCode = async () => {
-    if (!generatedImage) return;
+    if (!generatedImage || downloading) return;
 
-    const filename = `qrcode-${Date.now()}.png`;
-    await saveToolboxBlobFile({
-      data: generatedImage,
-      filename,
-      subfolder: 'Aruthtale/QR',
-      mimeType: 'image/png'
-    });
+    try {
+      setDownloading(true);
+      const filename = `qrcode-${Date.now()}.png`;
+      await saveToolboxBlobFile({
+        data: generatedImage,
+        filename,
+        subfolder: 'Aruthtale/QR',
+        mimeType: 'image/png'
+      });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2500);
+    } catch (err) {
+      console.error('Gagal mengunduh QR code:', err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   // Salin QR Code ke clipboard
@@ -352,10 +364,20 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
               <div className="flex gap-2">
                 <button
                   onClick={downloadQrCode}
-                  className="flex-1 py-2 px-4 bg-[#A076F9] hover:bg-[#8B5CF6] active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black"
+                  disabled={downloading}
+                  className="flex-1 py-2 px-4 bg-[#A076F9] hover:bg-[#8B5CF6] disabled:opacity-50 active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black"
                 >
-                  <Download className="w-4 h-4 inline mr-2" />
-                  Unduh
+                  {downloadSuccess ? (
+                    <>
+                      <Check className="w-4 h-4 inline mr-2 text-green-700" />
+                      Tersimpan!
+                    </>
+                  ) : (
+                    <>
+                      <Download className={`w-4 h-4 inline mr-2 ${downloading ? 'animate-bounce' : ''}`} />
+                      {downloading ? 'Menyimpan...' : 'Unduh'}
+                    </>
+                  )}
                 </button>
 
                 <button

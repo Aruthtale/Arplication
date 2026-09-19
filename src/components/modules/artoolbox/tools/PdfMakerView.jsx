@@ -345,15 +345,27 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
     }
   };
 
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
   const downloadPdf = async () => {
-    if (!generatedPdfBlobUrl) return;
-    const filename = `${pdfTitle.trim() || 'Dokumen'}.pdf`;
-    await saveToolboxBlobFile({
-      data: generatedPdfBlobUrl,
-      filename,
-      subfolder: 'Aruthtale/PDF',
-      mimeType: 'application/pdf',
-    });
+    if (!generatedPdfBlobUrl || downloading) return;
+    try {
+      setDownloading(true);
+      const filename = `${pdfTitle.trim() || 'Dokumen'}.pdf`;
+      await saveToolboxBlobFile({
+        data: generatedPdfBlobUrl,
+        filename,
+        subfolder: 'Aruthtale/PDF',
+        mimeType: 'application/pdf',
+      });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2500);
+    } catch (err) {
+      console.error('Gagal mengunduh PDF:', err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -507,10 +519,20 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
             {generatedPdfBlobUrl && (
               <button
                 onClick={downloadPdf}
-                className="w-full py-2.5 bg-[#38E54D] hover:bg-[#30CC43] active:translate-x-0.5 active:translate-y-0.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                disabled={downloading}
+                className="w-full py-2.5 bg-[#38E54D] hover:bg-[#30CC43] disabled:opacity-50 active:translate-x-0.5 active:translate-y-0.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Download className="w-4 h-4" />
-                <span>Unduh {pdfTitle}.pdf Siap Dicetak</span>
+                {downloadSuccess ? (
+                  <>
+                    <Check className="w-4 h-4 text-green-800" />
+                    <span>Tersimpan di Storage HP!</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className={`w-4 h-4 ${downloading ? 'animate-bounce' : ''}`} />
+                    <span>{downloading ? 'Menyimpan PDF...' : `Unduh ${pdfTitle || 'Dokumen'}.pdf`}</span>
+                  </>
+                )}
               </button>
             )}
           </div>

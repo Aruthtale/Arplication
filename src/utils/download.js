@@ -666,14 +666,38 @@ export async function downloadMedia({
  */
 export async function saveToolboxBlobFile({ data, filename, subfolder = 'Aruthtale/Toolbox', mimeType = 'application/octet-stream' }) {
   const settings = getDownloadSettings();
-  const dirName = settings.directory === 'Documents' ? 'Documents' : 'Download';
-  const directoryEnum = settings.directory === 'Documents' ? Directory.Documents : Directory.ExternalPublic;
+  const dirChoice = settings.directory === 'Documents' ? 'Documents' : 'Downloads';
   const cleanSub = String(subfolder || 'Aruthtale/Toolbox').trim().replace(/^\/+|\/+$/g, '');
-  const relativePath = cleanSub ? `${cleanSub}/${filename}` : filename;
-  const displayLocation = `${dirName}/${relativePath}`;
+  const safeName = sanitizeFilename(filename || 'file.bin', 'file.bin');
+  const targetLabel = dirChoice === 'Documents' ? 'Documents' : 'Download';
+  const displayLocation = cleanSub ? `${targetLabel}/${cleanSub}` : targetLabel;
 
   if (isNative()) {
     try {
+      await Filesystem.requestPermissions().catch(() => {});
+
+      let directoryEnum;
+      let relativePath;
+      let mkdirPath = '';
+
+      if (dirChoice === 'Documents') {
+        directoryEnum = Directory.Documents;
+        mkdirPath = cleanSub;
+        relativePath = cleanSub ? `${cleanSub}/${safeName}` : safeName;
+      } else {
+        directoryEnum = Directory.ExternalStorage;
+        mkdirPath = cleanSub ? `Download/${cleanSub}` : 'Download';
+        relativePath = `${mkdirPath}/${safeName}`;
+      }
+
+      if (mkdirPath) {
+        await Filesystem.mkdir({
+          path: mkdirPath,
+          directory: directoryEnum,
+          recursive: true,
+        }).catch(() => {});
+      }
+
       let base64Data = '';
       if (typeof data === 'string') {
         base64Data = data.includes('base64,') ? data.split('base64,')[1] : data;
@@ -691,7 +715,7 @@ export async function saveToolboxBlobFile({ data, filename, subfolder = 'Aruthta
       });
 
       sendDownloadCompleteNotification({
-        title: filename,
+        title: safeName,
         platform: 'ArToolbox',
         path: displayLocation,
       });
@@ -699,6 +723,11 @@ export async function saveToolboxBlobFile({ data, filename, subfolder = 'Aruthta
       return { success: true, path: res.uri, location: displayLocation };
     } catch (err) {
       console.warn('Native toolbox file write failed, falling back to browser download:', err);
+      sendDownloadErrorNotification({
+        title: safeName,
+        platform: 'ArToolbox',
+        error: err?.message || 'Gagal menyimpan ke penyimpanan lokal',
+      });
     }
   }
 
@@ -718,7 +747,7 @@ export async function saveToolboxBlobFile({ data, filename, subfolder = 'Aruthta
 
     const a = document.createElement('a');
     a.href = blobUrl;
-    a.download = filename;
+    a.download = safeName;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => {
@@ -729,6 +758,11 @@ export async function saveToolboxBlobFile({ data, filename, subfolder = 'Aruthta
     return { success: true, location: displayLocation };
   } catch (err) {
     console.error('Browser toolbox file download failed:', err);
+    sendDownloadErrorNotification({
+      title: safeName,
+      platform: 'ArToolbox',
+      error: err?.message || 'Gagal mengunduh file',
+    });
     throw err;
   }
 }

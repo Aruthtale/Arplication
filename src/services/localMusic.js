@@ -123,7 +123,7 @@ export async function scanLocalAudio({ onProgress } = {}) {
   }
   await Filesystem.requestPermissions().catch(() => {});
 
-  const roots = ['Download/Arloader', 'Music'];
+  const roots = ['Download/Aruthtale', 'Download/Arloader', 'Music', 'Download'];
   const found = [];
   const queue = roots.map((r) => ({ path: r, depth: 0 }));
   const seen = new Set();

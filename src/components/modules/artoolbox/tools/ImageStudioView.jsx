@@ -184,18 +184,30 @@ export default function ImageStudioView({ onBack, onRefreshHistory }) {
     }
   }, [sourceImage, hdIntensity, contrastBoost, saturationBoost, activeTab]);
 
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
   // Download Handler
   const downloadResult = async (dataUrl, defaultName = 'image-processed') => {
-    if (!dataUrl) return;
-    const ext = outputFormat === 'image/webp' ? 'webp' : outputFormat === 'image/png' ? 'png' : 'jpg';
-    const filename = `${defaultName}-${Date.now()}.${activeTab === 'hd' ? 'png' : ext}`;
-    const mime = activeTab === 'hd' ? 'image/png' : outputFormat;
-    await saveToolboxBlobFile({
-      data: dataUrl,
-      filename,
-      subfolder: 'Aruthtale/Images',
-      mimeType: mime,
-    });
+    if (!dataUrl || downloading) return;
+    try {
+      setDownloading(true);
+      const ext = outputFormat === 'image/webp' ? 'webp' : outputFormat === 'image/png' ? 'png' : 'jpg';
+      const filename = `${defaultName}-${Date.now()}.${activeTab === 'hd' ? 'png' : ext}`;
+      const mime = activeTab === 'hd' ? 'image/png' : outputFormat;
+      await saveToolboxBlobFile({
+        data: dataUrl,
+        filename,
+        subfolder: 'Aruthtale/Images',
+        mimeType: mime,
+      });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2500);
+    } catch (err) {
+      console.error('Gagal mengunduh gambar:', err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const savingsPercent = originalFile && compressedSize > 0
