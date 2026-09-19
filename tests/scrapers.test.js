@@ -646,14 +646,14 @@ test('security: index.html ships a Content-Security-Policy meta tag', async () =
   assert.ok(/object-src 'none'/.test(html), 'CSP must block objects/plugins');
 });
 
-test('security: FileProvider paths expose only Download/Arloader (no broad roots)', async () => {
+test('security: FileProvider paths expose only Download/Aruthtale (no broad roots)', async () => {
   const { readFileSync } = await import('node:fs');
   const xmlRaw = readFileSync(new URL('../android/app/src/main/res/xml/file_paths.xml', import.meta.url), 'utf8');
   // Strip komentar XML agar dokumentasi tidak memicu false positive.
   const xml = xmlRaw.replace(/<!--[\s\S]*?-->/g, '');
   assert.ok(!/<root-path/.test(xml), 'must not use <root-path> (too broad)');
   assert.ok(!/<external-path[^>]*path="\."/.test(xml), 'must not expose whole external storage');
-  assert.ok(/path="Download\/Arloader\/"/.test(xml), 'must scope share to Download/Arloader/');
+  assert.ok(/path="Download\/Aruthtale\/"/.test(xml), 'must scope share to Download/Aruthtale/');
 });
 
 test('stability: ArMusicService handles AUDIO_BECOMING_NOISY with lifecycle-aware receiver', async () => {

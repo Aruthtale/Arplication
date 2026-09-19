@@ -6,11 +6,11 @@
     <external-files-path name="my_external_files" path="." />
     <files-path name="my_files" path="." />
     <!--
-      Dipersempit ke folder hasil unduhan Arloader saja.
+      Dipersempit ke folder hasil unduhan Aruthtale saja.
       external-path = Environment.getExternalStorageDirectory() + subpath
-      Download/Arloader — device-independent, tanpa hardcode device path.
-      APK update diunduh ke Download/Arloader/Arplication/ sehingga tetap
-      tercakup; file di luar Arloader TIDAK bisa di-share via FileProvider.
+      Download/Aruthtale — device-independent, tanpa hardcode device path.
+      APK update diunduh ke Download/Aruthtale/Arplication/ sehingga tetap
+      tercakup; file di luar Aruthtale TIDAK bisa di-share via FileProvider.
     -->
-    <external-path name="arloader_download" path="Download/Arloader/" />
+    <external-path name="aruthtale_download" path="Download/Aruthtale/" />
 </paths>

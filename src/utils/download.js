@@ -6,7 +6,7 @@ import { sendDownloadCompleteNotification, sendDownloadErrorNotification } from 
 
 export const DEFAULT_DOWNLOAD_SETTINGS = {
   directory: 'Downloads', // 'Downloads' | 'Documents'
-  subfolder: 'Arloader/{platform}',  // Default: Otomatis pisah folder per-platform (TikTok, Spotify, YouTube, etc)
+  subfolder: 'Aruthtale/{platform}',  // Default: Otomatis pisah folder per-platform (TikTok, Spotify, YouTube, etc)
   autoShare: false,       // whether to pop up "Buka dengan / Bagikan"
   igSessionId: '',        // optional Instagram sessionid cookie (legacy key)
   instagramSessionId: '', // optional Instagram sessionid cookie (kunci dipakai UI Pengaturan)
@@ -39,9 +39,10 @@ export function getDownloadSettings() {
         if (
           !parsed.subfolder ||
           parsed.subfolder === 'Arloader' ||
-          /^Arloader\/(TikTok|Spotify|YouTube|Instagram|Twitter|Pinterest)$/i.test(parsed.subfolder)
+          parsed.subfolder === 'Aruthtale' ||
+          /^Arloader\/(TikTok|Spotify|YouTube|Instagram|Twitter|Pinterest|\{platform\})$/i.test(parsed.subfolder)
         ) {
-          parsed.subfolder = 'Arloader/{platform}';
+          parsed.subfolder = 'Aruthtale/{platform}';
           saveDownloadSettings(parsed);
         }
         return { ...DEFAULT_DOWNLOAD_SETTINGS, ...parsed };
@@ -663,11 +664,11 @@ export async function downloadMedia({
  * @param {string} [options.mimeType] - Mime type file
  * @returns {Promise<{ success: boolean, path?: string, location?: string }>}
  */
-export async function saveToolboxBlobFile({ data, filename, subfolder = 'ArToolbox', mimeType = 'application/octet-stream' }) {
+export async function saveToolboxBlobFile({ data, filename, subfolder = 'Aruthtale/Toolbox', mimeType = 'application/octet-stream' }) {
   const settings = getDownloadSettings();
   const dirName = settings.directory === 'Documents' ? 'Documents' : 'Download';
   const directoryEnum = settings.directory === 'Documents' ? Directory.Documents : Directory.ExternalPublic;
-  const cleanSub = String(subfolder || 'ArToolbox').trim().replace(/^\/+|\/+$/g, '');
+  const cleanSub = String(subfolder || 'Aruthtale/Toolbox').trim().replace(/^\/+|\/+$/g, '');
   const relativePath = cleanSub ? `${cleanSub}/${filename}` : filename;
   const displayLocation = `${dirName}/${relativePath}`;
 

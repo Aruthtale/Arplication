@@ -137,9 +137,9 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
 
           <div className="grid grid-cols-3 gap-1.5 text-[11px]">
             {[
-              { id: 'Arloader/{platform}', label: '⚡ Otomatis Platform', desc: 'Otomatis pisah: Arloader/TikTok, Arloader/Spotify, Arloader/YouTube' },
-              { id: 'Arloader', label: 'Folder Arloader', desc: 'Semua file di satu folder Arloader' },
-              { id: 'Arloader/Media', label: 'Arloader/Media', desc: 'Disimpan di folder Arloader/Media' },
+              { id: 'Aruthtale/{platform}', label: '⚡ Otomatis Platform', desc: 'Otomatis pisah: Aruthtale/TikTok, Aruthtale/Spotify, Aruthtale/YouTube' },
+              { id: 'Aruthtale', label: 'Folder Aruthtale', desc: 'Semua file di satu folder Aruthtale' },
+              { id: 'Aruthtale/Media', label: 'Aruthtale/Media', desc: 'Disimpan di folder Aruthtale/Media' },
             ].map((preset) => {
               const isSelected = settings.subfolder === preset.id;
               return (
@@ -162,7 +162,7 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
             type="text"
             value={settings.subfolder || ''}
             onChange={(e) => setSettings((s) => ({ ...s, subfolder: e.target.value }))}
-            placeholder="Contoh: Arloader atau Arloader/{platform}"
+            placeholder="Contoh: Aruthtale atau Aruthtale/{platform}"
             className="w-full bg-[#F8F5EE] border-2 border-black rounded-xl p-2.5 text-xs font-mono-code font-bold text-[#121212] focus:outline-none shadow-[1.5px_1.5px_0px_#121212]"
           />
           <p className="text-[10px] text-gray-500 font-mono-code">

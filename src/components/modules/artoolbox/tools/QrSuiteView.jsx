@@ -62,7 +62,7 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
     await saveToolboxBlobFile({
       data: generatedImage,
       filename,
-      subfolder: 'ArToolbox/QR',
+      subfolder: 'Aruthtale/QR',
       mimeType: 'image/png'
     });
   };

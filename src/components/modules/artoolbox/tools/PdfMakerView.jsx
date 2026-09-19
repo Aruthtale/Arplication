@@ -351,7 +351,7 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
     await saveToolboxBlobFile({
       data: generatedPdfBlobUrl,
       filename,
-      subfolder: 'ArToolbox/PDF',
+      subfolder: 'Aruthtale/PDF',
       mimeType: 'application/pdf',
     });
   };

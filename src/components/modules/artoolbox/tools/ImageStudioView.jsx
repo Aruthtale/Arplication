@@ -193,7 +193,7 @@ export default function ImageStudioView({ onBack, onRefreshHistory }) {
     await saveToolboxBlobFile({
       data: dataUrl,
       filename,
-      subfolder: 'ArToolbox/Images',
+      subfolder: 'Aruthtale/Images',
       mimeType: mime,
     });
   };
