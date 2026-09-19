@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { QrCode, Upload, Camera, X, Copy, Download, Trash2, ExternalLink, Check } from 'lucide-react';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
+import { saveToolboxBlobFile } from '../../../../utils/download';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
 
@@ -54,13 +55,16 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
   };
 
   // Download QR Code
-  const downloadQrCode = () => {
+  const downloadQrCode = async () => {
     if (!generatedImage) return;
 
-    const link = document.createElement('a');
-    link.download = `qrcode-${Date.now()}.png`;
-    link.href = generatedImage;
-    link.click();
+    const filename = `qrcode-${Date.now()}.png`;
+    await saveToolboxBlobFile({
+      data: generatedImage,
+      filename,
+      subfolder: 'ArToolbox/QR',
+      mimeType: 'image/png'
+    });
   };
 
   // Salin QR Code ke clipboard

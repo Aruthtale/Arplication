@@ -4,6 +4,7 @@ import {
   RotateCw, Plus, Check, Layers, Sparkles, FileCheck 
 } from 'lucide-react';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
+import { saveToolboxBlobFile } from '../../../../utils/download';
 
 // IndexedDB Helper for PDF Maker Drafts (survives Android OS memory kills)
 const PDF_DB_NAME = 'artoolbox_pdf_maker_db';
@@ -344,12 +345,15 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
     }
   };
 
-  const downloadPdf = () => {
+  const downloadPdf = async () => {
     if (!generatedPdfBlobUrl) return;
-    const link = document.createElement('a');
-    link.download = `${pdfTitle.trim() || 'Dokumen'}.pdf`;
-    link.href = generatedPdfBlobUrl;
-    link.click();
+    const filename = `${pdfTitle.trim() || 'Dokumen'}.pdf`;
+    await saveToolboxBlobFile({
+      data: generatedPdfBlobUrl,
+      filename,
+      subfolder: 'ArToolbox/PDF',
+      mimeType: 'application/pdf',
+    });
   };
 
   return (

@@ -653,3 +653,81 @@ export async function downloadMedia({
     return { success: true, direct: true };
   }
 }
+
+/**
+ * Simpan file dari ArToolbox (QR Code, Image Studio, PDF Maker) langsung ke Storage HP (Downloads/ArToolbox/...)
+ * @param {Object} options
+ * @param {Blob|Uint8Array|string} options.data - Data URL, Blob, atau Uint8Array
+ * @param {string} options.filename - Nama file output
+ * @param {string} [options.subfolder='ArToolbox'] - Subfolder di bawah Download (e.g. 'ArToolbox/QR', 'ArToolbox/Images', 'ArToolbox/PDF')
+ * @param {string} [options.mimeType] - Mime type file
+ * @returns {Promise<{ success: boolean, path?: string, location?: string }>}
+ */
+export async function saveToolboxBlobFile({ data, filename, subfolder = 'ArToolbox', mimeType = 'application/octet-stream' }) {
+  const settings = getDownloadSettings();
+  const dirName = settings.directory === 'Documents' ? 'Documents' : 'Download';
+  const directoryEnum = settings.directory === 'Documents' ? Directory.Documents : Directory.ExternalPublic;
+  const cleanSub = String(subfolder || 'ArToolbox').trim().replace(/^\/+|\/+$/g, '');
+  const relativePath = cleanSub ? `${cleanSub}/${filename}` : filename;
+  const displayLocation = `${dirName}/${relativePath}`;
+
+  if (isNative()) {
+    try {
+      let base64Data = '';
+      if (typeof data === 'string') {
+        base64Data = data.includes('base64,') ? data.split('base64,')[1] : data;
+      } else if (data instanceof Blob) {
+        base64Data = await blobToBase64(data);
+      } else if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
+        base64Data = uint8ArrayToBase64(data instanceof Uint8Array ? data : new Uint8Array(data));
+      }
+
+      const res = await Filesystem.writeFile({
+        path: relativePath,
+        data: base64Data,
+        directory: directoryEnum,
+        recursive: true,
+      });
+
+      sendDownloadCompleteNotification({
+        title: filename,
+        platform: 'ArToolbox',
+        path: displayLocation,
+      });
+
+      return { success: true, path: res.uri, location: displayLocation };
+    } catch (err) {
+      console.warn('Native toolbox file write failed, falling back to browser download:', err);
+    }
+  }
+
+  // Web Browser Fallback
+  try {
+    let blobUrl = '';
+    if (typeof data === 'string' && data.startsWith('data:')) {
+      blobUrl = data;
+    } else if (data instanceof Blob) {
+      blobUrl = URL.createObjectURL(data);
+    } else if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
+      const blob = new Blob([data], { type: mimeType });
+      blobUrl = URL.createObjectURL(blob);
+    } else {
+      blobUrl = String(data);
+    }
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      if (blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
+    }, 1500);
+
+    return { success: true, location: displayLocation };
+  } catch (err) {
+    console.error('Browser toolbox file download failed:', err);
+    throw err;
+  }
+}

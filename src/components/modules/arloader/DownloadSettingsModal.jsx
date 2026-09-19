@@ -344,35 +344,11 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
           )}
         </div>
 
-        {/* 5. YT-DLP Server URL (Opsional / Self-Hosted) */}
-        <div className="nb-card p-3.5 bg-white space-y-2.5 shadow-[2.5px_2.5px_0px_#121212]">
-          <div>
-            <label className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wide flex items-center gap-1.5">
-              <Server className="w-3.5 h-3.5 text-[#121212]" />
-              <span>5. YT-DLP Server (Opsional)</span>
-            </label>
-            <p className="text-[11px] font-medium text-gray-600 mt-0.5 leading-relaxed">
-              Hubungkan ke server yt-dlp pribadi/lokal Anda untuk mengunduh YouTube dengan kecepatan maksimal dan bebas blokir 410. Kosongkan jika menggunakan server default.
-            </p>
-          </div>
-
-          <input
-            type="text"
-            value={settings.ytDlpServerUrl || ''}
-            onChange={(e) => setSettings((s) => ({ ...s, ytDlpServerUrl: e.target.value }))}
-            placeholder="Contoh: http://192.168.1.50:8787"
-            className="w-full bg-[#F8F5EE] border-2 border-black rounded-xl p-2.5 text-xs font-mono-code font-bold text-[#121212] focus:outline-none shadow-[1.5px_1.5px_0px_#121212]"
-          />
-          <p className="text-[10px] text-gray-500 font-mono-code">
-            * Tips: Jalankan <code className="bg-gray-200 px-1 rounded text-black font-bold">npm run downloader</code> di laptop/server lokal dalam satu jaringan Wi-Fi.
-          </p>
-        </div>
-
-        {/* 6. Informasi Pembuat & Kontak */}
+        {/* 5. Informasi Pembuat & Kontak */}
         <div className="nb-card p-3.5 bg-white space-y-2.5 shadow-[2.5px_2.5px_0px_#121212]">
           <div>
             <label className="font-mono-code font-black text-xs text-[#121212] uppercase tracking-wide block">
-              6. Informasi Pembuat & Kontak
+              5. Informasi Pembuat & Kontak
             </label>
             <p className="text-[11px] font-medium text-gray-600 mt-0.5 leading-relaxed">
               Hubungi pengembang atau ikuti kanal resmi Aruthtale:

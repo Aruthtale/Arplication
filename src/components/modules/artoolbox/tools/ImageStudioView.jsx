@@ -4,6 +4,7 @@ import {
   Check, RefreshCw, Layers, Zap, Eye, Trash2, Maximize2 
 } from 'lucide-react';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
+import { saveToolboxBlobFile } from '../../../../utils/download';
 
 export default function ImageStudioView({ onBack, onRefreshHistory }) {
   const [activeTab, setActiveTab] = useState('compress'); // 'compress' | 'hd'
@@ -184,13 +185,17 @@ export default function ImageStudioView({ onBack, onRefreshHistory }) {
   }, [sourceImage, hdIntensity, contrastBoost, saturationBoost, activeTab]);
 
   // Download Handler
-  const downloadResult = (dataUrl, defaultName = 'image-processed') => {
+  const downloadResult = async (dataUrl, defaultName = 'image-processed') => {
     if (!dataUrl) return;
     const ext = outputFormat === 'image/webp' ? 'webp' : outputFormat === 'image/png' ? 'png' : 'jpg';
-    const link = document.createElement('a');
-    link.download = `${defaultName}-${Date.now()}.${activeTab === 'hd' ? 'png' : ext}`;
-    link.href = dataUrl;
-    link.click();
+    const filename = `${defaultName}-${Date.now()}.${activeTab === 'hd' ? 'png' : ext}`;
+    const mime = activeTab === 'hd' ? 'image/png' : outputFormat;
+    await saveToolboxBlobFile({
+      data: dataUrl,
+      filename,
+      subfolder: 'ArToolbox/Images',
+      mimeType: mime,
+    });
   };
 
   const savingsPercent = originalFile && compressedSize > 0
