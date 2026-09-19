@@ -73,13 +73,18 @@ export default function ToolboxBentoGrid({ onSelectTool, onOpenHistory, historyC
           </button>
         </div>
 
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#121212] uppercase leading-tight">
-            Kumpulan Perkakas Ringkas
-          </h1>
-          <p className="text-xs font-bold text-gray-800 leading-relaxed mt-1">
-            Solusi offline-first serbaguna: pembuatan QR code, pengolahan teks, kalkulator praktis, dan ekstraksi palet warna tanpa koneksi internet.
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white border-2 border-[#121212] flex items-center justify-center shadow-[2px_2px_0px_#121212] overflow-hidden p-1.5 shrink-0">
+            <img src="/artoolbox.png" alt="ArToolbox Emblem" className="w-full h-full object-contain" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[#121212] uppercase leading-tight">
+              Kumpulan Perkakas Ringkas
+            </h1>
+            <p className="text-xs font-bold text-gray-800 leading-relaxed mt-0.5">
+              Solusi offline-first serbaguna: pembuatan QR code, pengolahan foto & PDF, serta ekstraksi palet warna tanpa koneksi internet.
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5 pt-1 text-[11px] font-mono-code font-bold">
