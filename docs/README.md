@@ -238,4 +238,4 @@ For questions, issues, or feature requests:
 ---
 
 *Last updated: 2026-09-19*
-*Version: 0.2.21*
+*Version: 0.3.0*
