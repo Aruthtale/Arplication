@@ -432,7 +432,7 @@ export default function MediaCard({ media, onDownloadComplete }) {
     try {
       await Share.share({
         title: state.filename || 'Media',
-        text: `Arloader Media: ${state.filename || 'Media'}`,
+        text: `Aruthtale Media: ${state.filename || 'Media'}`,
         url: state.filePath,
         dialogTitle: 'Buka atau Bagikan Media',
       });

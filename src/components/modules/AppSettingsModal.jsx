@@ -124,7 +124,7 @@ export default function AppSettingsModal({ isOpen, onClose }) {
                 className="w-full p-2 rounded-xl border-2 border-[#121212] font-mono font-bold text-xs bg-[#F8F5EE] cursor-pointer"
               >
                 <option value="auto">Folder Otomatis (TikTok, YouTube, Instagram, Spotify)</option>
-                <option value="flat">Satu Folder Utama (Download/Arloader)</option>
+                <option value="flat">Satu Folder Utama (Download/Aruthtale)</option>
                 <option value="media_type">Berdasarkan Tipe (Video, Audio, Gambar)</option>
               </select>
             </div>

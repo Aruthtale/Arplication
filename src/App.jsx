@@ -64,7 +64,37 @@ export default function App() {
     };
     window.addEventListener('arNavIntent', handleNavIntent);
 
-    // 4. Listener Tombol Hardware Back Android
+    // 4. Listener untuk OAuth Deep Links (Google OAuth redirect)
+    let appUrlOpenListener = null;
+    try {
+      CapacitorApp.addListener('appUrlOpen', (data) => {
+        const url = data.url;
+        
+        // Cek apakah ini OAuth callback
+        if (url.startsWith('com.aruthtale.arplication://oauth-callback')) {
+          try {
+            const urlObj = new URL(url);
+            const code = urlObj.searchParams.get('code');
+            const state = urlObj.searchParams.get('state');
+            
+            if (code && state) {
+              // Dispatch custom event untuk youtubeMusicAuth.js
+              window.dispatchEvent(new CustomEvent('oauth-callback', {
+                detail: { code, state }
+              }));
+            }
+          } catch (err) {
+            console.error('Failed to parse OAuth callback URL:', err);
+          }
+        }
+      }).then((handle) => {
+        appUrlOpenListener = handle;
+      }).catch(() => {});
+    } catch (err) {
+      console.log('App URL Open listener setup bypassed on web:', err);
+    }
+
+    // 5. Listener Tombol Hardware Back Android
     let backListenerHandle = null;
     try {
       CapacitorApp.addListener('backButton', () => {
@@ -105,6 +135,9 @@ export default function App() {
       window.removeEventListener('arNavIntent', handleNavIntent);
       if (backListenerHandle && typeof backListenerHandle.remove === 'function') {
         backListenerHandle.remove();
+      }
+      if (appUrlOpenListener && typeof appUrlOpenListener.remove === 'function') {
+        appUrlOpenListener.remove();
       }
     };
   }, []);

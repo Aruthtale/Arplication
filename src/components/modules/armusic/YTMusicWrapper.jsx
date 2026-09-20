@@ -14,12 +14,13 @@ export default function YTMusicWrapper(props) {
   const [authState, setAuthState] = useState(null);
 
   useEffect(() => {
+    // DISABLED: Paksa guest mode untuk sementara
     // Check apakah user sudah login sebelumnya
-    const savedAuth = loadAuthState();
-    if (savedAuth) {
-      setAuthState(savedAuth);
-      setMode('authenticated');
-    }
+    // const savedAuth = loadAuthState();
+    // if (savedAuth) {
+    //   setAuthState(savedAuth);
+    //   setMode('authenticated');
+    // }
   }, []);
 
   const handleModeToggle = () => {
@@ -34,7 +35,8 @@ export default function YTMusicWrapper(props) {
 
   return (
     <div className="space-y-3">
-      {/* Mode toggle header */}
+      {/* Mode toggle header - HIDDEN untuk sementara, langsung guest mode */}
+      {false && (
       <div className="flex items-center justify-between p-2 rounded-lg bg-[#F8F5EE] border border-black">
         <div className="flex items-center gap-2">
           {mode === 'guest' ? (
@@ -56,6 +58,7 @@ export default function YTMusicWrapper(props) {
           {mode === 'guest' ? '🔐 Login' : '🔓 Guest Mode'}
         </button>
       </div>
+      )}
 
       {/* Render appropriate view */}
       {mode === 'guest' ? (

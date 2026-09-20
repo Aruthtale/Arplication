@@ -107,7 +107,7 @@ export default function ArMusicModule({ setActiveTab }) {
   const [elapsed, setElapsed] = useState(0);
   const [duration, setDuration] = useState(0);
   const [order, setOrder] = useState([]); // index order untuk shuffle
-  const [musicView, setMusicView] = useState('semua'); // semua | artis | folder | playlist — sub-navbar ala Spotify
+  const [musicView, setMusicView] = useState('semua'); // semua | artis | folder | playlist | ytmusic — sub-navbar ala Spotify
   const [showLyrics, setShowLyrics] = useState(false);
   const [lyricsState, setLyricsState] = useState({ status: 'idle', synced: [], plain: '', instrumental: false }); // idle | loading | ready | notfound | error
   // Fase 2: EQ + sleep timer + playlist
@@ -669,7 +669,7 @@ export default function ArMusicModule({ setActiveTab }) {
       persist(mergeScanResults(loadLibrary(), scanned));
       setScanMsg(scanned.length > 0
         ? `Selesai: ${scanned.length} lagu ditemukan.`
-        : 'Selesai: tidak ada file audio di folder Arloader/Music.');
+        : 'Selesai: tidak ada file audio di folder Aruthtale/Music.');
     } catch (e) {
       setError(e?.message || 'Scan gagal.');
     } finally {
@@ -950,7 +950,7 @@ export default function ArMusicModule({ setActiveTab }) {
             ArMusic
           </h1>
           <p className="text-xs font-bold text-gray-800 leading-relaxed mt-1">
-            Pemutar lagu lokal dari storage HP — hasil unduhan Arloader & file musikmu, 100% offline.
+            Pemutar lagu lokal dari storage HP — hasil unduhan Aruthtale & file musikmu, 100% offline.
           </p>
         </div>
         {/* Search */}
@@ -968,7 +968,7 @@ export default function ArMusicModule({ setActiveTab }) {
           <button
             onClick={handleScan}
             disabled={scanning || !isNative()}
-            title={isNative() ? 'Scan folder Arloader & Music' : 'Scan hanya tersedia di aplikasi Android'}
+            title={isNative() ? 'Scan folder Aruthtale & Music' : 'Scan hanya tersedia di aplikasi Android'}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#38E54D] border-2 border-[#121212] shadow-[2px_2px_0px_#121212] text-xs font-black uppercase hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all disabled:opacity-50"
           >
             {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanLine className="w-4 h-4" />}
@@ -1111,7 +1111,7 @@ export default function ArMusicModule({ setActiveTab }) {
             </h3>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
-            {[['semua', 'Semua'], ['artis', 'Artis'], ['folder', 'Folder'], ['playlist', `Playlist (${playlists.length})`]].map(([v, label]) => (
+            {[['semua', 'Semua'], ['artis', 'Artis'], ['folder', 'Folder'], ['playlist', `Playlist (${playlists.length})`], ['ytmusic', '🎵 YouTube Music']].map(([v, label]) => (
               <button
                 key={v}
                 onClick={() => setMusicView(v)}
@@ -1142,7 +1142,7 @@ export default function ArMusicModule({ setActiveTab }) {
                 </p>
                 <p className="text-xs font-medium text-gray-500 max-w-xs mx-auto">
                   {tracks.length === 0
-                    ? 'Ketuk "Scan Storage" untuk memindai hasil unduhan Arloader, atau "Pilih File" untuk menambah manual.'
+                    ? 'Ketuk "Scan Storage" untuk memindai hasil unduhan Aruthtale, atau "Pilih File" untuk menambah manual.'
                     : 'Coba kata kunci lain.'}
                 </p>
               </div>
@@ -1316,6 +1316,28 @@ export default function ArMusicModule({ setActiveTab }) {
               </div>
             )}
           </div>
+        )}
+
+        {musicView === 'ytmusic' && (
+          <YTMusicWrapper
+            playTrack={playTrack}
+            onDownload={(metadata) => {
+              // Refresh library setelah download selesai
+              if (metadata?.downloadPath) {
+                console.log('YouTube Music track downloaded:', metadata);
+                // Trigger library refresh
+                setTimeout(() => {
+                  const refreshed = loadLibrary();
+                  setTracks(refreshed);
+                }, 500); // Delay 500ms biar file system sudah sync
+              }
+            }}
+            currentId={currentId}
+            playing={playing}
+            onPlayError={(err) => {
+              console.error('YouTube Music play error:', err);
+            }}
+          />
         )}
       </div>
 

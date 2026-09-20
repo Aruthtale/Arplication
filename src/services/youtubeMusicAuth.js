@@ -13,19 +13,20 @@ import { isNative } from './http.js';
  * 5. Exchange auth code → access token + refresh token
  */
 
-const CLIENT_ID = isNative()
-  ? import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID
-  : import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID;
+// Gunakan Web Client ID untuk semua platform (karena butuh custom scheme redirect)
+// Android Client ID tidak support custom redirect URI
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID;
 
-const CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET; // Only for web
+const CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
 
-const REDIRECT_URI = isNative() 
+// Redirect URI per platform
+const REDIRECT_URI = isNative()
   ? 'com.aruthtale.arplication:/oauth-callback'
   : 'http://localhost:5173/oauth-callback';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/youtube.readonly',
-  'https://www.googleapis.com/auth/youtubepartner', // Optional: untuk liked songs
+  // NOTE: youtubepartner scope butuh Google verification, tidak bisa di testing mode
 ].join(' ');
 
 const AUTH_STORAGE_KEY = 'ytmusic_auth';
@@ -243,15 +244,11 @@ async function exchangeCodeForToken(code, codeVerifier) {
   const params = {
     code,
     client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
     redirect_uri: REDIRECT_URI,
     grant_type: 'authorization_code',
     code_verifier: codeVerifier,
   };
-  
-  // Web mode butuh client_secret
-  if (!isNative() && CLIENT_SECRET) {
-    params.client_secret = CLIENT_SECRET;
-  }
   
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',

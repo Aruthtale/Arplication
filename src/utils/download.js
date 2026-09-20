@@ -196,7 +196,7 @@ export function formatDownloadError(err) {
     return 'Akses ditolak — sesi kedaluwarsa. Perbarui IG Session ID di Pengaturan lalu coba lagi.';
   }
   if (/410|gone/i.test(msg)) {
-    return 'Tautan stream kedaluwarsa (410 Gone). Arloader sedang merefresh link YouTube otomatis — coba klik lagi jika belum tersimpan.';
+    return 'Tautan stream kedaluwarsa (410 Gone). Aruthtale sedang merefresh link YouTube otomatis — coba klik lagi jika belum tersimpan.';
   }
   if (/404|expired|not found/i.test(msg)) {
     return 'Tautan kedaluwarsa atau media sudah dihapus. Ambil ulang link terbaru lalu coba lagi.';
@@ -295,16 +295,16 @@ export function resolveSubfolderPath(rawFolder, platformName = '') {
   const safePlatform = formatPlatformFolderName(platformName);
 
   if (!str) {
-    str = 'Arloader/{platform}';
+    str = 'Aruthtale/{platform}';
   }
 
   if (str.includes('{platform}')) {
     str = str.replace(/\{platform\}/gi, safePlatform || 'General');
   } else if (
-    /^Arloader\/(TikTok|Spotify|YouTube|Instagram|Twitter|Pinterest|Media|General)$/i.test(str) ||
-    str.toLowerCase() === 'arloader'
+    /^Aruthtale\/(TikTok|Spotify|YouTube|Instagram|Twitter|Pinterest|Media|General)$/i.test(str) ||
+    str.toLowerCase() === 'aruthtale'
   ) {
-    str = `Arloader/${safePlatform || 'General'}`;
+    str = `Aruthtale/${safePlatform || 'General'}`;
   }
 
   // Path traversal guard: split on slashes, strip relative dots, and sanitize each segment
@@ -568,7 +568,7 @@ export async function downloadMedia({
         try {
           await Share.share({
             title: safeFilename,
-            text: `Downloaded with Arloader: ${safeFilename}`,
+            text: `Downloaded with Aruthtale: ${safeFilename}`,
             url: resPath,
             dialogTitle: 'Buka atau Bagikan Media',
           });

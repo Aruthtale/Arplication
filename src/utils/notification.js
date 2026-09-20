@@ -51,12 +51,11 @@ export async function ensureNotificationChannel() {
       // Android bersifat PERSISTEN: createChannel tidak menimpa config lama.
       // (Channel lama menyimpan sound raw/default yang tidak ada di res/.)
       await LocalNotifications.deleteChannel({ id: 'arloader_downloads' }).catch(() => {});
-      await LocalNotifications.deleteChannel({ id: 'ardoro_timer' }).catch(() => {});
-      // Arloader channel (tanpa sound kustom — pakai bunyi default sistem)
+      // Aruthtale channel (tanpa sound kustom — pakai bunyi default sistem)
       await LocalNotifications.createChannel({
-        id: 'arloader_downloads',
-        name: 'Arloader Unduhan',
-        description: 'Notifikasi status penyelesaian unduhan media Arloader',
+        id: 'arloader_download',
+        name: 'Aruthtale Unduhan',
+        description: 'Notifikasi status penyelesaian unduhan media Aruthtale',
         importance: 4, // High importance (banner notification)
         visibility: 1, // Public on lockscreen
         vibration: true,
@@ -94,7 +93,7 @@ export async function sendDownloadCompleteNotification({ title = '', platform = 
     if (!ok) return;
 
     const cleanTitle = title ? (title.length > 35 ? title.slice(0, 35) + '...' : title) : 'Media';
-    const platName = platform ? (platform.charAt(0).toUpperCase() + platform.slice(1)) : 'Arloader';
+    const platName = platform ? (platform.charAt(0).toUpperCase() + platform.slice(1)) : 'Aruthtale';
 
     // Hapus notifikasi error sebelumnya agar tidak menumpuk
     await LocalNotifications.cancel({
@@ -127,7 +126,7 @@ export async function sendDownloadErrorNotification({ title = '', platform = '',
     if (!ok) return;
 
     const cleanTitle = title ? (title.length > 30 ? title.slice(0, 30) + '...' : title) : 'Media';
-    const platName = platform ? (platform.charAt(0).toUpperCase() + platform.slice(1)) : 'Arloader';
+    const platName = platform ? (platform.charAt(0).toUpperCase() + platform.slice(1)) : 'Aruthtale';
 
     // Batalkan notifikasi error sebelumnya agar selalu update di 1 notifikasi tunggal (tidak menumpuk)
     await LocalNotifications.cancel({

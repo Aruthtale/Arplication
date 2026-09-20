@@ -256,7 +256,7 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
               <span>Apa itu Session ID dan untuk apa fungsinya?</span>
             </div>
             <p className="text-[10px] text-gray-600">
-              Instagram sering membatasi unduhan untuk <strong>Story, Reel tertentu, atau akun Private / Close Friends</strong> jika tidak login. Session ID adalah kunci login sementara akun Anda yang mengizinkan Arloader mengunduh postingan tersebut.
+              Instagram sering membatasi unduhan untuk <strong>Story, Reel tertentu, atau akun Private / Close Friends</strong> jika tidak login. Session ID adalah kunci login sementara akun Anda yang mengizinkan Aruthtale mengunduh postingan tersebut.
             </p>
             <div className="flex items-center gap-1 text-emerald-800 font-bold text-[10px] pt-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -332,7 +332,7 @@ export default function DownloadSettingsModal({ isOpen, onClose }) {
                     <li>Pasang ekstensi gratis <strong>Cookie-Editor</strong> dari Chrome Web Store.</li>
                     <li>Buka <strong>instagram.com</strong> dan login ke akun Anda.</li>
                     <li>Buka ekstensi Cookie-Editor, cari item bernama <strong>sessionid</strong>, lalu salin isinya.</li>
-                    <li>Kembali ke Arloader dan tempelkan di kotak isian di atas.</li>
+                    <li>Kembali ke Aruthtale dan tempelkan di kotak isian di atas.</li>
                   </ol>
                 </div>
               )}

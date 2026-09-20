@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Music, Play, Pause, Download, Loader2, AlertCircle, Heart, Clock, User, LogOut,
+  Music, Play, Pause, Download, Loader2, AlertCircle, Heart, Clock, User, LogOut, Sparkles,
 } from 'lucide-react';
 import { loginYouTubeMusic, logoutYouTubeMusic, loadAuthState } from '../../../services/youtubeMusicAuth.js';
 import { getLibrary, getLikedSongs, searchAuthenticated, getRecommendations } from '../../../services/youtubeMusicClient.js';

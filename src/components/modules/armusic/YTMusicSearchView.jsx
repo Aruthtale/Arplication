@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, X, Loader2, Play, Pause, Download, Music, AlertCircle,
-  ChevronRight, Clock, User, Sparkles,
+  ChevronRight, Clock, User, Sparkles, CheckCircle,
 } from 'lucide-react';
 import { searchYouTubeMusic, resolveYouTubeMusicAudioUrl } from '../../../services/musicStream.js';
 import { isBotBlockError, formatResolverError } from '../../../services/scrapers/youtube.js';
 import { formatTrackDuration } from '../../../services/localMusic.js';
+import { downloadMedia } from '../../../utils/download.js';
+import { addDownloadRecord } from '../../../utils/history.js';
 
 const RECENT_KEY = 'yt_music_recent_searches';
 const MAX_RECENT = 10;
@@ -36,6 +38,9 @@ export default function YTMusicSearchView({ playTrack, onDownload, currentId, pl
   const [recent, setRecent] = useState(() => loadRecent());
   const [resolvingId, setResolvingId] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadProgress, setDownloadProgress] = useState({});
+  const [downloadedIds, setDownloadedIds] = useState(new Set());
   const inputRef = useRef(null);
   const searchAbortRef = useRef(0);
   const isMountedRef = useRef(true);
@@ -142,18 +147,89 @@ export default function YTMusicSearchView({ playTrack, onDownload, currentId, pl
     }
   };
 
-  const handleDownload = (track) => {
-    if (!track?.videoId) return;
-    if (onDownload) {
-      onDownload({
+  const handleDownload = async (track) => {
+    if (!track?.videoId || downloadingId) return;
+    setDownloadingId(track.videoId);
+    setDownloadProgress({ [track.videoId]: { percent: 0, status: 'Memulai download...' } });
+
+    try {
+      // Resolve audio URL dulu
+      const audioUrl = await resolveYouTubeMusicAudioUrl({
         videoId: track.videoId,
-        title: track.title,
-        artist: track.artist || 'YouTube Music',
-        url: `https://music.youtube.com/watch?v=${track.videoId}`,
-        youtubeUrl: `https://www.youtube.com/watch?v=${track.videoId}`,
-        cover: track.cover,
-        duration: track.duration,
+        query: `${track.title} ${track.artist}`,
+        onProgress: (pct, msg) => {
+          if (pct < 100) {
+            setDownloadProgress({ [track.videoId]: { percent: pct, status: msg || 'Resolving...' } });
+          }
+        },
       });
+
+      if (!audioUrl) {
+        throw new Error('Gagal mendapatkan stream audio');
+      }
+
+      // Download file
+      const filename = `${track.title} - ${track.artist || 'YouTube Music'}.mp3`;
+      const downloadPath = await downloadMedia({
+        url: audioUrl,
+        filename,
+        platform: 'youtube',
+        subfolder: 'Aruthtale',
+        onProgress: (pct, msg) => {
+          setDownloadProgress({ [track.videoId]: { percent: pct, status: msg } });
+        },
+      });
+
+      // Save ke download history
+      addDownloadRecord({
+        url: `https://music.youtube.com/watch?v=${track.videoId}`,
+        platform: 'YouTube Music',
+        title: track.title,
+        artist: track.artist,
+        cover: track.cover,
+        downloadPath,
+        timestamp: Date.now(),
+      });
+
+      // Mark sebagai downloaded
+      setDownloadedIds((prev) => new Set(prev).add(track.videoId));
+      setDownloadProgress({ [track.videoId]: { percent: 100, status: 'Selesai!' } });
+
+      // Trigger refresh library ArMusic (via onDownload callback)
+      if (onDownload) {
+        onDownload({
+          videoId: track.videoId,
+          title: track.title,
+          artist: track.artist,
+          downloadPath,
+        });
+      }
+
+      // Clear progress setelah 2 detik
+      setTimeout(() => {
+        setDownloadProgress((prev) => {
+          const next = { ...prev };
+          delete next[track.videoId];
+          return next;
+        });
+      }, 2000);
+    } catch (err) {
+      console.error('Download failed:', err);
+      setDownloadProgress({
+        [track.videoId]: {
+          percent: 0,
+          status: `Error: ${err.message || 'Download gagal'}`,
+        },
+      });
+      setTimeout(() => {
+        setDownloadProgress((prev) => {
+          const next = { ...prev };
+          delete next[track.videoId];
+          return next;
+        });
+      }, 3000);
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -260,46 +336,80 @@ export default function YTMusicSearchView({ playTrack, onDownload, currentId, pl
       {results.map((track) => {
         const playingNow = isTrackPlaying(track.videoId);
         const isCurrent = isTrackCurrent(track.videoId);
+        const isDownloading = downloadingId === track.videoId;
+        const progress = downloadProgress[track.videoId];
+        const isDownloaded = downloadedIds.has(track.videoId);
+        
         return (
-          <div
-            key={track.videoId}
-            onClick={() => handlePlay(track)}
-            className={`nb-card p-2.5 flex items-center gap-2.5 cursor-pointer transition-all shadow-[1.5px_1.5px_0px_#121212] ${isCurrent ? 'bg-[#FFE600]' : 'bg-[#F8F5EE] hover:bg-white'}`}
-          >
-            <div className="w-11 h-11 rounded-lg overflow-hidden border border-black bg-[#D8B4FE] shrink-0 flex items-center justify-center shadow-[1px_1px_0px_#121212]">
-              {track.cover ? (
-                <img src={track.cover} alt={track.title} className="w-full h-full object-cover" loading="lazy" />
-              ) : (
-                <Music className="w-5 h-5 text-[#121212]" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className={`text-xs font-black truncate ${isCurrent ? 'text-[#121212]' : 'text-[#121212]'}`}>{track.title}</p>
-              <p className="text-[10px] font-mono-code font-bold text-gray-500 truncate flex items-center gap-1">
-                <User className="w-2.5 h-2.5" />
-                {track.artist}{track.durationFormatted ? ` • ${track.durationFormatted}` : ''}
-              </p>
-            </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); handlePlay(track); }}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-black shadow-[1px_1px_0px_#121212] ${playingNow ? 'bg-[#121212] text-[#FFE600]' : 'bg-white text-[#121212] hover:bg-[#FFE600]'}`}
-              title={playingNow ? 'Sedang diputar' : 'Putar'}
+          <div key={track.videoId} className="space-y-1">
+            <div
+              onClick={() => handlePlay(track)}
+              className={`nb-card p-2.5 flex items-center gap-2.5 cursor-pointer transition-all shadow-[1.5px_1.5px_0px_#121212] ${isCurrent ? 'bg-[#FFE600]' : 'bg-[#F8F5EE] hover:bg-white'}`}
             >
-              {resolvingId === track.videoId ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : playingNow ? (
-                <Pause className="w-3.5 h-3.5" />
-              ) : (
-                <Play className="w-3.5 h-3.5 ml-0.5" />
-              )}
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDownload(track); }}
-              className="w-8 h-8 rounded-lg bg-white hover:bg-[#38E54D] border border-black flex items-center justify-center text-[#121212] shrink-0 shadow-[1px_1px_0px_#121212]"
-              title="Unduh ke koleksi"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
+              <div className="w-11 h-11 rounded-lg overflow-hidden border border-black bg-[#D8B4FE] shrink-0 flex items-center justify-center shadow-[1px_1px_0px_#121212]">
+                {track.cover ? (
+                  <img src={track.cover} alt={track.title} className="w-full h-full object-cover" loading="lazy" />
+                ) : (
+                  <Music className="w-5 h-5 text-[#121212]" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs font-black truncate ${isCurrent ? 'text-[#121212]' : 'text-[#121212]'}`}>{track.title}</p>
+                <p className="text-[10px] font-mono-code font-bold text-gray-500 truncate flex items-center gap-1">
+                  <User className="w-2.5 h-2.5" />
+                  {track.artist}{track.durationFormatted ? ` • ${track.durationFormatted}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); handlePlay(track); }}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-black shadow-[1px_1px_0px_#121212] ${playingNow ? 'bg-[#121212] text-[#FFE600]' : 'bg-white text-[#121212] hover:bg-[#FFE600]'}`}
+                title={playingNow ? 'Sedang diputar' : 'Putar'}
+              >
+                {resolvingId === track.videoId ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : playingNow ? (
+                  <Pause className="w-3.5 h-3.5" />
+                ) : (
+                  <Play className="w-3.5 h-3.5 ml-0.5" />
+                )}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDownload(track); }}
+                disabled={isDownloading}
+                className={`w-8 h-8 rounded-lg border border-black flex items-center justify-center shrink-0 shadow-[1px_1px_0px_#121212] ${
+                  isDownloaded 
+                    ? 'bg-[#38E54D] text-[#121212]' 
+                    : isDownloading 
+                    ? 'bg-gray-200 text-gray-400' 
+                    : 'bg-white text-[#121212] hover:bg-[#38E54D]'
+                }`}
+                title={isDownloaded ? 'Sudah diunduh' : isDownloading ? 'Mengunduh...' : 'Unduh ke koleksi'}
+              >
+                {isDownloading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : isDownloaded ? (
+                  <CheckCircle className="w-3.5 h-3.5" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+            
+            {/* Download progress bar */}
+            {progress && (
+              <div className="px-2 py-1.5 bg-white border border-black rounded-lg shadow-[1px_1px_0px_#121212] text-[10px] font-mono-code space-y-1">
+                <div className="flex items-center justify-between font-bold">
+                  <span className="text-[#121212]">{progress.status}</span>
+                  <span className="text-[#38E54D]">{progress.percent}%</span>
+                </div>
+                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden border border-black">
+                  <div 
+                    className="h-full bg-[#38E54D] transition-all duration-300"
+                    style={{ width: `${progress.percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         );
       })}

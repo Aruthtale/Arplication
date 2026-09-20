@@ -103,10 +103,6 @@ export function removeTrack(tracks = [], id) {
 }
 
 /**
- * Scan folder hasil unduhan Arloader di storage HP (native only).
- * Menjelajah Download/Arloader/* dan folder Music, kedalaman maks 3 level.
- */
-/**
  * Jumlah file per batch sebelum yield ke event loop.
  * Mencegah ANR/jank UI saat folder berisi ratusan file: tiap batch beri
  * kesempatan ke render loop + izinkan onProgress update.
@@ -117,13 +113,17 @@ function yieldToEventLoop() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * Scan folder hasil unduhan Aruthtale di storage HP (native only).
+ * Menjelajah Download/Aruthtale/* dan folder Music, kedalaman maks 3 level.
+ */
 export async function scanLocalAudio({ onProgress } = {}) {
   if (!isNative()) {
     throw new Error('Scan storage hanya tersedia di aplikasi Android.');
   }
   await Filesystem.requestPermissions().catch(() => {});
 
-  const roots = ['Download/Aruthtale', 'Download/Arloader', 'Music', 'Download'];
+  const roots = ['Download/Aruthtale', 'Music', 'Download'];
   const found = [];
   const queue = roots.map((r) => ({ path: r, depth: 0 }));
   const seen = new Set();
