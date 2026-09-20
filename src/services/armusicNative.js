@@ -331,3 +331,57 @@ export function formatSleepRemaining(remainingMs) {
   const s = totalSec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+/**
+ * Web Media Session API stubs (untuk web playback control di notifikasi browser)
+ * Di native: no-op karena sudah pakai MediaStyle notification
+ */
+export function publishNowPlaying(metadata) {
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: metadata?.title || 'Unknown',
+        artist: metadata?.artist || 'Unknown',
+        album: metadata?.album || '',
+        artwork: metadata?.artwork || [],
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+}
+
+export function setPlaybackState(playing) {
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+    } catch (e) {
+      // ignore
+    }
+  }
+}
+
+export function setPositionState(state) {
+  if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: state?.duration || 0,
+        playbackRate: state?.playbackRate || 1.0,
+        position: state?.position || 0,
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+}
+
+export function clearNowPlaying() {
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = 'none';
+    } catch (e) {
+      // ignore
+    }
+  }
+}

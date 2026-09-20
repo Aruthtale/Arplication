@@ -31,7 +31,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Route Intent actions (widget click, etc.) to the WebView and plugin storage.
+     * Route Intent actions (widget click, OAuth callback, etc.) to the WebView and plugin storage.
      */
     private void handleNavigationIntent(Intent intent) {
         if (intent == null) {
@@ -40,6 +40,29 @@ public class MainActivity extends BridgeActivity {
 
         String action = intent.getAction();
         Log.i(TAG, "handleNavigationIntent action: " + action);
+        
+        // Handle OAuth callback (YouTube Music Login)
+        if (Intent.ACTION_VIEW.equals(action)) {
+            android.net.Uri data = intent.getData();
+            if (data != null && "com.aruthtale.arplication".equals(data.getScheme()) 
+                && "oauth-callback".equals(data.getHost())) {
+                String code = data.getQueryParameter("code");
+                String state = data.getQueryParameter("state");
+                Log.i(TAG, "OAuth callback received: code=" + (code != null ? "present" : "null"));
+                
+                // Dispatch custom event ke WebView
+                Bridge bridge = getBridge();
+                if (bridge != null) {
+                    JSObject eventData = new JSObject();
+                    eventData.put("code", code);
+                    eventData.put("state", state);
+                    bridge.triggerWindowJSEvent("oauth-callback", eventData.toString());
+                }
+                return;
+            }
+        }
+        
+        // Handle widget actions
         if (ACTION_OPEN_NOTE.equals(action) || ACTION_CREATE_NOTE.equals(action)) {
             String noteId = intent.getStringExtra("note_id");
             // Store in plugin for cold-start / direct fetch

@@ -6,32 +6,12 @@ import {
   SlidersHorizontal, Timer, TimerOff, ListPlus, Plus, X, Pencil, Check,
 } from 'lucide-react';
 import { isNative } from '../../../services/http.js';
-import {
-  loadLibrary, saveLibrary, removeTrack, mergeScanResults,
-  scanLocalAudio, toPlayableSrc, formatTrackDuration, isAudioFilename,
-} from '../../../services/localMusic.js';
-import {
-  publishNowPlaying, setPlaybackState, setPositionState, clearNowPlaying,
-} from '../../../services/mediaSession.js';
-import {
-  showNativeNowPlaying, dismissNativeNowPlaying, onNativeMediaControl,
-  nativePlaybackSupported, shouldUseNativePlayback,
-  playNativeQueue, updateNativeQueue, pauseNativePlayback, resumeNativePlayback,
-  nextNativeTrack, prevNativeTrack, stopNativePlayback,
-  seekNativePlayback, getNativePlaybackState,
-  getNativeEqualizer, setNativeEqualizerEnabled, setNativeEqualizerBand,
-  setNativeEqualizerPreset, setNativeSleepTimer, getNativeSleepTimer,
-  formatEqFreq, formatEqGain, formatSleepRemaining,
-} from '../../../services/armusicNative.js';
-import {
-  loadPlaylists, savePlaylists, createPlaylist, renamePlaylist, deletePlaylist,
-  addTrackToPlaylist, removeTrackFromPlaylist, resolvePlaylistTracks,
-  purgeTrackFromPlaylists, isTrackInPlaylist, groupTracksBy,
-} from '../../../services/playlistManager.js';
-import {
-  fetchLyrics, activeLyricIndex,
-} from '../../../services/lyrics.js';
+import { loadLibrary, saveLibrary, removeTrack, mergeScanResults, scanLocalAudio, toPlayableSrc, formatTrackDuration, isAudioFilename, } from '../../../services/localMusic.js';
+import { publishNowPlaying, setPlaybackState, setPositionState, clearNowPlaying, showNativeNowPlaying, dismissNativeNowPlaying, onNativeMediaControl, nativePlaybackSupported, shouldUseNativePlayback, playNativeQueue, updateNativeQueue, pauseNativePlayback, resumeNativePlayback, nextNativeTrack, prevNativeTrack, stopNativePlayback, seekNativePlayback, getNativePlaybackState, getNativeEqualizer, setNativeEqualizerEnabled, setNativeEqualizerBand, setNativeEqualizerPreset, setNativeSleepTimer, getNativeSleepTimer, formatEqFreq, formatEqGain, formatSleepRemaining, } from '../../../services/armusicNative.js';
+import { loadPlaylists, savePlaylists, createPlaylist, renamePlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, resolvePlaylistTracks, purgeTrackFromPlaylists, isTrackInPlaylist, groupTracksBy, } from '../../../services/playlistManager.js';
+import { fetchLyrics, activeLyricIndex, } from '../../../services/lyrics.js';
 import { registerBackHandler } from '../../../services/backHandler.js';
+import YTMusicWrapper from './YTMusicWrapper.jsx';
 
 function filterTracks(tracks, query) {
   const q = String(query || '').toLowerCase().trim();
