@@ -97,7 +97,7 @@ export default function ImageStudioView({ onBack, onRefreshHistory }) {
 
   useEffect(() => {
     if (sourceImage && activeTab === 'compress') {
-      processCompression();
+      queueMicrotask(() => processCompression());
     }
   }, [sourceImage, quality, outputFormat, scalePercent, activeTab]);
 
@@ -180,7 +180,7 @@ export default function ImageStudioView({ onBack, onRefreshHistory }) {
 
   useEffect(() => {
     if (sourceImage && activeTab === 'hd') {
-      processHdEnhance();
+      queueMicrotask(() => processHdEnhance());
     }
   }, [sourceImage, hdIntensity, contrastBoost, saturationBoost, activeTab]);
 

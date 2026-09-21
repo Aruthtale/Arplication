@@ -36,3 +36,21 @@ export async function stopForegroundTimer() {
     console.warn('Failed to stop foreground timer:', e);
   }
 }
+
+/**
+ * Dengarkan event TIMER_COMPLETE dari Android Foreground Service.
+ * @param {Function} callback - ({ phase }) => void
+ * @returns {Promise<{ remove: Function }>} handle untuk unsubscribe
+ */
+export async function addTimerCompleteListener(callback) {
+  if (!isNative() || typeof callback !== 'function') {
+    return { remove: () => {} };
+  }
+  try {
+    const handle = await TimerService.addListener('timerComplete', callback);
+    return handle;
+  } catch (e) {
+    console.warn('Failed to add timerComplete listener:', e);
+    return { remove: () => {} };
+  }
+}

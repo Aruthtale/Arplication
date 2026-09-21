@@ -1,8 +1,6 @@
 import { httpClient, isLocalWeb, isNative } from './http.js';
 import {
   resolveYouTubeAudioUrl as youtubeResolveAudioUrl,
-  isBotBlockError,
-  formatResolverError,
 } from './scrapers/youtube.js';
 import { pickYouTubeMusicAudioUrl, searchYouTubeMusic } from './scrapers/youtubeMusic.js';
 
@@ -185,7 +183,6 @@ async function resolveConvert1s(videoId, quality, onProgress) {
   };
 
   // Kirim request ke Convert1s API
-  const isVideo = false;
   const outQuality = quality ? (quality.endsWith('p') ? quality : `${quality}p`) : '128';
 
   const convRes = await httpClient({

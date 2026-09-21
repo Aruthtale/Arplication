@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, X, Loader2, Play, Pause, Download, Music, AlertCircle,
-  ChevronRight, Clock, User, Sparkles, CheckCircle,
+  Clock, User, Sparkles, CheckCircle,
 } from 'lucide-react';
 import { searchYouTubeMusic, resolveYouTubeMusicAudioUrl } from '../../../services/musicStream.js';
 import { isBotBlockError, formatResolverError } from '../../../services/scrapers/youtube.js';
-import { formatTrackDuration } from '../../../services/localMusic.js';
 import { downloadMedia } from '../../../utils/download.js';
 import { addDownloadRecord } from '../../../utils/history.js';
 
@@ -170,7 +169,7 @@ export default function YTMusicSearchView({ playTrack, onDownload, currentId, pl
 
       // Download file
       const filename = `${track.title} - ${track.artist || 'YouTube Music'}.mp3`;
-      const downloadPath = await downloadMedia({
+      const downloadRes = await downloadMedia({
         url: audioUrl,
         filename,
         platform: 'youtube',
@@ -179,6 +178,8 @@ export default function YTMusicSearchView({ playTrack, onDownload, currentId, pl
           setDownloadProgress({ [track.videoId]: { percent: pct, status: msg } });
         },
       });
+
+      const downloadPath = typeof downloadRes === 'string' ? downloadRes : (downloadRes?.path || '');
 
       // Save ke download history
       addDownloadRecord({
@@ -201,7 +202,10 @@ export default function YTMusicSearchView({ playTrack, onDownload, currentId, pl
           videoId: track.videoId,
           title: track.title,
           artist: track.artist,
+          cover: track.cover,
+          duration: track.duration,
           downloadPath,
+          filename,
         });
       }
 

@@ -59,13 +59,14 @@ export default function MediaCard({ media, onDownloadComplete }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [media?.id]);
+  }, [media?.id, media?.options]);
 
   // Clean up audio on unmount
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
+      const audioEl = audioRef.current;
+      if (audioEl) {
+        audioEl.pause();
       }
     };
   }, []);

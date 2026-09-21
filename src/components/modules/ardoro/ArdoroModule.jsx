@@ -11,9 +11,10 @@ import {
   saveTimerState, loadTimerState, clearTimerState,
 } from '../../../utils/pomodoro.js';
 import { sendPomodoroPhaseNotification, checkNotificationPermission, requestNotificationPermission } from '../../../utils/notification.js';
-import { startForegroundTimer, stopForegroundTimer } from '../../../services/timerService.js';
+import { startForegroundTimer, stopForegroundTimer, addTimerCompleteListener } from '../../../services/timerService.js';
 import { startAmbientSound, stopAmbientSound, setAmbientVolume, getNoiseTypes, isAmbientPlaying } from '../../../utils/ambientSound.js';
 import { registerBackHandler } from '../../../services/backHandler.js';
+import { saveNote } from '../../../services/notesDb.js';
 
 const PHASE_META = {
   focus: { label: 'FOKUS', chip: 'DEEP FOCUS MODE', color: '#FFE600' },
@@ -76,6 +77,10 @@ export default function ArdoroModule({ setActiveTab }) {
   const endAtRef = useRef(0);
   const tickRef = useRef(null);
   const stateRef = useRef({ phase, focusDone, settings, running });
+  const statsRef = useRef(stats);
+  useEffect(() => {
+    statsRef.current = stats;
+  }, [stats]);
   useEffect(() => {
     stateRef.current = { phase, focusDone, settings, running };
   });
@@ -83,20 +88,88 @@ export default function ArdoroModule({ setActiveTab }) {
   const totalFor = (p) => durationFor(p, settings);
   const summary = summarizeStats(stats);
 
-  // Load timer state on mount (restore from navigation or minimize)
+  const stopTicker = () => {
+    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+  };
+
+  const handlePhaseComplete = () => {
+    const { phase: cur, focusDone: done, settings: s } = stateRef.current;
+    let focusDuration = 0;
+    if (cur === 'focus') {
+      focusDuration = durationFor('focus', s);
+      setStats((prev) => recordFocusSession(prev, focusDuration));
+    }
+    if (s.sound) playChime('end');
+    const next = advancePhase({ phase: cur, focusDone: done }, s.rounds);
+    sendPomodoroPhaseNotification({ phase: cur, nextPhase: next.phase });
+    setPhase(next.phase);
+    setFocusDone(next.focusDone);
+    const nextDuration = durationFor(next.phase, s);
+    setRemaining(nextDuration);
+    if (s.autoContinue) {
+      const nextEndTime = Date.now() + nextDuration * 1000;
+      endAtRef.current = nextEndTime;
+      setRunning(true);
+      startForegroundTimer(nextEndTime, next.phase);
+    } else {
+      setRunning(false);
+      stopTicker();
+      stopForegroundTimer();
+    }
+
+    // Catat sesi fokus ke ArNote (non-blocking, selalu via saveNote)
+    if (cur === 'focus' && focusDuration > 0) {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const doneCount = (statsRef.current?.totalSessions || 0) + 1;
+      saveNote({
+        title: `Sesi Fokus ${today}`,
+        content: `# Refleksi Sesi Fokus\n\n- **Durasi**: ${focusDuration} menit\n- **Waktu**: ${now.toLocaleString('id-ID')}\n- **Fokus selesai**: ${doneCount} sesi\n\n_Yang harus dilakukan besok:_\n- \n\n_Yang dihambat hari ini:_\n- \n`,
+        tags: ['ardoro', 'fokus', 'refleksi'],
+        color: 'yellow',
+        isPinned: false,
+      }).catch(() => {});
+    }
+  };
+
+  const handlePhaseCompleteRef = useRef(null);
+  useEffect(() => {
+    handlePhaseCompleteRef.current = handlePhaseComplete;
+  });
+
+  // Load timer state on mount (restore from navigation or minimize) + pasang listener timerComplete native
   useEffect(() => {
     const saved = loadTimerState();
     if (saved && saved.running) {
       setPhase(saved.phase);
       setFocusDone(saved.focusDone);
-      setRemaining(saved.remaining);
       if (saved.remaining > 0) {
+        setRemaining(saved.remaining);
         endAtRef.current = Date.now() + saved.remaining * 1000;
         setRunning(true);
+      } else {
+        // Selesai saat di background / minimize
+        setRemaining(0);
+        handlePhaseCompleteRef.current?.();
       }
     }
+
+    // Dengarkan event timer selesai dari Android native service
+    let listenerHandle = null;
+    addTimerCompleteListener(() => {
+      handlePhaseCompleteRef.current?.();
+    }).then((handle) => {
+      listenerHandle = handle;
+    });
+
     // Check notification permission status
     checkNotificationPermission().then(setNotifStatus);
+
+    return () => {
+      if (listenerHandle && typeof listenerHandle.remove === 'function') {
+        listenerHandle.remove();
+      }
+    };
   }, []);
 
   // Save timer state on every change (persist across navigation)
@@ -113,27 +186,6 @@ export default function ArdoroModule({ setActiveTab }) {
       clearTimerState();
     }
   }, [running, phase, focusDone, remaining]);
-
-  const stopTicker = () => {
-    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
-  };
-
-  const handlePhaseComplete = useCallback(() => {
-    const { phase: cur, focusDone: done, settings: s } = stateRef.current;
-    if (cur === 'focus') setStats((prev) => recordFocusSession(prev, durationFor('focus', s)));
-    if (s.sound) playChime('end');
-    const next = advancePhase({ phase: cur, focusDone: done }, s.rounds);
-    sendPomodoroPhaseNotification({ phase: cur, nextPhase: next.phase });
-    setPhase(next.phase);
-    setFocusDone(next.focusDone);
-    setRemaining(durationFor(next.phase, s));
-    if (s.autoContinue) {
-      endAtRef.current = Date.now() + durationFor(next.phase, s) * 1000;
-    } else {
-      setRunning(false);
-      stopTicker();
-    }
-  }, []);
 
   // Ticker anti-drift: hitung sisa dari timestamp, bukan decrement.
   useEffect(() => {
@@ -186,6 +238,7 @@ export default function ArdoroModule({ setActiveTab }) {
     setSettings(next);
     setRunning(false);
     stopTicker();
+    stopForegroundTimer();
     setRemaining(durationFor(phase, next));
   };
 
@@ -193,6 +246,9 @@ export default function ArdoroModule({ setActiveTab }) {
     const v = Math.min(120, Math.max(1, Math.floor(Number(minutes) || 0)));
     const next = { ...settings, preset: 'kustom', [key]: v * 60 };
     setSettings(next);
+    setRunning(false);
+    stopTicker();
+    stopForegroundTimer();
     if (phase === key || (key === 'focus' && phase === 'focus')) setRemaining(v * 60);
   };
 
@@ -531,6 +587,19 @@ export default function ArdoroModule({ setActiveTab }) {
             );
           })}
         </div>
+      </div>
+
+      {/* Refleksi Fokus ke ArNote */}
+      <div className="nb-card p-4 bg-[#FFF3C4] space-y-2 shadow-[3px_3px_0px_#121212]">
+        <div className="flex items-center gap-2">
+          <span className="font-mono-code font-black text-xs text-[#121212]">📋 Refleksi Fokus</span>
+          <span className="text-[10px] font-bold text-gray-600 bg-white px-1.5 py-0.5 rounded border border-[#121212]">
+            {summary.totalSessions} catatan tersedia
+          </span>
+        </div>
+        <p className="text-[10px] font-black text-[#121212]">
+          Setiap sesi fokus selesai otomatis dicatat ke ArNote dengan tag #ardoro #fokus — buka ArNote tab untuk melihat & menyunting refleksi.
+        </p>
       </div>
     </div>
   );

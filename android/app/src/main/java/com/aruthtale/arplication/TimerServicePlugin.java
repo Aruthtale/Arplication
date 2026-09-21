@@ -1,6 +1,11 @@
 package com.aruthtale.arplication;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Build;
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -11,6 +16,41 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  */
 @CapacitorPlugin(name = "TimerService")
 public class TimerServicePlugin extends Plugin {
+    private BroadcastReceiver timerReceiver;
+
+    @Override
+    public void load() {
+        super.load();
+        timerReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if ("com.aruthtale.arplication.TIMER_COMPLETE".equals(intent.getAction())) {
+                    String phase = intent.getStringExtra("phase");
+                    JSObject ret = new JSObject();
+                    ret.put("phase", phase);
+                    notifyListeners("timerComplete", ret);
+                }
+            }
+        };
+
+        IntentFilter filter = new IntentFilter("com.aruthtale.arplication.TIMER_COMPLETE");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getContext().registerReceiver(timerReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            getContext().registerReceiver(timerReceiver, filter);
+        }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (timerReceiver != null) {
+            try {
+                getContext().unregisterReceiver(timerReceiver);
+            } catch (Exception ignored) {}
+            timerReceiver = null;
+        }
+        super.handleOnDestroy();
+    }
     
     @PluginMethod
     public void startForegroundTimer(PluginCall call) {

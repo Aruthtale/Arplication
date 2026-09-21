@@ -51,17 +51,19 @@ export async function ensureNotificationChannel() {
       // Android bersifat PERSISTEN: createChannel tidak menimpa config lama.
       // (Channel lama menyimpan sound raw/default yang tidak ada di res/.)
       await LocalNotifications.deleteChannel({ id: 'arloader_downloads' }).catch(() => {});
+      await LocalNotifications.deleteChannel({ id: 'arloader_download' }).catch(() => {});
       // Aruthtale channel (tanpa sound kustom — pakai bunyi default sistem)
       await LocalNotifications.createChannel({
-        id: 'arloader_download',
+        id: 'arloader_downloads',
         name: 'Aruthtale Unduhan',
         description: 'Notifikasi status penyelesaian unduhan media Aruthtale',
         importance: 4, // High importance (banner notification)
         visibility: 1, // Public on lockscreen
         vibration: true,
+        sound: 'default',
       }).catch(() => {});
       
-      // Ardoro channel (NEW)
+      // Ardoro channel (dengan sound & getar max importance)
       await LocalNotifications.createChannel({
         id: 'ardoro_timer',
         name: 'Ardoro Timer',
@@ -69,6 +71,7 @@ export async function ensureNotificationChannel() {
         importance: 5, // Max importance for heads-up
         visibility: 1,
         vibration: true,
+        sound: 'default',
       }).catch(() => {});
       
       channelCreated = true;
@@ -170,9 +173,8 @@ export async function sendPomodoroPhaseNotification({ phase = '', nextPhase = ''
           title: `🍅 Ardoro — ${finishedLabel}`,
           body: nextLabel,
           id: Math.floor(Date.now() % 100000) + Math.floor(Math.random() * 1000),
-          schedule: { at: new Date(Date.now() + 100) },
-          channelId: 'ardoro_timer', // Changed from 'arloader_downloads'
-          sound: 'default', // Explicit sound
+          channelId: 'ardoro_timer',
+          sound: 'default',
         },
       ],
     });

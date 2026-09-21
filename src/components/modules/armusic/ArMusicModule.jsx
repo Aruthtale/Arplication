@@ -6,7 +6,7 @@ import {
   SlidersHorizontal, Timer, TimerOff, ListPlus, Plus, X, Pencil, Check,
 } from 'lucide-react';
 import { isNative } from '../../../services/http.js';
-import { loadLibrary, saveLibrary, removeTrack, mergeScanResults, scanLocalAudio, toPlayableSrc, formatTrackDuration, isAudioFilename, } from '../../../services/localMusic.js';
+import { loadLibrary, saveLibrary, addOrUpdateTrackInLibrary, removeTrack, mergeScanResults, scanLocalAudio, toPlayableSrc, formatTrackDuration, isAudioFilename, } from '../../../services/localMusic.js';
 import { publishNowPlaying, setPlaybackState, setPositionState, clearNowPlaying, showNativeNowPlaying, dismissNativeNowPlaying, onNativeMediaControl, nativePlaybackSupported, shouldUseNativePlayback, playNativeQueue, updateNativeQueue, pauseNativePlayback, resumeNativePlayback, nextNativeTrack, prevNativeTrack, stopNativePlayback, seekNativePlayback, getNativePlaybackState, getNativeEqualizer, setNativeEqualizerEnabled, setNativeEqualizerBand, setNativeEqualizerPreset, setNativeSleepTimer, getNativeSleepTimer, formatEqFreq, formatEqGain, formatSleepRemaining, } from '../../../services/armusicNative.js';
 import { loadPlaylists, savePlaylists, createPlaylist, renamePlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, resolvePlaylistTracks, purgeTrackFromPlaylists, isTrackInPlaylist, groupTracksBy, } from '../../../services/playlistManager.js';
 import { fetchLyrics, activeLyricIndex, } from '../../../services/lyrics.js';
@@ -1322,14 +1322,31 @@ export default function ArMusicModule({ setActiveTab }) {
           <YTMusicWrapper
             playTrack={playTrack}
             onDownload={(metadata) => {
-              // Refresh library setelah download selesai
-              if (metadata?.downloadPath) {
+              if (metadata?.downloadPath || metadata?.title) {
                 console.log('YouTube Music track downloaded:', metadata);
-                // Trigger library refresh
-                setTimeout(() => {
-                  const refreshed = loadLibrary();
-                  setTracks(refreshed);
-                }, 500); // Delay 500ms biar file system sudah sync
+                const filename = metadata.filename || `${metadata.title} - ${metadata.artist || 'YouTube Music'}.mp3`;
+                const newTrack = {
+                  id: `scan:${metadata.downloadPath || filename}`,
+                  title: metadata.title,
+                  artist: metadata.artist || 'YouTube Music',
+                  filename,
+                  folder: 'Download/Aruthtale/YouTube',
+                  uri: metadata.downloadPath,
+                  cover: metadata.cover,
+                  duration: metadata.duration,
+                  source: 'scan',
+                };
+                const updated = addOrUpdateTrackInLibrary(newTrack);
+                setTracks(updated);
+
+                // Run background scan on native to ensure exact filesystem URI match
+                if (isNative()) {
+                  scanLocalAudio().then((scanned) => {
+                    const merged = mergeScanResults(loadLibrary(), scanned);
+                    saveLibrary(merged);
+                    setTracks(merged);
+                  }).catch(() => {});
+                }
               }
             }}
             currentId={currentId}

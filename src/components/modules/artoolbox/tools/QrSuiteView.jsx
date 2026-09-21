@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { QrCode, Upload, Camera, X, Copy, Download, Trash2, ExternalLink, Check } from 'lucide-react';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
 import { saveToolboxBlobFile } from '../../../../utils/download';
+import { saveNote } from '../../../../services/notesDb';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
 
@@ -16,6 +17,24 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
   const [scanResult, setScanResult] = useState(null);
   const [scanError, setScanError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+
+  const saveToArNote = async (textToSave, titlePrefix = 'QR Code') => {
+    if (!textToSave) return;
+    try {
+      await saveNote({
+        title: `${titlePrefix}: ${textToSave.substring(0, 30)}${textToSave.length > 30 ? '...' : ''}`,
+        content: `# Hasil QR & Barcode Suite\n\n- **Waktu**: ${new Date().toLocaleString('id-ID')}\n- **Konten Data**:\n\`\`\`\n${textToSave}\n\`\`\`\n`,
+        tags: ['artoolbox', 'qr', 'suite'],
+        color: 'yellow',
+        isPinned: false,
+      });
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 2000);
+    } catch (e) {
+      console.error('Gagal menyimpan ke ArNote:', e);
+    }
+  };
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -146,8 +165,15 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
       }
     }
 
-    animFrameRef.current = requestAnimationFrame(detectQrFromVideo);
+    if (detectRef.current) {
+      animFrameRef.current = requestAnimationFrame(detectRef.current);
+    }
   }, [onRefreshHistory, stopQrScan]);
+
+  const detectRef = useRef(detectQrFromVideo);
+  useEffect(() => {
+    detectRef.current = detectQrFromVideo;
+  }, [detectQrFromVideo]);
 
   // Scan QR Code from camera
   const startQrScan = async () => {
@@ -176,7 +202,9 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         await videoRef.current.play();
-        animFrameRef.current = requestAnimationFrame(detectQrFromVideo);
+        if (detectRef.current) {
+          animFrameRef.current = requestAnimationFrame(detectRef.current);
+        }
       }
     } catch (err) {
       console.error('Gagal mengakses kamera:', err);
@@ -361,20 +389,20 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
                 />
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={downloadQrCode}
                   disabled={downloading}
-                  className="flex-1 py-2 px-4 bg-[#A076F9] hover:bg-[#8B5CF6] disabled:opacity-50 active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black"
+                  className="flex-1 min-w-[100px] py-2 px-3 bg-[#A076F9] hover:bg-[#8B5CF6] disabled:opacity-50 active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black text-xs"
                 >
                   {downloadSuccess ? (
                     <>
-                      <Check className="w-4 h-4 inline mr-2 text-green-700" />
+                      <Check className="w-3.5 h-3.5 inline mr-1 text-green-700" />
                       Tersimpan!
                     </>
                   ) : (
                     <>
-                      <Download className={`w-4 h-4 inline mr-2 ${downloading ? 'animate-bounce' : ''}`} />
+                      <Download className={`w-3.5 h-3.5 inline mr-1 ${downloading ? 'animate-bounce' : ''}`} />
                       {downloading ? 'Menyimpan...' : 'Unduh'}
                     </>
                   )}
@@ -382,17 +410,25 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
 
                 <button
                   onClick={copyQrCode}
-                  className="flex-1 py-2 px-4 bg-[#FFE600] hover:bg-[#FFD700] active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black"
+                  className="flex-1 min-w-[90px] py-2 px-3 bg-[#FFE600] hover:bg-[#FFD700] active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black text-xs"
                 >
-                  {copied ? <Check className="w-4 h-4 inline mr-2 text-green-700" /> : <Copy className="w-4 h-4 inline mr-2" />}
+                  {copied ? <Check className="w-3.5 h-3.5 inline mr-1 text-green-700" /> : <Copy className="w-3.5 h-3.5 inline mr-1" />}
                   {copied ? 'Tersalin!' : 'Salin'}
                 </button>
 
                 <button
-                  onClick={() => setGeneratedImage(null)}
-                  className="py-2 px-4 bg-[#FF70A6] hover:bg-[#FF5A8C] active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black"
+                  onClick={() => saveToArNote(qrText, 'QR Code Generator')}
+                  className="flex-1 min-w-[120px] py-2 px-3 bg-[#C4FAF8] hover:bg-[#A8F3F0] active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black text-xs"
                 >
-                  <Trash2 className="w-4 h-4 inline mr-2" />
+                  {noteSaved ? <Check className="w-3.5 h-3.5 inline mr-1 text-green-700" /> : <ExternalLink className="w-3.5 h-3.5 inline mr-1" />}
+                  {noteSaved ? 'Di ArNote!' : 'Simpan Note'}
+                </button>
+
+                <button
+                  onClick={() => setGeneratedImage(null)}
+                  className="py-2 px-3 bg-[#FF70A6] hover:bg-[#FF5A8C] active:translate-x-0.5 active:translate-y-0.5 transition-all rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black text-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5 inline mr-1" />
                   Hapus
                 </button>
               </div>
@@ -484,16 +520,23 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
                 {scanResult}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(scanResult);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  className="flex-1 py-2 px-3 bg-[#FFE600] border-2 border-[#121212] shadow-[2px_2px_0px_#121212] rounded-lg font-black text-xs"
+                  className="flex-1 min-w-[90px] py-2 px-3 bg-[#FFE600] border-2 border-[#121212] shadow-[2px_2px_0px_#121212] rounded-lg font-black text-xs"
                 >
                   {copied ? 'Tersalin!' : 'Salin Teks'}
+                </button>
+
+                <button
+                  onClick={() => saveToArNote(scanResult, 'QR Code Scanner')}
+                  className="flex-1 min-w-[110px] py-2 px-3 bg-[#A076F9] text-white border-2 border-[#121212] shadow-[2px_2px_0px_#121212] rounded-lg font-black text-xs"
+                >
+                  {noteSaved ? 'Di ArNote!' : 'Simpan Note'}
                 </button>
 
                 {isUrl(scanResult) && (
@@ -501,9 +544,9 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
                     href={scanResult}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex-1 py-2 px-3 bg-[#38E54D] border-2 border-[#121212] shadow-[2px_2px_0px_#121212] rounded-lg font-black text-xs text-center inline-flex items-center justify-center gap-1"
+                    className="flex-1 min-w-[90px] py-2 px-3 bg-[#38E54D] border-2 border-[#121212] shadow-[2px_2px_0px_#121212] rounded-lg font-black text-xs text-center inline-flex items-center justify-center gap-1"
                   >
-                    Buka Link <ExternalLink className="w-3 h-3" />
+                    Buka <ExternalLink className="w-3 h-3" />
                   </a>
                 )}
               </div>

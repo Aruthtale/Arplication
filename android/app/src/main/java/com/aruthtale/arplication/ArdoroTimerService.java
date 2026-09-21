@@ -5,7 +5,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -18,7 +21,9 @@ import androidx.core.app.NotificationCompat;
  */
 public class ArdoroTimerService extends Service {
     private static final String CHANNEL_ID = "ardoro_timer_foreground";
+    private static final String COMPLETE_CHANNEL_ID = "ardoro_timer";
     private static final int NOTIFICATION_ID = 1001;
+    private static final int COMPLETE_NOTIFICATION_ID = 1002;
     
     private Handler handler;
     private Runnable tickRunnable;
@@ -29,6 +34,7 @@ public class ArdoroTimerService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
+        createCompleteNotificationChannel();
         handler = new Handler(Looper.getMainLooper());
     }
     
@@ -41,6 +47,7 @@ public class ArdoroTimerService extends Service {
         
         String action = intent.getAction();
         if ("STOP_TIMER".equals(action)) {
+            stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -49,6 +56,7 @@ public class ArdoroTimerService extends Service {
         phase = intent.getStringExtra("phase");
         
         if (endTimeMillis == 0) {
+            stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -60,14 +68,19 @@ public class ArdoroTimerService extends Service {
     }
     
     private void startTicking() {
+        if (handler != null && tickRunnable != null) {
+            handler.removeCallbacks(tickRunnable);
+        }
         tickRunnable = new Runnable() {
             @Override
             public void run() {
                 long remaining = endTimeMillis - System.currentTimeMillis();
                 
                 if (remaining <= 0) {
-                    // Timer selesai - kirim broadcast
+                    // Timer selesai - tampilkan notifikasi kepala/suara & kirim broadcast
+                    showCompletionNotification();
                     sendTimerCompleteIntent();
+                    stopForeground(true);
                     stopSelf();
                     return;
                 }
@@ -96,8 +109,44 @@ public class ArdoroTimerService extends Service {
     
     private void sendTimerCompleteIntent() {
         Intent broadcast = new Intent("com.aruthtale.arplication.TIMER_COMPLETE");
+        broadcast.setPackage(getPackageName());
         broadcast.putExtra("phase", phase);
         sendBroadcast(broadcast);
+    }
+    
+    private void showCompletionNotification() {
+        createCompleteNotificationChannel();
+
+        String finishedLabel = "focus".equals(phase) ? "Sesi fokus selesai!" : "Waktu istirahat selesai!";
+        String nextLabel = "focus".equals(phase) ? "Saatnya istirahat sebentar dulu." : "Saatnya kembali fokus.";
+
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        notificationIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent,
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
+
+        Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, COMPLETE_CHANNEL_ID)
+            .setContentTitle("🍅 Ardoro — " + finishedLabel)
+            .setContentText(nextLabel)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setSound(soundUri)
+            .setVibrate(new long[]{0, 500, 250, 500})
+            .setDefaults(NotificationCompat.DEFAULT_ALL);
+
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) {
+            manager.notify(COMPLETE_NOTIFICATION_ID, builder.build());
+        }
     }
     
     @Override
@@ -122,6 +171,25 @@ public class ArdoroTimerService extends Service {
             );
             channel.setDescription("Notifikasi timer Ardoro sedang berjalan");
             channel.setShowBadge(false);
+            
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    private void createCompleteNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                COMPLETE_CHANNEL_ID,
+                "Ardoro Timer",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Notifikasi fase Pomodoro selesai");
+            channel.enableVibration(true);
+            channel.setShowBadge(true);
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {

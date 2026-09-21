@@ -14,7 +14,7 @@ function kindIcon(type, ext) {
   return <Video className="w-4 h-4 text-[#121212]" />;
 }
 
-export default function DownloadHistory({ items, onChange }) {
+export default function DownloadHistory({ items, onChange, setActiveTab }) {
   const [preview, setPreview] = useState(null);
 
   if (!items || items.length === 0) return null;
@@ -64,6 +64,16 @@ export default function DownloadHistory({ items, onChange }) {
               </span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {(item.type === 'audio' || ['mp3', 'm4a', 'wav'].some(e => String(item.filename || item.title).toLowerCase().includes(e))) && setActiveTab && (
+                <button
+                  onClick={() => setActiveTab('armusic')}
+                  className="px-2 h-7 rounded-lg bg-[#D8B4FE] hover:bg-purple-300 border border-black flex items-center gap-1 text-[10px] font-black text-[#121212] transition-colors shadow-[1px_1px_0px_#121212]"
+                  title="Buka di ArMusic"
+                >
+                  <Music className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">ArMusic</span>
+                </button>
+              )}
               <button
                 onClick={() => setPreview(item)}
                 className="w-7 h-7 rounded-lg bg-[#C4FAF8] hover:bg-cyan-200 border border-black flex items-center justify-center text-[#121212] transition-colors shadow-[1px_1px_0px_#121212]"

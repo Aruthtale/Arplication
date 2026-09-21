@@ -184,11 +184,14 @@ export function loadTimerState() {
     if (!raw) return null;
     const state = JSON.parse(raw);
     
-    // Adjust remaining time based on elapsed time
+    // Adjust remaining time based on elapsed time / target endAt
     if (state.running && state.endAt) {
-      const elapsed = (Date.now() - state.savedAt) / 1000;
-      const newRemaining = Math.max(0, state.remaining - elapsed);
-      return { ...state, remaining: newRemaining };
+      const remainingSeconds = Math.max(0, Math.round((state.endAt - Date.now()) / 1000));
+      return {
+        ...state,
+        remaining: remainingSeconds,
+        isExpired: remainingSeconds <= 0,
+      };
     }
     
     return state;

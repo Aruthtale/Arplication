@@ -405,7 +405,7 @@ export default function ArloaderModule({ setActiveTab }) {
       )}
 
       {/* Download History */}
-      <DownloadHistory items={downloads} onChange={setDownloads} />
+      <DownloadHistory items={downloads} onChange={setDownloads} setActiveTab={setActiveTab} />
 
       {/* SECTION: PIPELINE STATUS SUMMARY CARD (Di paling bawah) */}
       <div className="nb-card p-3 bg-white space-y-2 shadow-[3px_3px_0px_#121212]">

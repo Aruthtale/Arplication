@@ -98,6 +98,16 @@ export function saveLibrary(tracks = []) {
   return tracks;
 }
 
+export function addOrUpdateTrackInLibrary(track) {
+  if (!track || !track.id) return loadLibrary();
+  const current = loadLibrary();
+  const byId = new Map(current.map((t) => [t.id, t]));
+  byId.set(track.id, { ...(byId.get(track.id) || {}), ...track, unavailable: false });
+  const updated = [...byId.values()].slice(0, MAX_LIBRARY_ITEMS);
+  saveLibrary(updated);
+  return updated;
+}
+
 export function removeTrack(tracks = [], id) {
   return tracks.filter((t) => t.id !== id);
 }

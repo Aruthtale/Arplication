@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ArrowLeft, Palette, Image as ImageIcon, Copy, Check, Pipette, Sparkles, Upload, Eye } from 'lucide-react';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
+import { saveNote } from '../../../../services/notesDb';
 
 export default function ColorStudioView({ onBack, onRefreshHistory }) {
   const [activeTab, setActiveTab] = useState('picker'); // 'picker' | 'extractor' | 'shades'
@@ -9,6 +10,27 @@ export default function ColorStudioView({ onBack, onRefreshHistory }) {
   const [extractedPalette, setExtractedPalette] = useState([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
+  const [noteSaved, setNoteSaved] = useState(false);
+
+  const saveColorPaletteToNote = async (title, paletteColors = [], extraInfo = '') => {
+    try {
+      const colorsList = paletteColors.length > 0 
+        ? paletteColors.map(c => `- \`${c}\``).join('\n')
+        : `- **HEX**: \`${currentColor.toUpperCase()}\`\n- **RGB**: \`rgb(${rgb.r}, ${rgb.g}, ${rgb.b})\`\n- **HSL**: \`hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)\`\n- **HSV**: \`hsv(${hsv.h}, ${hsv.s}%, ${hsv.v}%)\`\n- **Kontras Teks Hitam**: \`${contrastBlack}:1\`\n- **Kontras Teks Putih**: \`${contrastWhite}:1\``;
+
+      await saveNote({
+        title: `Color Studio: ${title}`,
+        content: `# ${title}\n\n- **Waktu**: ${new Date().toLocaleString('id-ID')}\n${extraInfo ? `- ${extraInfo}\n` : ''}\n### Daftar Warna / Nilai:\n${colorsList}\n`,
+        tags: ['artoolbox', 'color', 'palette'],
+        color: 'cyan',
+        isPinned: false,
+      });
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 2000);
+    } catch (err) {
+      console.error('Gagal menyimpan warna ke ArNote:', err);
+    }
+  };
 
   const canvasRef = useRef(null);
 
