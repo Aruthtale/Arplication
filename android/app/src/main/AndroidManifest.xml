@@ -85,6 +85,21 @@
                 android:resource="@xml/arnote_widget_list_info" />
         </receiver>
 
+        <receiver
+            android:name=".ArMusicWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.aruthtale.arplication.ACTION_WIDGET_PLAY_PAUSE" />
+                <action android:name="com.aruthtale.arplication.ACTION_WIDGET_NEXT" />
+                <action android:name="com.aruthtale.arplication.ACTION_WIDGET_PREV" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/armusic_widget_info" />
+        </receiver>
+
         <!-- Service for Note List Widget -->
         <service
             android:name=".NoteWidgetService"

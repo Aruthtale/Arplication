@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_armusic_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/armusic_widget_border"
+    android:orientation="vertical"
+    android:padding="10dp"
+    android:gravity="center_vertical">
+
+    <!-- Top Badge Row -->
+    <LinearLayout
+        android:id="@+id/widget_armusic_badge_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🎵 ARMUSIC"
+            android:textColor="#121212"
+            android:textSize="9.5sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.05" />
+
+        <TextView
+            android:id="@+id/widget_armusic_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OFFLINE"
+            android:textColor="#666666"
+            android:textSize="8.5sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.04" />
+    </LinearLayout>
+
+    <!-- Main Content Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- Album Cover -->
+        <ImageView
+            android:id="@+id/widget_armusic_cover"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/armusic_widget_cover_bg"
+            android:src="@drawable/ic_widget_music"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            android:contentDescription="Cover Lagu" />
+
+        <!-- Track Info -->
+        <LinearLayout
+            android:id="@+id/widget_armusic_info_container"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="8dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_armusic_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="ArMusic"
+                android:textColor="#121212"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/widget_armusic_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Ketuk untuk memutar musik"
+                android:textColor="#555555"
+                android:textSize="11sp"
+                android:singleLine="true"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- Playback Controls -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Prev Button -->
+            <ImageButton
+                android:id="@+id/widget_armusic_prev"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/armusic_widget_btn_ctrl_bg"
+                android:src="@drawable/ic_widget_prev"
+                android:scaleType="centerInside"
+                android:padding="6dp"
+                android:contentDescription="Lagu Sebelumnya" />
+
+            <!-- Play/Pause Button -->
+            <ImageButton
+                android:id="@+id/widget_armusic_play_pause"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/armusic_widget_btn_play_bg"
+                android:src="@drawable/ic_widget_play"
+                android:scaleType="centerInside"
+                android:padding="8dp"
+                android:contentDescription="Putar atau Jeda" />
+
+            <!-- Next Button -->
+            <ImageButton
+                android:id="@+id/widget_armusic_next"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/armusic_widget_btn_ctrl_bg"
+                android:src="@drawable/ic_widget_next"
+                android:scaleType="centerInside"
+                android:padding="6dp"
+                android:contentDescription="Lagu Berikutnya" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

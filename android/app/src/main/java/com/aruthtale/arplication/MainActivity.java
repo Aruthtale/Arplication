@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
     private static final String TAG = "MainActivity";
     private static final String ACTION_OPEN_NOTE = "com.aruthtale.arplication.OPEN_NOTE";
     private static final String ACTION_CREATE_NOTE = "com.aruthtale.arplication.CREATE_NOTE";
+    private static final String ACTION_OPEN_ARMUSIC = "com.aruthtale.arplication.OPEN_ARMUSIC";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -69,6 +70,9 @@ public class MainActivity extends BridgeActivity {
             ArNoteWidgetPlugin.setPendingNavigation(action, noteId);
             // Also notify live webview if already running
             notifyWebViewNavigation(action, noteId);
+        } else if (ACTION_OPEN_ARMUSIC.equals(action)) {
+            ArNoteWidgetPlugin.setPendingNavigation(action, "");
+            notifyWebViewNavigation(action, "");
         }
     }
 

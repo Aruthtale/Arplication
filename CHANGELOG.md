@@ -7,7 +7,26 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [0.2.21] - 2026-09-17
+## [1.1.0] - 2026-09-24
+
+### 🎉 New
+- **ArMusic Homescreen Widget**:
+  - Widget rumah gaya neobrutalisme dengan judul lagu, artis, album, dan indikator status (MEMUTAR / JEDA / OFFLINE).
+  - Tombol putar/jeda, lagu berikutnya, dan lagu sebelumnya langsung dari layar utama — bahkan saat aplikasi tertutup.
+  - Klik bodi widget membuka aplikasi langsung ke tab ArMusic (deep-link `OPEN_ARMUSIC`).
+  - Sinkron otomatis dengan `ArMusicService`; state kembali ke OFFLINE saat antrean berhenti atau service dihentikan.
+- **ArGame (Tahap 1)**: Modul permainan baru dengan Sudoku, plus integrasi logo ArToolbox ke HomeHub.
+
+### 🐛 Fixed
+- **Pengujian scrapers**: Fixture `resolveSubfolderPath` diperbarui agar konsisten dengan pemindahan folder unduhan ke `Aruthtale/`.
+
+### 📦 Build
+- **versionCode**: 29 → **30**
+- **versionName**: "1.0.0" → **"1.1.0"**
+
+---
+
+## [1.0.0] - 2026-09-21
 
 ### ⚡ Enhanced
 - **Mori Dual-Engine YouTube Converter**:

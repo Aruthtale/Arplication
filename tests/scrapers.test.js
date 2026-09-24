@@ -550,14 +550,14 @@ test('resolveSubfolderPath handles automatic platform folders and legacy presets
   assert.equal(formatPlatformFolderName('instagram'), 'Instagram');
 
   // Placeholder format
-  assert.equal(resolveSubfolderPath('Arloader/{platform}', 'youtube'), 'Arloader/YouTube');
-  assert.equal(resolveSubfolderPath('Arloader/{platform}', 'tiktok'), 'Arloader/TikTok');
-  assert.equal(resolveSubfolderPath('Arloader/{platform}', 'spotify'), 'Arloader/Spotify');
+  assert.equal(resolveSubfolderPath('Aruthtale/{platform}', 'youtube'), 'Aruthtale/YouTube');
+  assert.equal(resolveSubfolderPath('Aruthtale/{platform}', 'tiktok'), 'Aruthtale/TikTok');
+  assert.equal(resolveSubfolderPath('Aruthtale/{platform}', 'spotify'), 'Aruthtale/Spotify');
 
-  // Legacy preset migration (e.g. Arloader/TikTok saved in localStorage)
-  assert.equal(resolveSubfolderPath('Arloader/TikTok', 'youtube'), 'Arloader/YouTube');
-  assert.equal(resolveSubfolderPath('Arloader/TikTok', 'tiktok'), 'Arloader/TikTok');
-  assert.equal(resolveSubfolderPath('Arloader', 'youtube'), 'Arloader/YouTube');
+  // Legacy preset migration (e.g. Aruthtale/TikTok saved in localStorage)
+  assert.equal(resolveSubfolderPath('Aruthtale/TikTok', 'youtube'), 'Aruthtale/YouTube');
+  assert.equal(resolveSubfolderPath('Aruthtale/TikTok', 'tiktok'), 'Aruthtale/TikTok');
+  assert.equal(resolveSubfolderPath('Aruthtale', 'youtube'), 'Aruthtale/YouTube');
 
   // Custom user subfolders
   assert.equal(resolveSubfolderPath('MyVideos', 'youtube'), 'MyVideos');

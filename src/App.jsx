@@ -38,6 +38,8 @@ export default function App() {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('arNoteWidgetIntent', { detail: intent }));
         }, 150);
+      } else if (action === 'com.aruthtale.arplication.OPEN_ARMUSIC') {
+        setActiveTab('armusic');
       }
     };
 

@@ -164,6 +164,10 @@ public class ArMusicService extends Service {
 
     public static ArMusicService getInstance() { return instance; }
 
+    public boolean isPlayingState() {
+        return player != null && player.isPlaying();
+    }
+
     private void restoreEqPrefs() {
         try {
             android.content.SharedPreferences p = getSharedPreferences("armusic_eq", MODE_PRIVATE);
@@ -590,6 +594,7 @@ public class ArMusicService extends Service {
             }
         } catch (Exception ignored) {}
         queue.clear();
+        ArMusicWidget.updateAllWidgets(this, "", "", "", false);
     }
 
     // ------------------------------------------------------------------ playback core
@@ -683,7 +688,7 @@ public class ArMusicService extends Service {
         }
     }
 
-    private void doPause(boolean broadcast) {
+    void doPause(boolean broadcast) {
         if (player == null) return;
         player.setPlayWhenReady(false);
         setNoisyReceiverRegistered(false);
@@ -691,7 +696,7 @@ public class ArMusicService extends Service {
         if (broadcast) sendControl("toggle", null);
     }
 
-    private void doResume(boolean broadcast) {
+    void doResume(boolean broadcast) {
         if (player == null) return;
         if (player.getPlaybackState() == Player.STATE_IDLE) return;
         player.setPlayWhenReady(true);
@@ -700,13 +705,13 @@ public class ArMusicService extends Service {
         if (broadcast) sendControl("toggle", null);
     }
 
-    private void doToggle(boolean broadcast) {
+    void doToggle(boolean broadcast) {
         if (player == null) return;
         if (player.isPlaying()) doPause(broadcast);
         else doResume(broadcast);
     }
 
-    private void doNext(boolean broadcast) {
+    void doNext(boolean broadcast) {
         if (player == null || queue.isEmpty()) return;
         int cur = player.getCurrentMediaItemIndex();
         // Konsisten dengan REPEAT_MODE_ALL: ujung antrean wrap ke awal.
@@ -722,7 +727,7 @@ public class ArMusicService extends Service {
         if (broadcast) sendControl("next", metaOf(next));
     }
 
-    private void doPrev(boolean broadcast) {
+    void doPrev(boolean broadcast) {
         if (player == null || queue.isEmpty()) return;
         int cur = player.getCurrentMediaItemIndex();
         try {
@@ -758,6 +763,7 @@ public class ArMusicService extends Service {
             }
         } catch (Exception ignored) {}
         queue.clear();
+        ArMusicWidget.updateAllWidgets(this, "", "", "", false);
         setNoisyReceiverRegistered(false);
         try {
             stopForeground(true);
@@ -854,6 +860,7 @@ public class ArMusicService extends Service {
         updateSession(q.title, q.artist, q.album, playing, startPositionForSession());
         startForegroundCompat(buildNotification(q.title, q.artist, q.album, playing));
         snapshotFromPlayer();
+        ArMusicWidget.updateAllWidgets(this, q.title, q.artist, q.album, playing);
     }
 
     private void syncSessionOnly() {
