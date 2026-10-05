@@ -7,6 +7,35 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.4.0] - 2026-10-06
+
+### ✨ Added
+- **Cadangan & Pemulihan Data (Backup & Restore)**: simpan seluruh data pengguna ke
+  **satu file JSON** dan pulihkan kapan saja — terutama setelah pasang ulang aplikasi.
+  - Mencakup: pengaturan global, data Arloader, ArMusic (library/playlist/lirik),
+    Ardoro (pengaturan/statistik/status timer), ArToolbox, ArGame, serta catatan
+    **ArNote** dan draf **ArToolbox PDF Maker** (IndexedDB).
+  - Tombol **Cadangkan** & **Pulihkan** di Pengaturan Aplikasi, lengkap dengan
+    ringkasan isi (jumlah kunci, catatan, ukuran) dan **modal konfirmasi** sebelum menimpa.
+  - Opsi **"Sertakan login"** (default NONAKTIF) untuk token YouTube Music.
+    Secara default token login **tidak** ikut ke dalam file cadangan.
+  - Validasi file: menolak file asing/rusak/skema lebih baru dengan pesan jelas.
+- Helper murni `src/services/backupService.js` + modal `RestoreConfirmModal.jsx`.
+
+### 🧪 Tests
+- Tambah `tests/backup.test.js` (12 tes): round-trip, validasi, whitelist, isolasi
+  kunci sensitif, ringkasan, penamaan file. Total **163** lulus.
+
+### 🧹 Cleanup
+- `AppSettingsModal.jsx`: buang import/state/handler mati (`HardDrive`, `Bell`,
+  `ShieldCheck`, `Smartphone`, `Check`, `AlertCircle`, `useEffect`, toggle `notifSound`).
+
+### 📦 Build
+- **versionCode**: 34 → **35**
+- **versionName**: "1.3.2" → **"1.4.0"**
+
+---
+
 ## [1.3.2] - 2026-10-06
 
 ### 🐛 Fixed

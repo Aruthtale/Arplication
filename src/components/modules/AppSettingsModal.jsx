@@ -1,10 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
-  X, Settings, HardDrive, Bell, Volume2, ShieldCheck, 
-  Trash2, RefreshCw, Smartphone, Sparkles, Check, Download, AlertCircle 
+  X, Settings, Volume2, 
+  Trash2, RefreshCw, Sparkles, Download,
+  DatabaseBackup, Upload, KeyRound
 } from 'lucide-react';
 import { APP_VERSION, checkForAppUpdate } from '../../services/updater';
 import { clearToolboxHistory } from '../../services/toolboxDb';
+import {
+  downloadBackup,
+  parseBackupText,
+  summarizeBackup,
+  restoreBackup,
+  formatBytes,
+} from '../../services/backupService';
+import RestoreConfirmModal from './RestoreConfirmModal';
 
 export default function AppSettingsModal({ isOpen, onClose }) {
   const [hapticEnabled, setHapticEnabled] = useState(() => {
@@ -13,15 +22,19 @@ export default function AppSettingsModal({ isOpen, onClose }) {
   const [autoScanMusic, setAutoScanMusic] = useState(() => {
     return localStorage.getItem('ar_setting_autoscan') !== 'false';
   });
-  const [notifSound, setNotifSound] = useState(() => {
-    return localStorage.getItem('ar_setting_notifsound') !== 'false';
-  });
   const [downloadSubfolder, setDownloadSubfolder] = useState(() => {
     return localStorage.getItem('arloader_folder_preset') || 'auto';
   });
   const [clearedMsg, setClearedMsg] = useState(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
+
+  // Backup & Restore
+  const [includeSensitive, setIncludeSensitive] = useState(false);
+  const [backupStatus, setBackupStatus] = useState(null); // { type, msg }
+  const [busy, setBusy] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState(null); // { data, summary }
+  const fileInputRef = useRef(null);
 
   if (!isOpen) return null;
 
@@ -37,12 +50,6 @@ export default function AppSettingsModal({ isOpen, onClose }) {
     localStorage.setItem('ar_setting_autoscan', String(next));
   };
 
-  const handleToggleNotifSound = () => {
-    const next = !notifSound;
-    setNotifSound(next);
-    localStorage.setItem('ar_setting_notifsound', String(next));
-  };
-
   const handleFolderChange = (val) => {
     setDownloadSubfolder(val);
     localStorage.setItem('arloader_folder_preset', val);
@@ -56,6 +63,62 @@ export default function AppSettingsModal({ isOpen, onClose }) {
       setTimeout(() => setClearedMsg(null), 2500);
     } catch {
       setClearedMsg('Gagal membersihkan cache.');
+    }
+  };
+
+  const handleBackup = async () => {
+    setBusy(true);
+    setBackupStatus(null);
+    try {
+      const res = await downloadBackup({ includeSensitive });
+      const s = res.summary;
+      setBackupStatus({
+        type: 'ok',
+        msg: `Cadangan dibuat: ${res.filename} (${s.keys} kunci, ${s.notes} catatan, ${formatBytes(s.bytes)}).`,
+      });
+    } catch (err) {
+      setBackupStatus({ type: 'error', msg: `Gagal membuat cadangan: ${err?.message || err}` });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handlePickRestoreFile = () => {
+    setBackupStatus(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleRestoreFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // izinkan pilih file yang sama lagi
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = parseBackupText(text);
+      const summary = summarizeBackup(data);
+      setPendingRestore({ data, summary });
+    } catch (err) {
+      setBackupStatus({ type: 'error', msg: `File cadangan tidak bisa dibaca: ${err?.message || err}` });
+    }
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!pendingRestore) return;
+    setBusy(true);
+    try {
+      const res = await restoreBackup(pendingRestore.data, { includeSensitive });
+      setPendingRestore(null);
+      setBackupStatus({
+        type: 'ok',
+        msg: `Pemulihan berhasil (${res.localWritten} kunci, ${res.idbWritten} item). Memuat ulang…`,
+      });
+      setTimeout(() => {
+        if (typeof window !== 'undefined') window.location.reload();
+      }, 1200);
+    } catch (err) {
+      setPendingRestore(null);
+      setBackupStatus({ type: 'error', msg: `Gagal memulihkan: ${err?.message || err}` });
+      setBusy(false);
     }
   };
 
@@ -176,6 +239,78 @@ export default function AppSettingsModal({ isOpen, onClose }) {
             </div>
           </div>
 
+          {/* Section: Cadangan & Pemulihan */}
+          <div className="p-3.5 bg-white rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] space-y-3">
+            <div className="flex items-center gap-2 text-xs font-black uppercase text-[#121212] border-b border-[#121212]/15 pb-2">
+              <DatabaseBackup className="w-4 h-4 text-[#4D8BFF]" />
+              <span>Cadangan & Pemulihan Data</span>
+            </div>
+
+            <p className="text-[10px] text-gray-600 leading-relaxed">
+              Simpan seluruh data (pengaturan, catatan ArNote, playlist ArMusic, statistik
+              Ardoro, riwayat) ke satu file. Pulihkan kapan saja — mis. setelah pasang ulang.
+            </p>
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-[#FF9F1C]" />
+                <div>
+                  <div className="text-[11px] font-black text-[#121212]">Sertakan login</div>
+                  <div className="text-[9px] text-gray-500">Token YouTube Music (opsional)</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIncludeSensitive((v) => !v)}
+                className={`w-12 h-6 rounded-full border-2 border-[#121212] p-0.5 transition-colors cursor-pointer ${
+                  includeSensitive ? 'bg-[#FF9F1C]' : 'bg-gray-300'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-white border border-[#121212] shadow-sm transform transition-transform ${
+                    includeSensitive ? 'translate-x-6' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleBackup}
+                disabled={busy}
+                className="py-2 bg-[#38E54D] hover:bg-[#2FCC42] active:translate-x-0.5 active:translate-y-0.5 disabled:opacity-50 text-[11px] font-black rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{busy ? 'Memproses…' : 'Cadangkan'}</span>
+              </button>
+              <button
+                onClick={handlePickRestoreFile}
+                disabled={busy}
+                className="py-2 bg-white hover:bg-[#FFE600] active:translate-x-0.5 active:translate-y-0.5 disabled:opacity-50 text-[11px] font-black rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Pulihkan</span>
+              </button>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleRestoreFile}
+              className="hidden"
+            />
+
+            {backupStatus && (
+              <div className={`p-2 rounded-lg border text-[11px] font-bold ${
+                backupStatus.type === 'ok'
+                  ? 'bg-[#E8FCE8] border-green-700 text-green-900'
+                  : 'bg-red-100 border-red-500 text-red-800'
+              }`}>
+                {backupStatus.msg}
+              </div>
+            )}
+          </div>
+
           {/* Section 3: Pembersihan Cache */}
           <div className="p-3.5 bg-white rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] space-y-2.5">
             <div className="flex items-center justify-between">
@@ -246,6 +381,13 @@ export default function AppSettingsModal({ isOpen, onClose }) {
         </div>
 
       </div>
+
+      <RestoreConfirmModal
+        isOpen={pendingRestore !== null}
+        onClose={() => setPendingRestore(null)}
+        onConfirm={handleConfirmRestore}
+        summary={pendingRestore?.summary}
+      />
     </div>
   );
 }
