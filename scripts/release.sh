@@ -231,7 +231,11 @@ BUNDLE_JS="$(unzip -p "$APK" 'assets/public/assets/index-*.js' 2>/dev/null || tr
 ok "APK siap: $(du -h "$APK" | cut -f1) ($APK)"
 if [[ -z "$BUNDLE_JS" ]]; then
   warn "Tidak bisa membaca bundle JS dari APK — verifikasi versi dilewati"
-elif printf '%s' "$BUNDLE_JS" | grep -qE "$VER_RE"; then
+# CATATAN: pakai here-string, BUKAN `printf | grep -q`. Dengan `set -o pipefail`,
+# `grep -q` yang keluar lebih awal (begitu cocok) memicu SIGPIPE pada `printf` →
+# pipeline melaporkan 141 (gagal) padahal versi ADA. Ini bug yang sempat membuat
+# rilis 1.4.0 diblokir keliru.
+elif grep -qE "$VER_RE" <<< "$BUNDLE_JS"; then
   info "Web assets dalam APK: v$NEW (cocok dengan versi rilis)"
 else
   die "Web assets dalam APK TIDAK memuat v$NEW — 'cap copy' mungkin tidak jalan. Periksa sebelum rilis!"
