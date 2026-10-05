@@ -7,6 +7,35 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.6.1] - 2026-10-05
+
+## Perbaikan ArMaps — peta & GPS di HP Android
+
+Menambal **dua bug runtime** yang membuat ArMaps tidak bisa dipakai di
+perangkat nyata (lolos dari tes otomatis karena menyangkut kontrak API native).
+
+### 🐛 Fixed
+- **Peta tidak tampil — stuck di "Memuat peta… Membaca berkas lokal".**
+  Pembacaan file peta menunggu penanda "selesai" bernilai `null`, padahal
+  native Android menandainya dengan data kosong (`{ data: "" }`). Akibatnya
+  pembacaan menggantung selamanya dan peta tak pernah dirender. Kini keduanya
+  (null maupun data kosong) dikenali sebagai selesai.
+- **GPS selalu gagal walau GPS HP menyala.**
+  Plugin lokasi (`@capacitor/geolocation`) tidak ikut terpasang ke dalam APK
+  karena proses build memakai `cap copy` (hanya menyalin aset web) alih-alih
+  `cap sync` (mendaftarkan plugin native). Kini build memakai `cap sync`,
+  dan plugin lokasi terdaftar — GPS "lokasi saya" berfungsi.
+
+### 🧪 Verified
+- **192 tes lulus** (termasuk 2 guard baru yang terbukti gagal bila perbaikan
+  dibalik: kontrak chunk akhir, dan pendaftaran plugin di gradle).
+- APK diverifikasi memuat `GeolocationPlugin` (sebelumnya 0 referensi) dan
+  kode perbaikan peta.
+
+> Catatan: perbaikan ini butuh pemasangan ulang APK (plugin native berubah).
+
+---
+
 ## [1.6.0] - 2026-10-05
 
 ## ArMaps — Peta Offline (Tahap 1)
