@@ -38,6 +38,79 @@ import {
 
 import { interpretChunk } from '../src/services/armaps/regionStore.js';
 
+import {
+  normalizeHeading,
+  headingToCardinal8,
+  headingToCardinal4,
+  roseRotation,
+  isAbsoluteEvent,
+  computeHeading,
+} from '../src/services/armaps/heading.js';
+
+// ─────────────────── Kompas / arah HP (heading) ───────────────────
+// Menghitung arah hadap HP dari sensor orientasi (deviceorientation*).
+// heading 0=U, 90=T, 180=S, 270=B. Ini mengunci konversi sudut agar huruf
+// kompas (U/T/S/B) benar saat HP diputar.
+
+test('normalizeHeading membungkus sudut ke [0,360)', () => {
+  assert.equal(normalizeHeading(0), 0);
+  assert.equal(normalizeHeading(360), 0);
+  assert.equal(normalizeHeading(450), 90);
+  assert.equal(normalizeHeading(-90), 270);
+  assert.equal(normalizeHeading(-450), 270);
+  assert.equal(normalizeHeading(NaN), null);
+  assert.equal(normalizeHeading('90'), null);
+});
+
+test('headingToCardinal8 memetakan sudut ke 8 arah', () => {
+  assert.equal(headingToCardinal8(0), 'U');
+  assert.equal(headingToCardinal8(45), 'TL');
+  assert.equal(headingToCardinal8(90), 'T');
+  assert.equal(headingToCardinal8(135), 'TG');
+  assert.equal(headingToCardinal8(180), 'S');
+  assert.equal(headingToCardinal8(225), 'BD');
+  assert.equal(headingToCardinal8(270), 'B');
+  assert.equal(headingToCardinal8(315), 'BL');
+  assert.equal(headingToCardinal8(359), 'U');
+  assert.equal(headingToCardinal8(null), null);
+});
+
+test('headingToCardinal4 memetakan sudut ke 4 arah', () => {
+  assert.equal(headingToCardinal4(0), 'U');
+  assert.equal(headingToCardinal4(90), 'T');
+  assert.equal(headingToCardinal4(180), 'S');
+  assert.equal(headingToCardinal4(270), 'B');
+});
+
+test('roseRotation: huruf U selalu menunjuk utara sebenarnya (rotasi = -heading)', () => {
+  assert.equal(roseRotation(0), 0);
+  assert.equal(roseRotation(90), -90);
+  assert.equal(roseRotation(270), -270);
+  assert.equal(roseRotation(null), 0);
+});
+
+test('computeHeading: pakai webkitCompassHeading bila ada (iOS)', () => {
+  assert.equal(computeHeading({ webkitCompassHeading: 90 }), 90);
+  assert.equal(computeHeading({ webkitCompassHeading: 0 }), 0);
+});
+
+test('computeHeading: alpha Android dikonversi heading = 360 - alpha', () => {
+  // alpha 0 → menghadap utara
+  assert.equal(computeHeading({ alpha: 0 }), 0);
+  // alpha 90 (berputar berlawanan jarum jam) → heading 270 (barat)
+  assert.equal(computeHeading({ alpha: 90 }), 270);
+  assert.equal(computeHeading({ alpha: 270 }), 90);
+  assert.equal(computeHeading({}), null);
+});
+
+test('isAbsoluteEvent mendeteksi arah absolut vs relatif', () => {
+  assert.equal(isAbsoluteEvent({ type: 'deviceorientationabsolute' }), true);
+  assert.equal(isAbsoluteEvent({ absolute: true }), true);
+  assert.equal(isAbsoluteEvent({ webkitCompassHeading: 12 }), true);
+  assert.equal(isAbsoluteEvent({ type: 'deviceorientation', absolute: false }), false);
+  assert.equal(isAbsoluteEvent(null), false);
+});
+
 // ─────────────────── Kontrak readFileInChunks (bug runtime HP) ────────────────
 // Bug nyata: peta stuck "Memuat peta…" di Android karena kode menunggu `null`
 // sebagai penanda selesai, padahal native Android mengirim `{ data: "" }`

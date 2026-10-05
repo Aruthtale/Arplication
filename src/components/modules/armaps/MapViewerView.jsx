@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   ArrowLeft, RefreshCw, Trash2, LocateFixed, Loader2, AlertTriangle,
-  Layers, X, WifiOff, MapPin, Compass,
+  Layers, X, WifiOff, MapPin, Compass, Plus, Minus,
 } from 'lucide-react';
 import { loadRegionForRender, removeRegion } from '../../../services/armaps/armapsService.js';
 import {
@@ -19,6 +19,11 @@ import {
   getCurrentPosition,
   watchPosition,
 } from '../../../services/armaps/geolocation.js';
+import {
+  startHeadingWatch,
+  headingToCardinal8,
+  roseRotation,
+} from '../../../services/armaps/heading.js';
 import { formatBytes, formatDataDate, MAPS_DATA_DATE } from '../../../services/armaps/catalog.js';
 
 /**
@@ -42,6 +47,14 @@ export default function MapViewerView({
   const [locState, setLocState] = useState('off'); // off | requesting | on | denied | error
   const [showAttribution, setShowAttribution] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // ── Kompas / arah HP ──
+  // heading = arah hadap HP (0=U, 90=T, 180=S, 270=B), null bila sensor tak ada.
+  const [heading, setHeading] = useState(null);
+  const [headingState, setHeadingState] = useState('off'); // off | on | unsupported
+  // north = peta selalu utara di atas; heading = peta ikut berputar (arah HP selalu ke atas).
+  const [compassMode, setCompassMode] = useState('north');
+  const headingStopRef = useRef(null);
 
   /** Hentikan pelacakan GPS. */
   const stopWatch = useCallback(() => {
@@ -157,6 +170,51 @@ export default function MapViewerView({
   // Bersihkan GPS saat unmount
   useEffect(() => () => stopWatch(), [stopWatch]);
 
+  /** Mulai/hentikan pemantauan arah HP. */
+  const toggleCompass = useCallback(() => {
+    if (headingStopRef.current) {
+      try { headingStopRef.current(); } catch { /* abaikan */ }
+      headingStopRef.current = null;
+      setHeadingState('off');
+      setHeading(null);
+      return;
+    }
+    let got = false;
+    const stop = startHeadingWatch((h) => {
+      got = true;
+      setHeading(h);
+      setHeadingState('on');
+    }, {
+      onError: () => setHeadingState('unsupported'),
+    });
+    headingStopRef.current = stop;
+    // Bila tak ada event dalam 1.2 dtk → sensor tak tersedia di perangkat ini.
+    setTimeout(() => { if (!got && headingStopRef.current === stop) setHeadingState('unsupported'); }, 1200);
+  }, []);
+
+  // Bersihkan sensor arah saat unmount
+  useEffect(() => () => { if (headingStopRef.current) { try { headingStopRef.current(); } catch { /* abaikan */ } } }, []);
+
+  // Terapkan mode kompas ke peta (utara tetap di atas vs ikut berputar).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const applyBearing = () => {
+      if (compassMode === 'heading' && heading != null) {
+        map.easeTo({ bearing: heading, duration: 220 });
+      } else if (compassMode === 'north') {
+        map.easeTo({ bearing: 0, duration: 220 });
+      }
+    };
+    if (map.isStyleLoaded?.() || map.loaded?.()) applyBearing();
+    else map.once('load', applyBearing);
+  }, [compassMode, heading]);
+
+  /** Zoom masuk/keluar dari tombol (tetap halus). */
+  const zoomBy = useCallback((delta) => {
+    mapRef.current?.zoomTo(mapRef.current.getZoom() + delta, { duration: 220 });
+  }, []);
+
   /** Zoom ke titik lokasi (bila sudah ada). */
   const recenter = useCallback(() => {
     const pos = userLocRef.current;
@@ -242,6 +300,73 @@ export default function MapViewerView({
 
         {/* Kontrol kanan bawah */}
         <div className="absolute right-3 bottom-24 flex flex-col items-end gap-2">
+          {/* Zoom dalam/keluar */}
+          <div className="flex flex-col rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] overflow-hidden bg-white">
+            <button
+              onClick={() => zoomBy(1)}
+              className="p-2 border-b-2 border-[#121212] active:bg-[#eae6df] transition-colors"
+              title="Perbesar (zoom in)"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => zoomBy(-1)}
+              className="p-2 active:bg-[#eae6df] transition-colors"
+              title="Perkecil (zoom out)"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Kompas arah HP */}
+          <button
+            onClick={toggleCompass}
+            className={`relative w-14 h-14 rounded-full border-2 border-[#121212] shadow-[2px_2px_0px_#121212] flex items-center justify-center transition-colors ${
+              headingState === 'on' ? 'bg-white' : 'bg-white/90'
+            }`}
+            title={headingState === 'on' ? 'Sembunyikan kompas' : 'Tampilkan kompas arah'}
+          >
+            {headingState === 'on' && heading != null ? (
+              <svg viewBox="0 0 100 100" className="w-11 h-11">
+                {/* Mawar kompas: huruf U selalu menunjuk utara sebenarnya */}
+                <g style={{ transform: `rotate(${roseRotation(heading)}deg)`, transformOrigin: '50px 50px', transition: 'transform .15s linear' }}>
+                  <text x="50" y="20" textAnchor="middle" fontSize="20" fontWeight="900" fill="#121212">U</text>
+                  <text x="50" y="90" textAnchor="middle" fontSize="16" fontWeight="900" fill="#8a8378">S</text>
+                  <text x="86" y="56" textAnchor="middle" fontSize="16" fontWeight="900" fill="#8a8378">T</text>
+                  <text x="14" y="56" textAnchor="middle" fontSize="16" fontWeight="900" fill="#8a8378">B</text>
+                </g>
+                {/* Jarum tetap: selalu menunjuk arah hadap HP (atas) */}
+                <polygon points="50,26 44,50 56,50" fill="#FF70A6" stroke="#121212" strokeWidth="2" />
+              </svg>
+            ) : (
+              <Compass className="w-5 h-5" />
+            )}
+          </button>
+
+          {/* Label arah + mode */}
+          {headingState === 'on' && (
+            <button
+              onClick={() => setCompassMode((m) => (m === 'north' ? 'heading' : 'north'))}
+              className={`px-2.5 py-1 rounded-lg border-2 border-[#121212] shadow-[2px_2px_0px_#121212] text-[10px] font-black uppercase tracking-wider ${
+                compassMode === 'heading' ? 'bg-[#FF70A6]' : 'bg-white'
+              }`}
+              title="Ubah orientasi peta"
+            >
+              {heading != null ? headingToCardinal8(heading) : '—'}
+              <span className="ml-1 font-mono-code">
+                {heading != null ? `${Math.round(heading)}°` : ''}
+              </span>
+              <span className="ml-1 text-[9px] font-bold text-gray-600">
+                {compassMode === 'heading' ? 'IKUT' : 'U↑'}
+              </span>
+            </button>
+          )}
+          {headingState === 'unsupported' && (
+            <div className="max-w-[150px] px-2 py-1 bg-[#FFFBDF] rounded-lg border-2 border-[#121212] text-[9px] font-bold text-gray-700 text-right">
+              Kompas tak tersedia di perangkat ini
+            </div>
+          )}
+
           <button
             onClick={toggleLocation}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all text-xs font-black ${

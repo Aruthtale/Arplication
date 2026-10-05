@@ -115,7 +115,10 @@ export function unregisterBlobSource(key) {
  * @param {Object} [opts]  { center, zoom }
  * @returns {Promise<any>} map
  */
-export async function createMap(container, style, { center = [106.8272, -6.1751], zoom = 11, minZoom = 1, maxZoom = 16 } = {}) {
+// maxZoom 19: izinkan zoom lebih dalam dari maxzoom data (14). MapLibre otomatis
+// OVERZOOM tile z14 (memperbesar detail yang ada) — pengguna bisa masuk sedekat
+// yang diinginkan walau di luar area data tetap kosong (itu wajar, offline).
+export async function createMap(container, style, { center = [106.8272, -6.1751], zoom = 11, minZoom = 1, maxZoom = 19 } = {}) {
   const { maplibregl } = await loadMapLibs();
   const map = new maplibregl.Map({
     container,

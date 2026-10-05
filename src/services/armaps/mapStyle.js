@@ -90,7 +90,7 @@ export function buildMapStyle(sourceKey, {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': C.roadCasing,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 12, 3, 16, 9],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 12, 3, 16, 9, 19, 18],
       },
     },
     {
@@ -105,7 +105,7 @@ export function buildMapStyle(sourceKey, {
           ['highway', 'major_road'], C.roadMajor,
           C.roadFill,
         ],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 12, 2, 16, 7],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 12, 2, 16, 7, 19, 15],
       },
     },
   ];
