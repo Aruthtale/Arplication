@@ -113,6 +113,41 @@ Data OSM diperbarui **harian** (Protomaps/Geofabrik), jadi "terbaru" = tanggal u
 | Detail default | **Zoom 14** (Jabodetabek ≈ 37 MB) |
 | Hosting file wilayah | **GitHub Releases** (gratis) |
 
+### ⚠️ JEBAKAN KRITIS #2 — Worker MapLibre 404 di bawah bundler (terbukti runtime)
+
+Saat uji runtime dengan Vite, peta **tidak render**: `styleLoaded` tetap
+`false`, event `load`/`idle` tidak pernah menyala, walau Blob PMTiles sudah
+terdaftar (`source.loaded=true`, `hasTile=true`).
+
+**Penyebab:** MapLibre menebak URL worker dari `import.meta.url` →
+`new URL('./maplibre-gl-worker.mjs', import.meta.url)`. Di prototipe kita
+mengimpor `dist/maplibre-gl.mjs` langsung (worker ketemu). Lewat bundler,
+module hidup di `.vite/deps/` sehingga worker **404** →
+`Error: Worker failed to load`. Peta butuh worker untuk memproses tile, jadi
+tanpa worker = canvas kosong. Ini pola *bundler blind spot*.
+
+**Solusi (terbukti):** host worker sendiri + arahkan MapLibre ke sana:
+1. Salin `maplibre-gl-worker.mjs` **dan** `maplibre-gl-shared.mjs` (worker
+   mengimpor yang kedua) ke `public/armaps/maplibre/`.
+2. Panggil `maplibregl.setWorkerUrl(new URL('armaps/maplibre/maplibre-gl-worker.mjs', location.href).href)`
+   sekali sebelum membuat `Map`. Lihat `src/services/armaps/mapEngine.js`.
+
+**Bukti:** setelah fix, `phase=idle`, `layers=9`, `canvas 1280×633`,
+`permintaan jaringan non-lokal: 0`, `error: none`, dan peta Jabodetabek
+tampil penuh (label Jakarta/Bekasi/Bogor/Depok/Bandung) — terverifikasi
+lewat screenshot, bukan asumsi.
+
+### ⚠️ JEBAKAN #3 — Uji di tab latar belakang = peta "macet" (jebakan harness)
+
+MapLibre menunda pemuatan style lewat `requestAnimationFrame`
+(`frameAsync`). Browser **men-throttle rAF di tab yang tidak aktif**
+(terlihat: `document.hidden=true`, hanya 1 tick rAF dalam 2 detik), sehingga
+style tidak pernah dimuat → `styleLoaded=false` selamanya, seolah ada bug.
+**Ini artefak harness, bukan bug aplikasi.** Saat tab dibawa ke depan
+(`Page.bringToFront`), rAF berjalan (241 tick/2 dtk) dan peta langsung
+render. **Aturan uji:** selalu pastikan tab uji **aktif/foreground** sebelum
+menyimpulkan peta gagal.
+
 ### Aturan "ringan & hemat memori" (WAJIB dipatuhi)
 
 1. **Atomic update (jangan tabrak/hapus dulu)**:

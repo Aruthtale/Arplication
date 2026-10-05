@@ -41,3 +41,9 @@ android/app/release/
 android/arplication-release.keystore
 *.keystore
 *.jks
+
+# ArMaps — scaffolding uji runtime lokal (file peta besar, jangan di-commit)
+public/armaps-test/
+dist-armaps-test/
+armaps-test.html
+vite.armaps-test.config.js

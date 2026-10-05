@@ -13,6 +13,30 @@
 let protocolRegistered = false;
 let maplibreglRef = null;
 let pmtilesRef = null;
+let workerConfigured = false;
+
+/**
+ * Path worker MapLibre yang di-host sendiri (lihat public/armaps/maplibre/).
+ * WAJIB: tanpa ini, MapLibre menebak URL worker dari import.meta.url, yang
+ * GAGAL saat di-bundle Vite (module ada di .vite/deps/) → worker 404 →
+ * `styleLoaded` tidak pernah true → PETA TIDAK RENDER. Jebakan "bundler
+ * blind spot" ini terbukti saat uji runtime.
+ */
+export const MAPLIBRE_WORKER_PATH = 'armaps/maplibre/maplibre-gl-worker.mjs';
+
+/** Konfigurasi URL worker MapLibre (sekali saja). */
+function configureWorker(maplibregl) {
+  if (workerConfigured) return;
+  try {
+    if (typeof maplibregl.setWorkerUrl === 'function' && typeof location !== 'undefined') {
+      const url = new URL(MAPLIBRE_WORKER_PATH, location.href).href;
+      maplibregl.setWorkerUrl(url);
+      workerConfigured = true;
+    }
+  } catch {
+    /* biarkan MapLibre memakai default (mode web dev langsung) */
+  }
+}
 
 /** Muat MapLibre + PMTiles sekali saja. */
 export async function loadMapLibs() {
@@ -20,6 +44,7 @@ export async function loadMapLibs() {
     const maplibre = await import('maplibre-gl');
     // MapLibre ESM tidak selalu punya default export → pakai namespace.
     maplibreglRef = maplibre.default || maplibre;
+    configureWorker(maplibreglRef);
     await import('maplibre-gl/dist/maplibre-gl.css');
   }
   if (!pmtilesRef) {

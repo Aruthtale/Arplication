@@ -48,6 +48,15 @@ export const REGION_CATALOG = [
     file: 'bandung.pmtiles',
   },
   {
+    id: 'cianjur',
+    name: 'Cianjur',
+    description: 'Kabupaten Cianjur & sekitarnya',
+    bbox: [106.85, -7.75, 107.45, -6.55],
+    maxzoom: 14,
+    sizeBytes: 13352975,
+    file: 'cianjur.pmtiles',
+  },
+  {
     id: 'surabaya',
     name: 'Surabaya',
     description: 'Surabaya & sekitarnya (Gerbangkertosusila)',

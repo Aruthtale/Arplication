@@ -54,6 +54,30 @@ test('katalog: TIDAK ada wilayah default — daftar murni untuk dipilih pengguna
   }
 });
 
+test('katalog: Cianjur ada dengan ukuran nyata & bbox valid', () => {
+  const c = findRegion('cianjur');
+  assert.ok(c, 'Cianjur harus ada di katalog');
+  assert.equal(c.file, 'cianjur.pmtiles');
+  assert.equal(c.sizeBytes, 13352975);
+  assert.equal(c.bbox.length, 4);
+  assert.ok(c.sizeBytes > 0);
+});
+
+test('worker MapLibre: path stabil & file benar-benar ada di public/', async () => {
+  const { MAPLIBRE_WORKER_PATH } = await import('../src/services/armaps/mapEngine.js');
+  assert.equal(MAPLIBRE_WORKER_PATH, 'armaps/maplibre/maplibre-gl-worker.mjs');
+  // Guard "bundler blind spot": worker + shared chunk HARUS ada di public/,
+  // kalau tidak peta tidak akan render (worker 404).
+  const { existsSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const base = fileURLToPath(new URL('../public/', import.meta.url));
+  assert.ok(existsSync(base + MAPLIBRE_WORKER_PATH), 'worker MapLibre hilang di public/');
+  assert.ok(
+    existsSync(base + 'armaps/maplibre/maplibre-gl-shared.mjs'),
+    'shared chunk MapLibre hilang di public/ (worker mengimpornya)',
+  );
+});
+
 test('buildRegionUrl menyusun URL GitHub Release dengan tag & file benar', () => {
   const jab = findRegion('jabodetabek');
   const url = buildRegionUrl(jab);
