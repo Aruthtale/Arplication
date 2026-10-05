@@ -64,6 +64,25 @@ export function base64ToBytes(b64) {
 }
 
 /**
+ * Interpretasi satu hasil callback `readFileInChunks`.
+ *
+ * ⚠️ KONTRAK PLATFORM (mudah salah): native Android menandai SELESAI dengan
+ * `{ data: "" }` (string kosong) — lihat `FilesystemPlugin.kt`
+ * (`sendSuccess(createReadResultObject(""))`), BUKAN `null`. Web/beberapa
+ * platform mengirim `null`. Keduanya harus dianggap "selesai"; kalau tidak,
+ * pembacaan file menggantung selamanya (gejala: peta "Memuat peta…" terus).
+ *
+ * @param {{data?: string}|null|undefined} chunkRead
+ * @returns {{ done: boolean, bytes: Uint8Array|null }}
+ */
+export function interpretChunk(chunkRead) {
+  if (chunkRead == null) return { done: true, bytes: null };
+  const data = chunkRead.data;
+  if (!data) return { done: true, bytes: null }; // "" = penanda selesai (native)
+  return { done: false, bytes: base64ToBytes(data) };
+}
+
+/**
  * Baca file wilayah sebagai Blob — memori-hemat (per-chunk) di native.
  * @returns {Promise<{ blob: Blob, sizeBytes: number } | null>}
  */
@@ -86,10 +105,8 @@ export async function readRegionBlob(id, { location, onProgress } = {}) {
       { path, directory: dir, chunkSize: READ_CHUNK },
       (chunkRead, err) => {
         if (err) return reject(err);
-        if (chunkRead === null) return resolve(); // selesai
-        const data = chunkRead?.data;
-        if (!data) return;
-        const bytes = base64ToBytes(data);
+        const { done, bytes } = interpretChunk(chunkRead);
+        if (done) return resolve();
         chunks.push(bytes);
         total += bytes.length;
         if (onProgress) onProgress(total);
@@ -122,11 +139,9 @@ export async function verifyRegionFile(id, { location } = {}) {
       { path, directory: dir, chunkSize: READ_CHUNK },
       (chunkRead, err) => {
         if (err) return reject(err);
-        if (chunkRead === null) return resolve();
-        if (!head && chunkRead?.data) {
-          const bytes = base64ToBytes(chunkRead.data);
-          head = bytes.slice(0, 16);
-        }
+        const { done, bytes } = interpretChunk(chunkRead);
+        if (done) return resolve();
+        if (!head) head = bytes.slice(0, 16);
         // cukup chunk pertama — sisanya diabaikan
         if (head) return resolve();
       },
@@ -157,9 +172,10 @@ export async function verifyFileHeaderAt(path, { location } = {}) {
       { path, directory: dir, chunkSize: READ_CHUNK },
       (chunkRead, err) => {
         if (err) return reject(err);
-        if (chunkRead === null) return resolve();
-        if (!head && chunkRead?.data) {
-          head = base64ToBytes(chunkRead.data).slice(0, 16);
+        const { done, bytes } = interpretChunk(chunkRead);
+        if (done) return resolve();
+        if (!head) {
+          head = bytes.slice(0, 16);
           return resolve();
         }
       },

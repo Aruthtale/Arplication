@@ -36,6 +36,30 @@ import {
   storageLocationLabel,
 } from '../src/services/armaps/settings.js';
 
+import { interpretChunk } from '../src/services/armaps/regionStore.js';
+
+// ─────────────────── Kontrak readFileInChunks (bug runtime HP) ────────────────
+// Bug nyata: peta stuck "Memuat peta…" di Android karena kode menunggu `null`
+// sebagai penanda selesai, padahal native Android mengirim `{ data: "" }`
+// (lihat FilesystemPlugin.kt). Tes ini mengunci kontrak tsb agar tak regresi.
+
+test('interpretChunk: chunk akhir native {data:""} = SELESAI (bukan gantung)', () => {
+  assert.equal(interpretChunk({ data: '' }).done, true);
+  assert.equal(interpretChunk({ data: '' }).bytes, null);
+});
+
+test('interpretChunk: null/undefined juga = SELESAI (web/beberapa platform)', () => {
+  assert.equal(interpretChunk(null).done, true);
+  assert.equal(interpretChunk(undefined).done, true);
+});
+
+test('interpretChunk: chunk berisi data = lanjut, byte ter-decode benar', () => {
+  const b64 = Buffer.from('PMTiles').toString('base64');
+  const r = interpretChunk({ data: b64 });
+  assert.equal(r.done, false);
+  assert.equal(Buffer.from(r.bytes).toString(), 'PMTiles');
+});
+
 // ───────────────────────────── Katalog ─────────────────────────────
 
 test('katalog: TIDAK ada wilayah default — daftar murni untuk dipilih pengguna', () => {
@@ -76,6 +100,32 @@ test('worker MapLibre: path stabil & file benar-benar ada di public/', async () 
     existsSync(base + 'armaps/maplibre/maplibre-gl-shared.mjs'),
     'shared chunk MapLibre hilang di public/ (worker mengimpornya)',
   );
+});
+
+test('semua plugin Capacitor terdaftar di gradle Android (guard cap copy vs sync)', async () => {
+  // Bug nyata: GPS gagal total di HP karena @capacitor/geolocation ada di
+  // node_modules tapi TIDAK terdaftar di capacitor.settings.gradle /
+  // capacitor.build.gradle — akibat `npm run build` memakai `cap copy`
+  // (hanya salin aset web) alih-alih `cap sync` (daftarkan plugin native).
+  // Guard ini memastikan setiap @capacitor/* (kecuali cli/android/core) punya
+  // modul gradle-nya.
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const pkg = JSON.parse(readFileSync(root + 'package.json', 'utf8'));
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  const settings = readFileSync(root + 'android/capacitor.settings.gradle', 'utf8');
+  const build = readFileSync(root + 'android/app/capacitor.build.gradle', 'utf8');
+
+  const skip = new Set(['@capacitor/cli', '@capacitor/core', '@capacitor/android']);
+  const plugins = Object.keys(deps).filter((k) => k.startsWith('@capacitor/') && !skip.has(k));
+  assert.ok(plugins.includes('@capacitor/geolocation'), 'geolocation harus jadi dependensi');
+
+  for (const p of plugins) {
+    const mod = 'capacitor-' + p.replace('@capacitor/', '');
+    assert.match(settings, new RegExp(`:${mod}'`), `${p} tidak ada di capacitor.settings.gradle`);
+    assert.match(build, new RegExp(`:${mod}'`), `${p} tidak ada di capacitor.build.gradle`);
+  }
 });
 
 test('buildRegionUrl menyusun URL GitHub Release dengan tag & file benar', () => {

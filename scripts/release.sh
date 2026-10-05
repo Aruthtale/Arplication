@@ -2,7 +2,7 @@
 #
 # release.sh — Rilis otomatis Arplication
 #
-# Satu perintah untuk: bump versi → build web (+cap copy) → build APK release
+# Satu perintah untuk: bump versi → build web (+cap sync) → build APK release
 #                      → commit → tag → push ke SEMUA remote
 #                      → buat GitHub Release (+ upload APK) di SEMUA repo.
 #
