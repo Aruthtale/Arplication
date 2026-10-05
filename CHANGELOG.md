@@ -7,6 +7,40 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.3.0] - 2026-10-06
+
+### 🎉 New
+- **Ardoro Focus Lock — Mode Ketat Level 3 (Jeda Wajib)**:
+  - Saat sesi fokus berjalan, mematikan blokir **tidak lagi instan**: muncul hitungan mundur (default **10 detik**, bisa diatur 3–60 detik).
+  - Pesan peringatan kontekstual sesuai lama fokus (mis. "Fokusmu sudah 25 menit. Sungguh mau berhenti sekarang?").
+  - Tombol **Batal** membatalkan dan tetap fokus; hitungan selesai baru mematikan blokir.
+  - Tidak mengunci permanen: timer habis tetap membebaskan pengguna.
+- **ArToolbox — Text & Dev Tools** (kartu baru):
+  - Case converter: UPPER, lower, Title, Sentence, camelCase, PascalCase, snake_case, kebab-case, slug, aLtErNaTiNg, reverse.
+  - Utak-atik baris: urutkan A→Z / Z→A, hapus duplikat, hapus baris kosong, rapikan spasi.
+  - Penghitung teks: kata, karakter, tanpa spasi, baris, kalimat, paragraf, estimasi waktu baca.
+  - Base64 encode/decode (aman Unicode/emoji) & Hash SHA-1/256/512.
+  - JSON formatter (rapikan/perkecil) dengan validasi error.
+  - Lorem Ipsum generator (kata/kalimat/paragraf).
+- **ArToolbox — Quick Calculator** (kartu baru):
+  - Diskon, markup, PPN (eksklusif/inklusif), kalkulator persen & perubahan nilai.
+  - Rasio aspek, konversi satuan (panjang, berat, luas, volume, data, waktu, suhu).
+  - Hitung umur & selisih dua tanggal, bagi tagihan rata + tip.
+- **PDF Maker — Halaman Teks (Teks → PDF)**:
+  - Selain foto, kini bisa menulis/menempel teks menjadi halaman PDF (auto-paginasi bila panjang).
+  - Generator PDF diekstrak ke `src/utils/pdfBuilder.js` (pure, testable, tanpa library).
+- **ArNote → PDF** (integrasi antar-modul):
+  - Ekspor satu catatan ke PDF (tombol di setiap kartu catatan).
+  - Ekspor **semua** catatan yang tampil sekaligus ke satu PDF.
+  - Markdown ringan dibersihkan agar rapi di PDF.
+
+### 📦 Build
+- **versionCode**: 31 → **32**
+- **versionName**: "1.2.0" → **"1.3.0"**
+- 48 tes unit baru (total **146** lulus): `focuslock`, `texttools`, `calctools`, `pdfbuilder`, `notepdf`.
+
+---
+
 ## [1.2.0] - 2026-10-05
 
 ### 🎉 New

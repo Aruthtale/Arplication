@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   QrCode, Sliders, FileText, Palette, History, 
-  Sparkles, Zap, ArrowUpRight, ShieldCheck 
+  Sparkles, Zap, ArrowUpRight, ShieldCheck, Type, Calculator
 } from 'lucide-react';
 
 export default function ToolboxBentoGrid({ onSelectTool, onOpenHistory, historyCount = 0 }) {
@@ -49,6 +49,28 @@ export default function ToolboxBentoGrid({ onSelectTool, onOpenHistory, historyC
       badgeBg: 'bg-[#D8B4FE]',
       icon: Palette,
       tag: 'Visual & Palet',
+    },
+    {
+      id: 'text',
+      title: 'Text & Dev Tools',
+      badge: 'Teks & Kode',
+      description: 'Ubah huruf (camel/snake/title), hitung kata, Base64, hash, rapikan JSON, & lorem.',
+      color: '#FFE600', // Kuning Neon
+      bgCard: 'bg-[#FFFBDF]',
+      badgeBg: 'bg-[#FFE600]',
+      icon: Type,
+      tag: 'Teks & Developer',
+    },
+    {
+      id: 'calc',
+      title: 'Quick Calculator',
+      badge: 'Hitung Cepat',
+      description: 'Diskon & PPN, kalkulator persen, rasio aspek, konversi satuan, umur, & bagi tagihan.',
+      color: '#C4FAF8', // Biru Muda
+      bgCard: 'bg-[#EBFDFC]',
+      badgeBg: 'bg-[#C4FAF8]',
+      icon: Calculator,
+      tag: 'Angka & Konversi',
     },
   ];
 

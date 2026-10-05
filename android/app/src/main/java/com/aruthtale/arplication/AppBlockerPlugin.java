@@ -43,11 +43,15 @@ public class AppBlockerPlugin extends Plugin {
         Boolean auto = call.getBoolean("auto");
         String mode = call.getString("mode");
         JSArray packages = call.getArray("packages");
+        Boolean strict = call.getBoolean("strict");
+        Integer graceSeconds = call.getInt("graceSeconds");
 
         if (enabled != null) AppBlockerStore.setEnabled(ctx, enabled);
         if (auto != null) AppBlockerStore.setAuto(ctx, auto);
         if (mode != null) AppBlockerStore.setMode(ctx, mode);
         if (packages != null) AppBlockerStore.setPackages(ctx, packages);
+        if (strict != null) AppBlockerStore.setStrict(ctx, strict);
+        if (graceSeconds != null) AppBlockerStore.setGraceSeconds(ctx, graceSeconds);
 
         call.resolve(buildConfig());
     }
@@ -140,6 +144,8 @@ public class AppBlockerPlugin extends Plugin {
         ret.put("packages", AppBlockerStore.getPackages(ctx));
         ret.put("accessibilityEnabled", isAccessibilityServiceOn(ctx));
         ret.put("overlayGranted", canDrawOverlays(ctx));
+        ret.put("strict", AppBlockerStore.isStrict(ctx));
+        ret.put("graceSeconds", AppBlockerStore.getGraceSeconds(ctx));
         return ret;
     }
 

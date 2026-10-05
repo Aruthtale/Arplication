@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, Upload, FileText, Download, Trash2, ArrowUp, ArrowDown, 
-  RotateCw, Plus, Check, Layers, Sparkles, FileCheck 
+  RotateCw, Plus, Check, Layers, Sparkles, FileCheck, Type, Image as ImageIcon
 } from 'lucide-react';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
 import { saveToolboxBlobFile } from '../../../../utils/download';
+import { buildPdf, A4_WIDTH, A4_HEIGHT } from '../../../../utils/pdfBuilder';
 
 // IndexedDB Helper for PDF Maker Drafts (survives Android OS memory kills)
 const PDF_DB_NAME = 'artoolbox_pdf_maker_db';
@@ -69,12 +70,45 @@ async function clearPagesFromDb() {
   }
 }
 
+/** Render gambar (dengan rotasi) → JPEG bytes + dimensi akhir. */
+function renderImageToJpegBytes(dataUrl, rotation = 0) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const w = img.width;
+      const h = img.height;
+      const rot = rotation || 0;
+      if (rot === 90 || rot === 270) {
+        canvas.width = h;
+        canvas.height = w;
+      } else {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.drawImage(img, -w / 2, -h / 2);
+
+      const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.90);
+      const binary = atob(jpegDataUrl.split(',')[1]);
+      const array = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
+      resolve({ width: canvas.width, height: canvas.height, data: array });
+    };
+    img.src = dataUrl;
+  });
+}
+
 export default function PdfMakerView({ onBack, onRefreshHistory }) {
-  const [pages, setPages] = useState([]); // Array of { id, dataUrl, name, size, rotation }
+  const [pages, setPages] = useState([]); // { id, type:'image', dataUrl, name, size, rotation } | { id, type:'text', text }
   const [pageSize, setPageSize] = useState('a4_portrait'); // 'a4_portrait' | 'a4_landscape' | 'fit'
   const [pdfTitle, setPdfTitle] = useState('Dokumen_Arplication');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPdfBlobUrl, setGeneratedPdfBlobUrl] = useState(null);
+  const [textDraft, setTextDraft] = useState('');
+  const [addMode, setAddMode] = useState('foto'); // 'foto' | 'teks'
   const isLoadedFromDbRef = useRef(false);
 
   // Restore saved pages on mount
@@ -107,6 +141,7 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
       reader.onload = (event) => {
         const item = {
           id: `page_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          type: 'image',
           dataUrl: event.target?.result,
           name: file.name,
           size: file.size,
@@ -116,6 +151,26 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
       };
       reader.readAsDataURL(file);
     });
+    e.target.value = '';
+  };
+
+  const addTextPage = () => {
+    const t = textDraft.trim();
+    if (!t) return;
+    const item = {
+      id: `text_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      type: 'text',
+      text: textDraft,
+      name: t.split('\n')[0].slice(0, 24) || 'Halaman Teks',
+    };
+    setPages((prev) => [...prev, item]);
+    setTextDraft('');
+    addToolboxHistory({
+      toolType: 'pdf',
+      title: 'Tambah Halaman Teks',
+      dataPayload: t.slice(0, 120),
+    });
+    if (onRefreshHistory) onRefreshHistory();
   };
 
   const movePage = (index, direction) => {
@@ -131,7 +186,9 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
   const rotatePage = (index) => {
     setPages((prev) => {
       const copy = [...prev];
-      copy[index] = { ...copy[index], rotation: (copy[index].rotation + 90) % 360 };
+      if (copy[index].type === 'image') {
+        copy[index] = { ...copy[index], rotation: (copy[index].rotation + 90) % 360 };
+      }
       return copy;
     });
   };
@@ -146,189 +203,55 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
     clearPagesFromDb();
   };
 
-  // Pure JavaScript Client-Side PDF Generator for Images
+  // Client-Side PDF Generator — gambar & teks (pure JS, via utils/pdfBuilder).
   const generatePdf = async () => {
     if (pages.length === 0) return;
     setIsGenerating(true);
 
     try {
-      // Load all images and draw into canvas with requested rotation and orientation
-      const pageImages = await Promise.all(
-        pages.map((p) => {
-          return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-
-              let w = img.width;
-              let h = img.height;
-              const rot = p.rotation || 0;
-
-              if (rot === 90 || rot === 270) {
-                canvas.width = h;
-                canvas.height = w;
-              } else {
-                canvas.width = w;
-                canvas.height = h;
-              }
-
-              ctx.translate(canvas.width / 2, canvas.height / 2);
-              ctx.rotate((rot * Math.PI) / 180);
-              ctx.drawImage(img, -w / 2, -h / 2);
-
-              const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.90);
-              const binary = atob(jpegDataUrl.split(',')[1]);
-              const array = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
-
-              resolve({
-                width: canvas.width,
-                height: canvas.height,
-                data: array,
-              });
-            };
-            img.src = p.dataUrl;
+      // Siapkan spec halaman (gambar di-render dulu ke JPEG bytes).
+      const specs = [];
+      for (const p of pages) {
+        if (p.type === 'text') {
+          specs.push({ type: 'text', text: p.text });
+        } else {
+          const imgInfo = await renderImageToJpegBytes(p.dataUrl, p.rotation || 0);
+          specs.push({
+            type: 'image',
+            width: imgInfo.width,
+            height: imgInfo.height,
+            data: imgInfo.data,
+            pageWidth: pageSize === 'a4_landscape' ? A4_HEIGHT : A4_WIDTH,
+            pageHeight: pageSize === 'a4_landscape' ? A4_WIDTH : A4_HEIGHT,
           });
-        })
-      );
-
-      // Build Standard Multi-Page PDF Specification
-      // 1 pt = 1/72 inch. A4 = 595.28 x 841.89 pt
-      const pdfObjects = [];
-      let currentObjIndex = 1;
-
-      // Determine page dimensions
-      let pdfPageWidth = 595.28;
-      let pdfPageHeight = 841.89;
-      if (pageSize === 'a4_landscape') {
-        pdfPageWidth = 841.89;
-        pdfPageHeight = 595.28;
-      }
-
-      const pagesObjIndex = 2;
-      currentObjIndex = 3;
-
-      const pageObjRefs = [];
-      const imageObjRefs = [];
-      const contentObjRefs = [];
-
-      pageImages.forEach((imgInfo, idx) => {
-        const imageObjNum = currentObjIndex++;
-        const contentObjNum = currentObjIndex++;
-        const pageObjNum = currentObjIndex++;
-
-        pageObjRefs.push(pageObjNum);
-        imageObjRefs.push(imageObjNum);
-        contentObjRefs.push(contentObjNum);
-
-        let targetW = pdfPageWidth;
-        let targetH = pdfPageHeight;
-
-        if (pageSize === 'fit') {
-          targetW = imgInfo.width * 0.75;
-          targetH = imgInfo.height * 0.75;
         }
+      }
 
-        // Calculate fit scale with 20pt margin
-        const margin = 20;
-        const maxDrawW = targetW - margin * 2;
-        const maxDrawH = targetH - margin * 2;
-        const imgAspect = imgInfo.width / imgInfo.height;
-        const frameAspect = maxDrawW / maxDrawH;
-
-        let drawW = maxDrawW;
-        let drawH = maxDrawH;
-        if (imgAspect > frameAspect) {
-          drawH = maxDrawW / imgAspect;
-        } else {
-          drawW = maxDrawH * imgAspect;
+      let bytes;
+      if (pageSize === 'fit') {
+        // Untuk mode "fit", halaman gambar memakai ukuran gambarnya; halaman teks tetap A4.
+        const fitSpecs = [];
+        for (const p of pages) {
+          if (p.type === 'text') {
+            fitSpecs.push({ type: 'text', text: p.text });
+          } else {
+            const imgInfo = await renderImageToJpegBytes(p.dataUrl, p.rotation || 0);
+            fitSpecs.push({
+              type: 'image',
+              width: imgInfo.width,
+              height: imgInfo.height,
+              data: imgInfo.data,
+              pageWidth: imgInfo.width * 0.75,
+              pageHeight: imgInfo.height * 0.75,
+            });
+          }
         }
-
-        const drawX = (targetW - drawW) / 2;
-        const drawY = (targetH - drawH) / 2;
-
-        // Image Object
-        pdfObjects[imageObjNum] = {
-          raw: true,
-          header: `<< /Type /XObject /Subtype /Image /Width ${imgInfo.width} /Height ${imgInfo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgInfo.data.length} >>\nstream\n`,
-          footer: `\nendstream`,
-          data: imgInfo.data,
-        };
-
-        // Content Stream Object (Draw Image on Page)
-        const contentStr = `q\n${drawW.toFixed(2)} 0 0 ${drawH.toFixed(2)} ${drawX.toFixed(2)} ${drawY.toFixed(2)} cm\n/Im${idx + 1} Do\nQ\n`;
-        pdfObjects[contentObjNum] = {
-          str: `<< /Length ${contentStr.length} >>\nstream\n${contentStr}endstream`,
-        };
-
-        // Page Object
-        pdfObjects[pageObjNum] = {
-          str: `<< /Type /Page /Parent ${pagesObjIndex} 0 R /MediaBox [0 0 ${targetW.toFixed(2)} ${targetH.toFixed(2)}] /Contents ${contentObjNum} 0 R /Resources << /XObject << /Im${idx + 1} ${imageObjNum} 0 R >> >> >>`,
-        };
-      });
-
-      // Catalog (Obj 1)
-      pdfObjects[1] = {
-        str: `<< /Type /Catalog /Pages ${pagesObjIndex} 0 R >>`,
-      };
-
-      // Pages Root (Obj 2)
-      pdfObjects[pagesObjIndex] = {
-        str: `<< /Type /Pages /Kids [${pageObjRefs.map((n) => `${n} 0 R`).join(' ')}] /Count ${pageObjRefs.length} >>`,
-      };
-
-      // Compile binary PDF byte buffer
-      const encoder = new TextEncoder();
-      const chunks = [];
-      const xref = [];
-      let currentOffset = 0;
-
-      const pushText = (text) => {
-        const bytes = encoder.encode(text);
-        chunks.push(bytes);
-        currentOffset += bytes.length;
-      };
-
-      const pushBinary = (bytes) => {
-        chunks.push(bytes);
-        currentOffset += bytes.length;
-      };
-
-      pushText('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
-
-      for (let i = 1; i < currentObjIndex; i++) {
-        xref[i] = currentOffset;
-        pushText(`${i} 0 obj\n`);
-        const obj = pdfObjects[i];
-        if (obj.raw) {
-          pushText(obj.header);
-          pushBinary(obj.data);
-          pushText(obj.footer);
-        } else {
-          pushText(obj.str);
-        }
-        pushText('\nendobj\n');
+        bytes = buildPdf(fitSpecs);
+      } else {
+        bytes = buildPdf(specs);
       }
 
-      const xrefOffset = currentOffset;
-      pushText(`xref\n0 ${currentObjIndex}\n0000000000 65535 f \n`);
-      for (let i = 1; i < currentObjIndex; i++) {
-        const offsetStr = String(xref[i]).padStart(10, '0');
-        pushText(`${offsetStr} 00000 n \n`);
-      }
-
-      pushText(`trailer\n<< /Size ${currentObjIndex} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
-
-      const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-      const finalPdfArray = new Uint8Array(totalLength);
-      let pos = 0;
-      for (const chunk of chunks) {
-        finalPdfArray.set(chunk, pos);
-        pos += chunk.length;
-      }
-
-      const blob = new Blob([finalPdfArray], { type: 'application/pdf' });
+      const blob = new Blob([bytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       setGeneratedPdfBlobUrl(url);
       setIsGenerating(false);
@@ -336,7 +259,7 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
       addToolboxHistory({
         toolType: 'pdf',
         title: `PDF: ${pdfTitle}.pdf (${pages.length} Halaman)`,
-        dataPayload: `Ukuran Halaman: ${pageSize} | Total: ${pages.length} foto/dokumen`,
+        dataPayload: `Ukuran: ${pageSize} | Total: ${pages.length} halaman (foto/teks)`,
       });
       if (onRefreshHistory) onRefreshHistory();
     } catch (err) {
@@ -387,14 +310,54 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 className="text-sm font-black uppercase text-[#121212]">Susun Dokumen PDF</h3>
-            <p className="text-xs text-gray-600">Gabungkan beberapa foto/struk/dokumen menjadi 1 file PDF rapi.</p>
+            <p className="text-xs text-gray-600">Gabungkan foto & tulisan menjadi 1 file PDF rapi — tanpa internet.</p>
           </div>
-          <label className="px-3.5 py-2 bg-[#38E54D] hover:bg-[#30CC43] active:translate-x-0.5 active:translate-y-0.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] text-xs font-black flex items-center gap-1.5 cursor-pointer">
+        </div>
+
+        {/* Mode tambah: Foto / Teks */}
+        <div className="flex bg-[#FFE600] rounded-xl border-2 border-[#121212] p-1 gap-1">
+          <button
+            onClick={() => setAddMode('foto')}
+            className={`flex-1 py-2 rounded-lg font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
+              addMode === 'foto' ? 'bg-white shadow-[1px_1px_0px_#121212]' : 'text-[#121212]/70'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" /> Tambah Foto
+          </button>
+          <button
+            onClick={() => setAddMode('teks')}
+            className={`flex-1 py-2 rounded-lg font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
+              addMode === 'teks' ? 'bg-white shadow-[1px_1px_0px_#121212]' : 'text-[#121212]/70'
+            }`}
+          >
+            <Type className="w-3.5 h-3.5" /> Tulis Teks
+          </button>
+        </div>
+
+        {addMode === 'foto' ? (
+          <label className="w-full px-3.5 py-3 bg-[#38E54D] hover:bg-[#30CC43] active:translate-x-0.5 active:translate-y-0.5 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer">
             <Plus className="w-4 h-4" />
-            <span>Tambah Foto ({pages.length})</span>
+            <span>Pilih Foto dari Galeri ({pages.filter((p) => p.type !== 'text').length})</span>
             <input type="file" multiple accept="image/*" onChange={handleAddFiles} className="hidden" />
           </label>
-        </div>
+        ) : (
+          <div className="space-y-2">
+            <textarea
+              value={textDraft}
+              onChange={(e) => setTextDraft(e.target.value)}
+              placeholder="Tulis atau tempel teks di sini… (otomatis dipaginasi bila panjang)"
+              rows={5}
+              className="w-full p-3 rounded-xl border-2 border-[#121212] bg-[#F8F5EE] font-mono text-xs outline-none resize-y"
+            />
+            <button
+              onClick={addTextPage}
+              disabled={!textDraft.trim()}
+              className="px-3.5 py-2 bg-[#C4FAF8] disabled:opacity-40 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none text-xs font-black flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Tambah Halaman Teks
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
           <div>
@@ -447,12 +410,16 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
               >
                 {/* Thumbnail */}
                 <div className="w-14 h-18 rounded-lg border border-[#121212] overflow-hidden bg-gray-100 flex items-center justify-center shrink-0">
-                  <img
-                    src={p.dataUrl}
-                    alt={p.name}
-                    className="w-full h-full object-cover transition-transform"
-                    style={{ transform: `rotate(${p.rotation}deg)` }}
-                  />
+                  {p.type === 'text' ? (
+                    <FileText className="w-6 h-6 text-gray-500" />
+                  ) : (
+                    <img
+                      src={p.dataUrl}
+                      alt={p.name}
+                      className="w-full h-full object-cover transition-transform"
+                      style={{ transform: `rotate(${p.rotation}deg)` }}
+                    />
+                  )}
                 </div>
 
                 {/* Details */}
@@ -461,10 +428,12 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
                     <span className="px-1.5 py-0.5 bg-[#FFE600] border border-[#121212] rounded text-[10px] font-mono font-black">
                       Hal. {idx + 1}
                     </span>
-                    <span className="text-xs font-bold text-[#121212] truncate">{p.name}</span>
+                    <span className="text-xs font-bold text-[#121212] truncate">
+                      {p.type === 'text' ? `Teks: ${p.name}` : p.name}
+                    </span>
                   </div>
                   <div className="text-[10px] font-mono text-gray-500 mt-1">
-                    Rotasi: {p.rotation}°
+                    {p.type === 'text' ? 'Halaman Teks' : `Rotasi: ${p.rotation}°`}
                   </div>
 
                   {/* Actions */}
@@ -487,7 +456,8 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
                     </button>
                     <button
                       onClick={() => rotatePage(idx)}
-                      className="p-1 bg-[#F8F5EE] rounded border border-[#121212] cursor-pointer"
+                      disabled={p.type === 'text'}
+                      className="p-1 bg-[#F8F5EE] disabled:opacity-30 rounded border border-[#121212] cursor-pointer"
                       title="Putar 90 Derajat"
                     >
                       <RotateCw className="w-3.5 h-3.5" />
@@ -542,7 +512,8 @@ export default function PdfMakerView({ onBack, onRefreshHistory }) {
           <FileText className="w-10 h-10 text-gray-400 mx-auto" />
           <h4 className="text-sm font-black uppercase text-[#121212]">Belum Ada Halaman</h4>
           <p className="text-xs text-gray-600 max-w-xs mx-auto">
-            Klik tombol <strong>"Tambah Foto"</strong> di atas untuk memasukkan gambar yang ingin diubah menjadi PDF.
+            Tambahkan <strong>foto</strong> dari galeri atau <strong>tulis teks</strong> di atas untuk
+            dijadikan PDF.
           </p>
         </div>
       )}

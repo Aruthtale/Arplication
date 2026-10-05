@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Plus, Tag, X } from 'lucide-react';
+import { Search, Filter, Plus, Tag, X, FileText } from 'lucide-react';
 import NoteBentoCard from './NoteBentoCard';
 import NoteEditorModal from './NoteEditorModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
 import NeubrutalistFilterPicker from './NeubrutalistFilterPicker';
 import { getAllNotes, saveNote, deleteNote, togglePinNote } from '../../../services/notesDb';
 import { exportNoteToMd } from '../../../services/notesFileSync';
+import { exportNotesToPdf } from '../../../services/notePdfService';
 import { syncNotesToWidget } from '../../../services/widgetBridge';
 import { registerBackHandler } from '../../../services/backHandler';
 
@@ -166,6 +167,39 @@ export default function ArNoteModule() {
     }
   };
 
+  const handleExportNotePdf = async (note) => {
+    try {
+      const result = await exportNotesToPdf(note, (note.title || 'Catatan').slice(0, 40));
+      if (result.success) {
+        alert(`Berhasil diekspor ke PDF:\n${result.fileName} (${result.pages} halaman)`);
+      } else {
+        alert('Ekspor PDF gagal: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Export PDF failed:', error);
+    }
+  };
+
+  const handleExportAllPdf = async () => {
+    if (filteredNotes.length === 0) {
+      alert('Tidak ada catatan untuk diekspor.');
+      return;
+    }
+    try {
+      const result = await exportNotesToPdf(
+        filteredNotes,
+        `ArNote_Semua_${new Date().toISOString().slice(0, 10)}`,
+      );
+      if (result.success) {
+        alert(`Berhasil mengekspor ${filteredNotes.length} catatan ke PDF:\n${result.fileName} (${result.pages} halaman)`);
+      } else {
+        alert('Ekspor PDF gagal: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Export all PDF failed:', error);
+    }
+  };
+
   const handleToggleChecklist = async (note, lineIndex, newCheckedState) => {
     try {
       const lines = (note.content || '').split('\n');
@@ -236,14 +270,25 @@ export default function ArNoteModule() {
         </div>
 
         {/* Catatan Baru Button (Desktop & Tablet) */}
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#121212] text-white rounded-xl border-2 border-[#121212] shadow-[3px_3px_0px_#FFE600] hover:bg-[#282828] active:translate-y-0.5 active:shadow-[1px_1px_0px_#FFE600] transition-all font-black text-xs cursor-pointer"
-        >
-          <Plus className="w-4 h-4 text-[#FFE600]" />
-          Catatan Baru
-        </button>
+        <div className="hidden sm:flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportAllPdf}
+            className="flex items-center gap-2 px-3 py-2 bg-white text-[#121212] rounded-xl border-2 border-[#121212] shadow-[3px_3px_0px_#121212] hover:bg-[#F8F5EE] active:translate-y-0.5 active:shadow-[1px_1px_0px_#121212] transition-all font-black text-xs cursor-pointer"
+            title="Ekspor semua catatan yang tampil ke PDF"
+          >
+            <FileText className="w-4 h-4" />
+            Ekspor PDF
+          </button>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="flex items-center gap-2 px-4 py-2 bg-[#121212] text-white rounded-xl border-2 border-[#121212] shadow-[3px_3px_0px_#FFE600] hover:bg-[#282828] active:translate-y-0.5 active:shadow-[1px_1px_0px_#FFE600] transition-all font-black text-xs cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-[#FFE600]" />
+            Catatan Baru
+          </button>
+        </div>
       </div>
 
       {/* Filter & Search Controls */}
@@ -314,6 +359,7 @@ export default function ArNoteModule() {
                 onDelete={() => handlePromptDelete(note)}
                 onTogglePin={() => handleTogglePin(note.id)}
                 onExport={() => handleExportNote(note)}
+                onExportPdf={() => handleExportNotePdf(note)}
                 onToggleChecklist={(n, idx, checked) => handleToggleChecklist(n, idx, checked)}
               />
             </div>

@@ -22,6 +22,8 @@ public final class AppBlockerStore {
     private static final String KEY_AUTO = "auto";
     private static final String KEY_MODE = "mode";
     private static final String KEY_PACKAGES = "packages";
+    private static final String KEY_STRICT = "strict";
+    private static final String KEY_GRACE = "graceSeconds";
 
     private AppBlockerStore() {}
 
@@ -63,6 +65,30 @@ public final class AppBlockerStore {
 
     public static void setPackages(Context ctx, JSONArray arr) {
         prefs(ctx).edit().putString(KEY_PACKAGES, arr != null ? arr.toString() : "[]").apply();
+    }
+
+    /** Mode Ketat Level 3 (Jeda Wajib): apakah tombol "matikan" perlu countdown. */
+    public static boolean isStrict(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_STRICT, false);
+    }
+
+    public static void setStrict(Context ctx, boolean strict) {
+        prefs(ctx).edit().putBoolean(KEY_STRICT, strict).apply();
+    }
+
+    /** Lama jeda wajib dalam detik (3..60). */
+    public static int getGraceSeconds(Context ctx) {
+        int v = prefs(ctx).getInt(KEY_GRACE, 10);
+        if (v < 3) v = 3;
+        if (v > 60) v = 60;
+        return v;
+    }
+
+    public static void setGraceSeconds(Context ctx, int seconds) {
+        int v = seconds;
+        if (v < 3) v = 3;
+        if (v > 60) v = 60;
+        prefs(ctx).edit().putInt(KEY_GRACE, v).apply();
     }
 
     /** True bila package ada di daftar (tanpa mempertimbangkan mode). */

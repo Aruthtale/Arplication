@@ -550,7 +550,10 @@ export default function ArdoroModule({ setActiveTab }) {
       </div>
 
       {/* Focus Lock — Blokir aplikasi selama sesi fokus */}
-      <FocusLockPanel />
+      <FocusLockPanel
+        focusRunning={running && phase === 'focus'}
+        focusElapsedSec={phase === 'focus' && total > 0 ? Math.max(0, total - remaining) : 0}
+      />
 
       {/* Stats Card */}
       <div className="nb-card p-4 bg-white space-y-3">

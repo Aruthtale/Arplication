@@ -19,6 +19,8 @@ export const DEFAULT_BLOCKER_CONFIG = {
   packages: [],
   accessibilityEnabled: false,
   overlayGranted: false,
+  strict: false,
+  graceSeconds: 10,
 };
 
 /**

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pin, Trash2, Download, Tag, CheckSquare, Square, Edit3 } from 'lucide-react';
+import { Pin, Trash2, Download, Tag, CheckSquare, Square, Edit3, FileText } from 'lucide-react';
 
 const COLOR_MAP = {
   yellow: { bg: 'bg-[#FFE600]', border: 'border-[#121212]', shadow: 'shadow-[2.5px_2.5px_0px_#121212]' },
@@ -10,7 +10,7 @@ const COLOR_MAP = {
   white:  { bg: 'bg-[#FFFFFF]', border: 'border-[#121212]', shadow: 'shadow-[2.5px_2.5px_0px_#121212]' }
 };
 
-export default function NoteBentoCard({ note, onEdit, onDelete, onTogglePin, onExport, onToggleChecklist }) {
+export default function NoteBentoCard({ note, onEdit, onDelete, onTogglePin, onExport, onExportPdf, onToggleChecklist }) {
   const colorScheme = COLOR_MAP[note.color] || COLOR_MAP.yellow;
 
   // Split lines for checklist and content preview
@@ -118,6 +118,17 @@ export default function NoteBentoCard({ note, onEdit, onDelete, onTogglePin, onE
         <div className="flex items-center justify-between text-[9.5px] sm:text-[10.5px] font-bold text-[#121212]/70">
           <span className="font-mono text-[9px] sm:text-[10px]">{formatDate(note.updatedAt)}</span>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onExportPdf(note);
+              }}
+              title="Ekspor ke PDF"
+              className="p-1 sm:p-1.5 rounded bg-white/80 hover:bg-white text-[#121212] border border-[#121212] shadow-[1px_1px_0px_#121212] active:translate-y-0.5"
+            >
+              <FileText className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+            </button>
             <button
               type="button"
               onClick={(e) => {

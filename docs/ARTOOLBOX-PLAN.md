@@ -10,10 +10,16 @@
 
 ## Tahap 3: Sub-View Perkakas (Individual Tools)
 - [x] Buat `src/components/modules/artoolbox/tools/QrSuiteView.jsx` (QR Generator & Pemindai/Kamera/Unggah Gambar).
-- [x] Buat `src/components/modules/artoolbox/tools/TextDevView.jsx` (Case Converter, Word Counter, Base64/Hash, JSON Formatter).
-- [x] Buat `src/components/modules/artoolbox/tools/QuickCalcView.jsx` (Kalkulator Diskon/Pajak, Rasio Aspek, Konverter Unit).
+- [x] Buat `src/components/modules/artoolbox/tools/TextDevView.jsx` (Case Converter, Word Counter, Base64/Hash, JSON Formatter, Lorem Ipsum, Utak-atik Baris).
+- [x] Buat `src/components/modules/artoolbox/tools/QuickCalcView.jsx` (Kalkulator Diskon/Pajak/PPN, Persen, Rasio Aspek, Konverter Unit, Umur & Selisih Tanggal, Bagi Tagihan).
 - [x] Buat `src/components/modules/artoolbox/tools/ColorStudioView.jsx` (Color Picker, Canvas Palette Extractor, Format HEX/RGB/HSL).
 - [x] Buat `src/components/modules/artoolbox/tools/ToolboxHistoryModal.jsx` (Panel Riwayat Lokal & Hapus Cepat).
+
+## Tahap 3b: PDF Maker Lanjutan (v1.3.0)
+- [x] Ekstrak generator PDF ke `src/utils/pdfBuilder.js` (pure, testable, tanpa library).
+- [x] Dukung **halaman Teks** selain gambar di `PdfMakerView.jsx` (Teks → PDF, auto-paginasi).
+- [x] Integrasi **ArNote → PDF** via `src/services/notePdfService.js` + `src/utils/notePdf.js`
+      (ekspor satu catatan atau semua catatan sekaligus).
 
 ## Tahap 4: Integrasi Modul ke Aplikasi Utama
 - [x] Tambahkan kartu ArToolbox di `src/components/modules/HomeHub.jsx`.

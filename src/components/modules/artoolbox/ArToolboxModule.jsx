@@ -4,12 +4,14 @@ import QrSuiteView from './tools/QrSuiteView';
 import ImageStudioView from './tools/ImageStudioView';
 import PdfMakerView from './tools/PdfMakerView';
 import ColorStudioView from './tools/ColorStudioView';
+import TextDevView from './tools/TextDevView';
+import QuickCalcView from './tools/QuickCalcView';
 import ToolboxHistoryModal from './tools/ToolboxHistoryModal';
 import { getToolboxHistory } from '../../../services/toolboxDb';
 import { registerBackHandler } from '../../../services/backHandler';
 
 export default function ArToolboxModule() {
-  const [activeTool, setActiveTool] = useState(null); // null | 'qr' | 'image' | 'pdf' | 'color'
+  const [activeTool, setActiveTool] = useState(null); // null | 'qr' | 'image' | 'pdf' | 'color' | 'text' | 'calc'
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
 
@@ -83,6 +85,16 @@ export default function ArToolboxModule() {
       {/* Sub-view Color Studio */}
       {activeTool === 'color' && (
         <ColorStudioView onBack={handleBackToBento} onRefreshHistory={refreshHistory} />
+      )}
+
+      {/* Sub-view Text & Dev Tools */}
+      {activeTool === 'text' && (
+        <TextDevView onBack={handleBackToBento} onRefreshHistory={refreshHistory} />
+      )}
+
+      {/* Sub-view Quick Calculator */}
+      {activeTool === 'calc' && (
+        <QuickCalcView onBack={handleBackToBento} onRefreshHistory={refreshHistory} />
       )}
 
       {/* Modal Riwayat Lokal */}
