@@ -7,6 +7,22 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.6.2] - 2026-10-05
+
+### Perbaikan: peta ArMaps blank/putih di HP Android
+
+**Gejala:** setelah memilih wilayah, layar peta kosong (putih) — overlay "Memuat peta…" hilang tapi tidak ada satu pun tile yang tampil. Tidak ada error di layar.
+
+**Akar masalah:** file *worker* MapLibre (`maplibre-gl-worker.mjs`) adalah ES module yang meng-`import` file lain (`maplibre-gl-shared.mjs`). Di WebView Android (Capacitor) hal ini gagal:
+- Request yang diinisiasi **worker** tidak dilayani `shouldInterceptRequest` → import ke file sibling gagal **di dalam worker** → worker mati → tidak ada tile termuat (dan error-nya tersembunyi di worker, bukan di konsol halaman).
+- WebView lama tidak mendukung *module worker*, sehingga MapLibre jatuh ke *classic worker* atas file `.mjs` yang berisi `import` → `SyntaxError: Cannot use import statement outside a module`.
+
+**Perbaikan:** worker MapLibre kini dibundel menjadi **satu file self-contained** (IIFE, tanpa `import`/`export`) lewat `scripts/build-worker.mjs`, dijalankan otomatis saat `npm run build`. File `maplibre-gl-shared.mjs` yang tidak lagi terpakai dihapus.
+
+**Verifikasi:** direproduksi persis di rig headless (simulasi WebView lama): sebelum perbaikan `sourceLoaded=false` (peta blank), sesudah perbaikan `idle` + `sourceLoaded=true` (peta render). Ditambah tes regresi yang gagal bila worker ESM kembali dipakai.
+
+---
+
 ## [1.6.1] - 2026-10-05
 
 ## Perbaikan ArMaps — peta & GPS di HP Android
