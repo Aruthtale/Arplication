@@ -148,6 +148,50 @@ style tidak pernah dimuat → `styleLoaded=false` selamanya, seolah ada bug.
 render. **Aturan uji:** selalu pastikan tab uji **aktif/foreground** sebelum
 menyimpulkan peta gagal.
 
+### ⚠️ JEBAKAN #4 — Peta stuck "Memuat peta…" di HP: sentinel `readFileInChunks` (terbukti di perangkat)
+
+**Gejala (dilaporkan di HP asli):** setelah meng-install wilayah, membuka peta
+hanya menampilkan "Memuat peta… Membaca berkas lokal…" **selamanya** — peta
+tak pernah tampil, tanpa pesan error.
+
+**Akar masalah:** `Filesystem.readFileInChunks` menandai **selesai** dengan
+memanggil callback berisi **data kosong** `{ data: "" }` — lihat
+`@capacitor/filesystem` `FilesystemPlugin.kt`:
+`onCompletion { call.sendSuccess(createReadResultObject("")) }`.
+Kode menunggu `chunk === null` (perilaku web) sehingga **promise tidak pernah
+resolve** → pembacaan file menggantung → peta stuck "memuat".
+
+**Solusi:** perlakukan **`null` MAUPUN data kosong** sebagai penanda selesai.
+Diimplementasikan sebagai helper murni `interpretChunk()` di `regionStore.js`,
+dipakai di ketiga tempat (`readRegionBlob`, `verifyRegionFile`,
+`verifyFileHeaderAt`). Guard tes: `tests/armaps.test.js` (terbukti gagal bila
+helper dikembalikan ke cek `null` saja).
+
+**Pelajaran:** jangan asumsi kontrak callback plugin native sama dengan web —
+**baca sumber platform** (`node_modules/@capacitor/*/android/.../*.kt`).
+
+### ⚠️ JEBAKAN #5 — GPS gagal walau GPS HP menyala: `cap copy` ≠ `cap sync` (terbukti di perangkat)
+
+**Gejala (dilaporkan di HP asli):** GPS HP sudah dinyalakan, tapi ArMaps tetap
+menampilkan "Gagal membaca GPS. Pastikan GPS HP menyala, lalu coba lagi."
+
+**Akar masalah:** `@capacitor/geolocation` ada di `node_modules` dan dipanggil
+dari JS, **tapi tidak terdaftar** di `android/capacitor.settings.gradle` /
+`android/app/capacitor.build.gradle` → plugin native-nya **tidak masuk APK**.
+Penyebab: script `build` memakai `cap copy android` (hanya menyalin aset web),
+**bukan** `cap sync android` (mendaftarkan plugin native).
+
+**Solusi:** ubah `package.json` `build` → `vite build && cap sync android`;
+plugin geolocation kini terdaftar. Bukti verifikasi di APK:
+`unzip -p app-release.apk 'classes*.dex' | strings | grep -c GeolocationPlugin`
+→ **0** di APK lama, **25** di APK baru. Guard tes: `tests/armaps.test.js`
+("semua plugin Capacitor terdaftar di gradle Android", terbukti gagal bila
+baris gradle dihapus).
+
+**Pelajaran:** setiap kali menambah plugin Capacitor, build **wajib** `cap sync`
+dan verifikasi **isi APK** (dex / `capacitor.plugins.json`) — build hijau +
+log "Copying web assets" **bukan** bukti plugin native ikut terpasang.
+
 ### Aturan "ringan & hemat memori" (WAJIB dipatuhi)
 
 1. **Atomic update (jangan tabrak/hapus dulu)**:
@@ -257,5 +301,14 @@ Modul ArMaps Tahap 1 sudah **diuji runtime nyata** dan **dirilis**:
   terverifikasi HTTP 206 (Range), header PMTiles valid, **sha256 cocok**.
 - **Rilis v1.6.0**: APK 50 MB di GitHub Release (Aruthtale + Zenixu),
   versionCode 38, worker + font ter-bundel di dalam APK (diverifikasi).
+- **Uji perangkat nyata (HP) menemukan 2 bug → fix v1.6.1** (lihat JEBAKAN #4 & #5):
+  1. Peta stuck "Memuat peta…" — sentinel `readFileInChunks` native = `{data:''}`,
+     bukan `null` (promise menggantung).
+  2. GPS selalu gagal — plugin `@capacitor/geolocation` tak terdaftar di gradle
+     karena build memakai `cap copy`, bukan `cap sync`.
+  - **Rilis v1.6.1**: versionCode 39, APK 15 MB (APK v1.6.0 tanpa sengaja
+    memuat file uji 37 MB), **192 tes lulus** (termasuk 2 guard baru yang
+    terbukti gagal bila fix dibalik). Diverifikasi di APK: `GeolocationPlugin`
+    25 ref (v1.6.0 = 0) + kode fix peta ter-bundle.
 
 **Sisa (Tahap 2+)**: indeks pencarian POI per wilayah, navigasi rute.
