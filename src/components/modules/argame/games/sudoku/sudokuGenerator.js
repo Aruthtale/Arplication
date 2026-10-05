@@ -164,3 +164,60 @@ export function isSolved(currentBoard, solution) {
   }
   return true;
 }
+
+// ─────────────────────────── Aturan bantu permainan ───────────────────────────
+
+/** Batas maksimum pemakaian Hint per game. */
+export const MAX_HINTS_PER_GAME = 3;
+
+/**
+ * Hitung berapa kali sebuah angka muncul di papan (hitungan mentah).
+ * @returns {number} jumlah kemunculan (0-9+)
+ */
+export function countNumber(board, num) {
+  if (!Array.isArray(board)) return 0;
+  let count = 0;
+  for (let r = 0; r < 9; r++) {
+    const row = board[r];
+    if (!row) continue;
+    for (let c = 0; c < 9; c++) {
+      if (row[c] === num) count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * Hitung berapa kali angka `num` ditempatkan dengan BENAR (posisi sesuai solusi).
+ * Ini yang dipakai untuk menentukan angka "lengkap" — agar salah input tidak
+ * mengunci angka secara keliru.
+ */
+export function countCorrectNumber(board, solution, num) {
+  if (!Array.isArray(board) || !Array.isArray(solution)) return 0;
+  let count = 0;
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (solution[r]?.[c] === num && board[r]?.[c] === num) count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * Sebuah angka dianggap "lengkap" (tidak bisa dipakai lagi) bila seluruh 9
+ * penempatan benarnya sudah terisi — sebab Sudoku valid memuat tepat 9 dari
+ * tiap angka. Berbasis solusi agar salah input tidak mengunci angka.
+ */
+export function isNumberComplete(board, solution, num) {
+  return countCorrectNumber(board, solution, num) >= 9;
+}
+
+/** Apakah Hint masih boleh dipakai (belum melewati batas per game). */
+export function canUseHint(hintsUsed) {
+  return Number(hintsUsed || 0) < MAX_HINTS_PER_GAME;
+}
+
+/** Sisa jatah Hint pada game berjalan. */
+export function hintsRemaining(hintsUsed) {
+  return Math.max(0, MAX_HINTS_PER_GAME - Number(hintsUsed || 0));
+}

@@ -7,6 +7,33 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.5.0] - 2026-10-06
+
+### ✨ Added
+- **Sudoku — batas Hint & kunci angka lengkap**:
+  - **Hint dibatasi 3× per game**. Tombol menampilkan sisa jatah — `Hint (3)` → `(2)`
+    → `(1)` → `(0)` — lalu otomatis **nonaktif** saat jatah habis. Jatah dihitung
+    per game dan direset saat memulai game baru (ikut tersimpan saat keluar-masuk).
+  - **Angka yang sudah lengkap (muncul 9×) otomatis dinonaktifkan** di numpad —
+    tidak perlu dipakai lagi. Tombol jadi abu-abu, dicoret, dan diberi tooltip
+    "Angka N sudah lengkap (9x)". Deteksi **berbasis solusi** (bukan hitungan
+    mentah), sehingga salah input berulang tidak mengunci angka secara keliru.
+  - Numpad kini menampilkan **jumlah pemakaian** kecil di tiap angka (mis. `7`).
+- Helper murni baru di `sudokuGenerator.js`: `MAX_HINTS_PER_GAME`, `canUseHint`,
+  `hintsRemaining`, `countNumber`, `countCorrectNumber`, `isNumberComplete`.
+
+### 🧪 Tests
+- Tambah `tests/sudoku.test.js` (10 tes): batas hint, sisa jatah, hitungan angka,
+  kunci angka berbasis solusi, plus **guard regresi wiring** (numpad memakai
+  `numberCounts`, hint memakai `canUseHint`). Total **173** lulus.
+
+### 🐛 Fixed
+- **Wiring helper**: pemanggil `isNumberComplete` di komponen tidak ikut diperbarui
+  saat signature helper berubah (tambah argumen `solution`) — argumen bergeser dan
+  angka tak pernah terkunci. Guard regresi ditambahkan agar tidak terulang.
+
+---
+
 ## [1.4.0] - 2026-10-06
 
 ### ✨ Added

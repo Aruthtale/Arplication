@@ -3,7 +3,7 @@ import {
   Trophy, RotateCcw, Edit3, Eraser, Sparkles, Play, Pause, 
   HelpCircle, Volume2, VolumeX, Smartphone, ArrowLeft, RefreshCw, CheckCircle2
 } from 'lucide-react';
-import { generateSudoku, findConflicts, isSolved, EMPTY } from './sudokuGenerator';
+import { generateSudoku, findConflicts, isSolved, EMPTY, countCorrectNumber, canUseHint, hintsRemaining } from './sudokuGenerator';
 import { 
   playTapSound, playNumberSound, playEraseSound, 
   playErrorSound, playVictorySound, triggerHaptic 
@@ -22,6 +22,7 @@ export default function SudokuGame({ onBack, soundEnabled, hapticEnabled, onNewS
   const [isPencilMode, setIsPencilMode] = useState(false);
   const [history, setHistory] = useState([]);     // Action history stack for Undo
   const [mistakes, setMistakes] = useState(0);
+  const [hintsUsed, setHintsUsed] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isGameWon, setIsGameWon] = useState(false);
@@ -40,6 +41,7 @@ export default function SudokuGame({ onBack, soundEnabled, hapticEnabled, onNewS
       setBoard(saved.board);
       setNotes(saved.notes ? saved.notes.map((row) => row.map((cell) => new Set(cell))) : createEmptyNotes());
       setMistakes(saved.mistakes || 0);
+      setHintsUsed(saved.hintsUsed || 0);
       setTimerSeconds(saved.timerSeconds || 0);
     } else {
       startNewGame('easy');
@@ -68,10 +70,11 @@ export default function SudokuGame({ onBack, soundEnabled, hapticEnabled, onNewS
         board,
         notes: notes.map((row) => row.map((cell) => Array.from(cell))),
         mistakes,
+        hintsUsed,
         timerSeconds,
       });
     }
-  }, [board, notes, mistakes, timerSeconds, difficulty, puzzle, solution, isGameWon]);
+  }, [board, notes, mistakes, hintsUsed, timerSeconds, difficulty, puzzle, solution, isGameWon]);
 
   const createEmptyNotes = () => Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => new Set()));
 
@@ -87,6 +90,7 @@ export default function SudokuGame({ onBack, soundEnabled, hapticEnabled, onNewS
     setIsPencilMode(false);
     setHistory([]);
     setMistakes(0);
+    setHintsUsed(0);
     setTimerSeconds(0);
     setIsPaused(false);
     setIsGameWon(false);
@@ -98,6 +102,12 @@ export default function SudokuGame({ onBack, soundEnabled, hapticEnabled, onNewS
 
   // Hitung Konflik / Bentrokan Angka pada Papan Saat Ini
   const conflicts = board.length === 9 ? findConflicts(board) : Array.from({ length: 9 }, () => Array(9).fill(false));
+
+  // Hitung berapa kali tiap angka (1-9) sudah ditempatkan dengan BENAR, untuk
+  // menonaktifkan angka yang sudah lengkap (9x) — tidak perlu dipakai lagi.
+  const numberCounts = board.length === 9
+    ? Array.from({ length: 9 }, (_, i) => countCorrectNumber(board, solution, i + 1))
+    : Array(9).fill(0);
 
   // Tangani Input Angka (1-9)
   const handleNumberInput = (num) => {
@@ -195,9 +205,10 @@ export default function SudokuGame({ onBack, soundEnabled, hapticEnabled, onNewS
     if (hapticEnabled) triggerHaptic(15);
   };
 
-  // Fitur Bantuan (Hint) - Membuka 1 sel dengan jawaban benar
+  // Fitur Bantuan (Hint) - Membuka 1 sel dengan jawaban benar (maks 3x per game)
   const handleHint = () => {
     if (!selectedCell || isGameWon || isPaused) return;
+    if (!canUseHint(hintsUsed)) return; // Jatah hint habis
     const [r, c] = selectedCell;
 
     if (puzzle[r][c] !== EMPTY || board[r][c] === solution[r][c]) return;
@@ -211,6 +222,7 @@ export default function SudokuGame({ onBack, soundEnabled, hapticEnabled, onNewS
 
     setBoard(newBoard);
     setNotes(newNotes);
+    setHintsUsed((prev) => prev + 1);
 
     playNumberSound(correctVal, soundEnabled);
     if (hapticEnabled) triggerHaptic(30);
@@ -420,24 +432,43 @@ export default function SudokuGame({ onBack, soundEnabled, hapticEnabled, onNewS
 
         <button
           onClick={handleHint}
-          className="py-2 px-1 bg-white hover:bg-gray-100 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] flex flex-col items-center justify-center gap-1 font-mono-code font-black text-[10px] uppercase cursor-pointer transition-all text-[#FFE600]"
+          disabled={!canUseHint(hintsUsed) || isGameWon}
+          className={`py-2 px-1 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] flex flex-col items-center justify-center gap-1 font-mono-code font-black text-[10px] uppercase transition-all ${
+            canUseHint(hintsUsed) && !isGameWon
+              ? 'bg-white hover:bg-gray-100 cursor-pointer text-[#121212]'
+              : 'bg-gray-200 opacity-50 cursor-not-allowed text-gray-500'
+          }`}
+          title={canUseHint(hintsUsed) ? `Sisa hint: ${hintsRemaining(hintsUsed)}` : 'Jatah hint habis'}
         >
-          <HelpCircle className="w-4 h-4 text-[#121212]" />
-          <span className="text-[#121212]">Hint</span>
+          <HelpCircle className="w-4 h-4" />
+          <span>Hint ({hintsRemaining(hintsUsed)})</span>
         </button>
       </div>
 
       {/* Virtual Numpad 1-9 */}
       <div className="grid grid-cols-9 gap-1.5 pt-1">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-          <button
-            key={num}
-            onClick={() => handleNumberInput(num)}
-            className="py-3 bg-white hover:bg-[#FFE600] active:scale-95 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black text-base text-[#121212] cursor-pointer transition-all flex items-center justify-center"
-          >
-            {num}
-          </button>
-        ))}
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
+          const complete = numberCounts[num - 1] >= 9;
+          return (
+            <button
+              key={num}
+              onClick={() => handleNumberInput(num)}
+              disabled={complete}
+              title={complete ? `Angka ${num} sudah lengkap (9x)` : undefined}
+              className={`relative py-3 rounded-xl border-2 border-[#121212] shadow-[2px_2px_0px_#121212] font-black text-base transition-all flex items-center justify-center ${
+                complete
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60 line-through'
+                  : 'bg-white hover:bg-[#FFE600] active:scale-95 text-[#121212] cursor-pointer'
+              }`}
+            >
+              {num}
+              {/* Penanda kecil jumlah pemakaian (mis. 9/9) */}
+              <span className="absolute bottom-0 right-0.5 text-[7px] font-mono-code font-bold text-gray-400 leading-none">
+                {numberCounts[num - 1]}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Modal Kemenangan */}
