@@ -4,4 +4,6 @@
     <string name="title_activity_main">Arplication</string>
     <string name="package_name">com.aruthtale.arplication</string>
     <string name="custom_url_scheme">com.aruthtale.arplication</string>
+    <string name="app_blocker_service_label">Arplication Fokus</string>
+    <string name="app_blocker_service_description">Memblokir aplikasi yang mengganggu selama sesi fokus Ardoro berjalan.</string>
 </resources>

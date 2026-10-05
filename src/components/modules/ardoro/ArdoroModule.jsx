@@ -15,6 +15,7 @@ import { startForegroundTimer, stopForegroundTimer, addTimerCompleteListener } f
 import { startAmbientSound, stopAmbientSound, setAmbientVolume, getNoiseTypes, isAmbientPlaying } from '../../../utils/ambientSound.js';
 import { registerBackHandler } from '../../../services/backHandler.js';
 import { saveNote } from '../../../services/notesDb.js';
+import FocusLockPanel from './FocusLockPanel.jsx';
 
 const PHASE_META = {
   focus: { label: 'FOKUS', chip: 'DEEP FOCUS MODE', color: '#FFE600' },
@@ -547,6 +548,9 @@ export default function ArdoroModule({ setActiveTab }) {
           </div>
         )}
       </div>
+
+      {/* Focus Lock — Blokir aplikasi selama sesi fokus */}
+      <FocusLockPanel />
 
       {/* Stats Card */}
       <div className="nb-card p-4 bg-white space-y-3">

@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ArNoteWidgetPlugin.class);
         registerPlugin(TimerServicePlugin.class);
         registerPlugin(ArMusicPlugin.class);
+        registerPlugin(AppBlockerPlugin.class);
         super.onCreate(savedInstanceState);
         handleNavigationIntent(getIntent());
     }

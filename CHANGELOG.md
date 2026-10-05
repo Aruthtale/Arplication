@@ -7,6 +7,25 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.2.0] - 2026-10-05
+
+### 🎉 New
+- **Ardoro Focus Lock (App Blocker)**:
+  - Blokir aplikasi (TikTok, Instagram, Discord, dll.) selama sesi fokus Ardoro berjalan.
+  - Deteksi real-time via **Accessibility Service** (`AppBlockerAccessibilityService`); saat aplikasi terblokir dibuka, Ardoro menampilkan overlay bertema "Fokus Dulu!" lalu melempar user kembali ke Home.
+  - Dua mode: **Blacklist** (blokir yang dicentang) atau **Whitelist** (hanya yang dicentang yang boleh dibuka).
+  - Aktif **otomatis saat fase fokus** (bisa dimatikan), plus toggle manual.
+  - Panel pengaturan di modul Ardoro: pilih aplikasi dengan ikon, pencarian, dan status izin.
+  - Izin: Accessibility (wajib) + Overlay `SYSTEM_ALERT_WINDOW` (opsional, untuk overlay).
+
+### 📦 Build
+- Izin baru: `SYSTEM_ALERT_WINDOW`, `QUERY_ALL_PACKAGES`.
+- Plugin native baru: `AppBlockerPlugin` + `AppBlockerStore` (SharedPreferences).
+- **versionCode**: 30 → **31**
+- **versionName**: "1.1.0" → **"1.2.0"**
+
+---
+
 ## [1.1.0] - 2026-09-24
 
 ### 🎉 New

@@ -47,6 +47,8 @@ public class ArdoroTimerService extends Service {
         
         String action = intent.getAction();
         if ("STOP_TIMER".equals(action)) {
+            // Blokir Ardoro juga dimatikan saat timer dihentikan.
+            AppBlockerStore.setEnabled(this, false);
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
@@ -56,10 +58,14 @@ public class ArdoroTimerService extends Service {
         phase = intent.getStringExtra("phase");
         
         if (endTimeMillis == 0) {
+            AppBlockerStore.setEnabled(this, false);
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
+
+        // Aktifkan App Blocker hanya selama fase FOKUS (bila mode otomatis ON).
+        AppBlockerStore.applyForPhase(this, phase);
         
         startForeground(NOTIFICATION_ID, buildNotification("Timer berjalan..."));
         startTicking();
