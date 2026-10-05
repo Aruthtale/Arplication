@@ -220,10 +220,22 @@ else
   [[ -f "$APK" ]] || die "Build selesai tapi APK tidak ditemukan: $APK"
 fi
 
-# verifikasi isi APK: versi web harus cocok
-ASSET_VER="$(unzip -p "$APK" 'assets/public/assets/index-*.js' 2>/dev/null | grep -oE '1\.[0-9]+\.[0-9]+' | head -1 || true)"
+# verifikasi isi APK: pastikan versi web di bundle == versi rilis.
+# PENTING: JANGAN grep "semver pertama" di bundle minified — data SVG path memuat
+# angka seperti `0 1.1.9 2` yang tampak seperti versi (ini penyebab false positive
+# lama "Web assets dalam APK: v1.1.9"). Versi asli disimpan sebagai literal
+# ter-quote (mis. `1.3.2`), jadi cek token persis yang cocok dengan $NEW.
+NEW_ESC="${NEW//./\\.}"
+VER_RE="[\`'\"]${NEW_ESC}[\`'\"]"
+BUNDLE_JS="$(unzip -p "$APK" 'assets/public/assets/index-*.js' 2>/dev/null || true)"
 ok "APK siap: $(du -h "$APK" | cut -f1) ($APK)"
-[[ -n "$ASSET_VER" ]] && info "Web assets dalam APK: v$ASSET_VER"
+if [[ -z "$BUNDLE_JS" ]]; then
+  warn "Tidak bisa membaca bundle JS dari APK — verifikasi versi dilewati"
+elif printf '%s' "$BUNDLE_JS" | grep -qE "$VER_RE"; then
+  info "Web assets dalam APK: v$NEW (cocok dengan versi rilis)"
+else
+  die "Web assets dalam APK TIDAK memuat v$NEW — 'cap copy' mungkin tidak jalan. Periksa sebelum rilis!"
+fi
 
 # ───────────────────── 4. commit + tag ───────────────────────────────
 info "4/6 Commit & tag…"
