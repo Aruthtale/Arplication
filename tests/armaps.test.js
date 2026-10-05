@@ -121,6 +121,32 @@ test('worker MapLibre: SELF-CONTAINED (tanpa import/export/import.meta)', async 
   assert.ok(/self\.worker\s*=/.test(src) || /new\s+\w+\(self\)/.test(src), 'worker tidak punya bootstrap (self.worker)');
 });
 
+// ───────── Kontrak ukuran container peta (bug "peta putih" sebenarnya) ────────
+// Bug nyata (terbukti di HP Redmi Note 8, WebView 153): container peta
+// (`ref={containerRef}`) hanya diberi `absolute inset-0`. `maplibre-gl.css`
+// di-import dinamis SETELAH Tailwind dan mendefinisikan
+//   .maplibregl-map { position: relative }
+// Spesifisitas sama dengan utilitas Tailwind `absolute`, tapi urutan file
+// belakangan menang → `inset-0` (top/right/bottom/left) TIDAK berlaku lagi, dan
+// karena canvas-nya `position:absolute` (tidak menyumbang tinggi), container
+// kolaps jadi TINGGI 0. Peta sudah ter-render di canvas tapi tak terlihat sama
+// sekali (layar tampak kosong berwarna latar app, TANPA error apa pun).
+// FIX: beri ukuran eksplisit `w-full h-full` supaya container tetap terukur
+// walau `position` ditimpa jadi relative.
+// Tes ini mengunci kontrak tsb: container peta WAJIB punya h-full/w-full.
+test('MapViewerView: container peta punya ukuran eksplisit (w-full h-full)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const base = fileURLToPath(new URL('..', import.meta.url));
+  const src = readFileSync(base + 'src/components/modules/armaps/MapViewerView.jsx', 'utf8');
+
+  // Temukan baris container peta (yang memakai ref={containerRef}).
+  const line = src.split('\n').find((l) => /ref=\{containerRef\}/.test(l));
+  assert.ok(line, 'tidak menemukan div container peta (ref={containerRef}) di MapViewerView.jsx');
+  assert.ok(/\bh-full\b/.test(line), 'container peta TIDAK punya `h-full` — akan kolaps jadi tinggi 0 di WebView (maplibre-gl.css menimpa `absolute`)');
+  assert.ok(/\bw-full\b/.test(line), 'container peta TIDAK punya `w-full` — ukuran tidak dijamin');
+});
+
 test('semua plugin Capacitor terdaftar di gradle Android (guard cap copy vs sync)', async () => {
   // Bug nyata: GPS gagal total di HP karena @capacitor/geolocation ada di
   // node_modules tapi TIDAK terdaftar di capacitor.settings.gradle /

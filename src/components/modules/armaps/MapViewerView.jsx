@@ -204,7 +204,13 @@ export default function MapViewerView({
 
       {/* Peta */}
       <div className="relative flex-1">
-        <div ref={containerRef} className="absolute inset-0" />
+        {/* PENTING: container harus punya UKURAN eksplisit (w-full h-full).
+            Jangan hanya mengandalkan `absolute inset-0`: maplibre-gl.css di-import
+            dinamis SETELAH Tailwind, dan `.maplibregl-map { position: relative }`
+            menimpa utilitas `absolute` (spesifisitas sama, urutan belakangan menang).
+            Tanpa w-full h-full container ber-tinggi 0 (canvas-nya position:absolute
+            tak menyumbang tinggi) → PETA TAK TAMPIL walau sudah ter-render di canvas. */}
+        <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
         {/* Status overlay */}
         {phase !== 'ready' && (
