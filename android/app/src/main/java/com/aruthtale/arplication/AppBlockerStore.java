@@ -2,6 +2,7 @@ package com.aruthtale.arplication;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 import org.json.JSONArray;
 
 /**
@@ -81,8 +82,11 @@ public final class AppBlockerStore {
     public static void applyForPhase(Context ctx, String phase) {
         if (!isAuto(ctx)) {
             setEnabled(ctx, false);
+            Log.i("ArdoroBlocker", "applyForPhase phase=" + phase + " auto=false -> enabled=false");
             return;
         }
-        setEnabled(ctx, "focus".equals(phase));
+        boolean on = "focus".equals(phase);
+        setEnabled(ctx, on);
+        Log.i("ArdoroBlocker", "applyForPhase phase=" + phase + " auto=true -> enabled=" + on);
     }
 }

@@ -42,7 +42,10 @@ public class AppBlockerAccessibilityService extends AccessibilityService {
     protected void onServiceConnected() {
         super.onServiceConnected();
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
-        Log.i(TAG, "Accessibility service terhubung");
+        Log.i(TAG, "Service terhubung | enabled=" + AppBlockerStore.isEnabled(this)
+                + " auto=" + AppBlockerStore.isAuto(this)
+                + " mode=" + AppBlockerStore.getMode(this)
+                + " packages=" + AppBlockerStore.getPackages(this).toString());
     }
 
     @Override
@@ -55,10 +58,14 @@ public class AppBlockerAccessibilityService extends AccessibilityService {
         String pkg = pkgCs.toString();
         if (pkg.isEmpty()) return;
 
+        boolean enabled = AppBlockerStore.isEnabled(this);
+        boolean always = isAlwaysAllowed(pkg);
+        boolean shouldBlk = shouldBlock(pkg);
+
         if (overlayView != null) return;              // overlay sedang tampil
-        if (!AppBlockerStore.isEnabled(this)) return; // fitur nonaktif
-        if (isAlwaysAllowed(pkg)) return;
-        if (!shouldBlock(pkg)) return;
+        if (!enabled) return;                          // fitur nonaktif
+        if (always) return;
+        if (!shouldBlk) return;
 
         long now = SystemClock.elapsedRealtime();
         if (pkg.equals(lastBlockedPkg) && now - lastBlockTime < DEBOUNCE_MS) return;
