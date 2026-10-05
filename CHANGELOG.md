@@ -7,6 +7,48 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.6.0] - 2026-10-05
+
+## ArMaps — Peta Offline (Tahap 1)
+
+Modul baru **ArMaps**: peta offline berbasis **OpenStreetMap**, alur
+**pilih → unduh → pakai → perbarui → hapus** per-wilayah.
+
+### ✨ Added
+- **Modul ArMaps (ke-7)**: peta offline penuh di dalam aplikasi.
+  - **Katalog wilayah tanpa default** — pengguna memilih sendiri wilayahnya
+    (Jabodetabek, Cianjur, Bandung Raya, Yogyakarta, Semarang, Bali,
+    Surabaya, Medan, Makassar). Tidak ada wilayah yang otomatis terpasang.
+  - **Unduh sekali, pakai offline**: file `.pmtiles` dibaca per-tile dari
+    penyimpanan, jadi RAM tetap hemat dan ukuran APK tidak membengkak.
+  - **"Lokasi saya" (GPS)** dengan izin lokasi opsional.
+  - **Perbarui = atomic swap**: unduh file baru ke `.tmp` → verifikasi
+    header → baru ganti. Gagal di tengah = peta lama tetap aman.
+  - **Hapus per-wilayah** dengan konfirmasi.
+  - Pilihan lokasi simpan (internal/eksternal) saat mengunduh.
+- Data peta dibangun dari snapshot **OpenStreetMap 2026-10-04** (© OpenStreetMap
+  contributors, ODbL). Data = "terbaru saat diunduh", bukan live.
+
+### 🐛 Fixed
+- **Peta tidak render saat di-bundle** — MapLibre menebak URL worker dari
+  `import.meta.url` → worker 404 di bawah bundler Vite sehingga peta kosong.
+  Diperbaiki dengan meng-host worker MapLibre sendiri + `setWorkerUrl()`.
+  Terverifikasi render penuh di dev **dan** artifact produksi (0 permintaan
+  jaringan non-lokal).
+
+### 🧪 Verified
+- Uji runtime nyata: peta Jabodetabek ter-render (label Jakarta/Bekasi/Bogor/
+  Depok/Bandung/Cianjur tampil), `layers=9`, `styleLoaded=true`.
+- Aset rilis `maps-20261004` terverifikasi: HTTP 206 (Range), header PMTiles
+  valid, sha256 cocok.
+- 188 tes lulus.
+
+### 📦 Aset peta
+File peta di-host terpisah di rilis **[maps-20261004](https://github.com/Aruthtale/Arplication/releases/tag/maps-20261004)**
+(9 wilayah, ±117 MB) — diunduh dari dalam aplikasi.
+
+---
+
 ## [1.5.1] - 2026-10-06
 
 ### 🐛 Fixed
