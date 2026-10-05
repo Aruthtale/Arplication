@@ -7,6 +7,22 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.6.3] - 2026-10-05
+
+### Perbaikan: peta ArMaps tampil kosong (putih) — akar masalah sebenarnya
+
+**Gejala:** setelah memilih wilayah, layar peta tampak kosong berwarna krem, tanpa error apa pun.
+
+**Akar masalah (ditemukan lewat remote-debug WebView di HP):** peta **sudah** ter-render di canvas, tetapi **tidak terlihat**. File `maplibre-gl.css` di-import dinamis **setelah** Tailwind dan menetapkan `.maplibregl-map { position: relative }`. Aturan ini menimpa utilitas Tailwind `absolute` (spesifisitas sama, urutan file belakangan menang), sehingga `inset-0` tak lagi berlaku. Karena canvas-nya `position: absolute` (tidak menyumbang tinggi), container peta **kolaps jadi tinggi 0 px** → peta terpotong habis.
+
+**Perbaikan:** container peta diberi ukuran eksplisit `w-full h-full`, sehingga tetap terukur walau `position` ditimpa menjadi `relative`.
+
+**Verifikasi di HP (Redmi Note 8):** sebelum perbaikan area peta hanya **1 warna** (kosong); sesudah perbaikan **120 warna** — jalan, air, dan label (Cianjur, Bandung, Jakarta, dll.) tampil. Ditambah tes regresi yang gagal bila `w-full`/`h-full` hilang dari container peta.
+
+Catatan: rilis ini juga memuat perbaikan worker MapLibre self-contained dari v1.6.2 (membuat peta lebih tahan terhadap perbedaan WebView).
+
+---
+
 ## [1.6.2] - 2026-10-05
 
 ### Perbaikan: peta ArMaps blank/putih di HP Android
