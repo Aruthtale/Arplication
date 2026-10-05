@@ -24,7 +24,7 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
     try {
       await saveNote({
         title: `${titlePrefix}: ${textToSave.substring(0, 30)}${textToSave.length > 30 ? '...' : ''}`,
-        content: `# Hasil QR & Barcode Suite\n\n- **Waktu**: ${new Date().toLocaleString('id-ID')}\n- **Konten Data**:\n\`\`\`\n${textToSave}\n\`\`\`\n`,
+        content: `# Hasil QR Suite\n\n- **Waktu**: ${new Date().toLocaleString('id-ID')}\n- **Konten Data**:\n\`\`\`\n${textToSave}\n\`\`\`\n`,
         tags: ['artoolbox', 'qr', 'suite'],
         color: 'yellow',
         isPinned: false,
@@ -279,7 +279,7 @@ export default function QrSuiteView({ onBack, onRefreshHistory }) {
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="text-xl font-black text-[#121212] uppercase">QR & Barcode Suite</h2>
+        <h2 className="text-xl font-black text-[#121212] uppercase">QR Suite</h2>
 
         <div className="w-9" />
       </div>

@@ -8,9 +8,9 @@ export default function ToolboxBentoGrid({ onSelectTool, onOpenHistory, historyC
   const tools = [
     {
       id: 'qr',
-      title: 'QR & Barcode Suite',
-      badge: 'QR / Barcode',
-      description: 'Buat & pindai QR Code atau Barcode instan via kamera atau galeri gambar.',
+      title: 'QR Suite',
+      badge: 'QR Code',
+      description: 'Buat & pindai QR Code instan via kamera atau galeri gambar.',
       color: '#38E54D', // Hijau Neon
       bgCard: 'bg-[#E8FCE8]',
       badgeBg: 'bg-[#38E54D]',

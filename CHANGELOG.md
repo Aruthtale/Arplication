@@ -7,6 +7,17 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.5.1] - 2026-10-06
+
+### 🐛 Fixed
+- **Label "Barcode" yang menyesatkan**: tool QR diberi nama "QR & Barcode Suite"
+  dan deskripsinya menjanjikan pemindaian **Barcode**, padahal pustaka `jsQR`
+  **hanya** membaca QR Code (bukan barcode 1D EAN/UPC). Label diperbaiki menjadi
+  **"QR Suite"** (badge "QR Code") di kartu Bento, judul header tool, dan catatan
+  hasil simpan — agar tidak menjanjikan fitur yang belum ada.
+
+---
+
 ## [1.5.0] - 2026-10-06
 
 ### ✨ Added
