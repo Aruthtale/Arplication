@@ -7,6 +7,24 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.7.0] - 2026-10-05
+
+### Fitur baru: zoom lebih dalam + kompas arah HP (U/T/S/B)
+
+**Zoom lebih dalam.** Kedalaman zoom maksimum dinaikkan dari 16 → **19**. Karena data peta (maxzoom 14) otomatis di-*overzoom* oleh MapLibre, kamu bisa masuk jauh lebih dekat ke jalan/perumahan. Ketebalan jalan dan ukuran label ikut disesuaikan sampai z19 supaya tetap enak dibaca. Tombol **+ / −** juga ditambahkan di kanan bawah untuk zoom cepat (selain cubit dua jari).
+
+**Kompas arah HP.** Tombol kompas baru (kanan bawah) membaca sensor orientasi HP (magnetometer) — **tanpa plugin tambahan dan tanpa izin runtime**. Saat kamu memutar HP, mawar kompas menampilkan arah hadap dalam huruf **U / T / S / B** (Utara/Timur/Selatan/Barat) plus derajatnya (mis. "B 265°"), dan jarum tetap menunjuk arah hadap HP.
+
+- Ketuk tombol kompas untuk menyalakan/mematikan.
+- Ketuk label arah untuk beralih mode peta:
+  - **U↑** = peta selalu utara di atas (default).
+  - **IKUT** = peta ikut berputar, sehingga arah hadap HP selalu di atas.
+- Bila perangkat tak punya sensor arah, muncul catatan kecil dan peta tetap bisa dipakai normal.
+
+Semuanya tetap 100% offline dan mengikuti lisensi © OpenStreetMap (ODbL).
+
+---
+
 ## [1.6.3] - 2026-10-05
 
 ### Perbaikan: peta ArMaps tampil kosong (putih) — akar masalah sebenarnya
