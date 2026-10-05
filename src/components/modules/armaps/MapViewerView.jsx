@@ -24,6 +24,7 @@ import {
   headingToCardinal8,
   roseRotation,
 } from '../../../services/armaps/heading.js';
+import { metersPerPixel, niceScaleBar } from '../../../services/armaps/scaleBar.js';
 import { formatBytes, formatDataDate, MAPS_DATA_DATE } from '../../../services/armaps/catalog.js';
 
 /**
@@ -55,6 +56,10 @@ export default function MapViewerView({
   // north = peta selalu utara di atas; heading = peta ikut berputar (arah HP selalu ke atas).
   const [compassMode, setCompassMode] = useState('north');
   const headingStopRef = useRef(null);
+
+  // ── Skala jarak ──
+  // { meters, pixels, label } dihitung dari pusat peta tiap zoom/geser.
+  const [scaleBar, setScaleBar] = useState(null);
 
   /** Hentikan pelacakan GPS. */
   const stopWatch = useCallback(() => {
@@ -88,6 +93,21 @@ export default function MapViewerView({
         mapRef.current = map;
 
         map.on('load', () => { if (!cancelled) setPhase('ready'); });
+
+        // ── Skala jarak: hitung ulang setiap peta bergerak/zoom ──
+        const updateScale = () => {
+          if (cancelled) return;
+          try {
+            const c = map.getCenter();
+            const mpp = metersPerPixel(c.lat, map.getZoom());
+            setScaleBar(niceScaleBar(mpp));
+          } catch { /* abaikan */ }
+        };
+        map.on('move', updateScale);
+        map.on('zoom', updateScale);
+        map.on('load', updateScale);
+        updateScale();
+
         map.on('error', (e) => {
           const msg = e?.error?.message || '';
           // Abaikan error tile individual (mis. di luar cakupan) agar peta tetap tampil.
@@ -412,6 +432,21 @@ export default function MapViewerView({
               Gagal membaca GPS. Pastikan GPS HP menyala, lalu coba lagi.
             </p>
             <button onClick={() => setLocState('off')} className="shrink-0"><X className="w-4 h-4" /></button>
+          </div>
+        )}
+
+        {/* Skala jarak (scale bar) */}
+        {scaleBar && (
+          <div className="absolute left-3 bottom-[4.25rem] select-none" aria-label={`Skala jarak ${scaleBar.label}`}>
+            <div className="flex flex-col items-start gap-0.5 px-1.5 py-1 bg-white/95 rounded-lg border border-[#121212] shadow-[1px_1px_0px_#121212]">
+              <span className="text-[9.5px] font-mono-code font-black leading-none">{scaleBar.label}</span>
+              {/* Bilah: lebar = pixels (px CSS), dengan ujung vertikal ala peta */}
+              <div className="relative h-2.5" style={{ width: `${Math.round(scaleBar.pixels)}px` }}>
+                <div className="absolute left-0 top-0 w-px h-2.5 bg-[#121212]" />
+                <div className="absolute right-0 top-0 w-px h-2.5 bg-[#121212]" />
+                <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-[#121212]" />
+              </div>
+            </div>
           </div>
         )}
 

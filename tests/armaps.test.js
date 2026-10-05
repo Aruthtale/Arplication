@@ -47,6 +47,59 @@ import {
   computeHeading,
 } from '../src/services/armaps/heading.js';
 
+import {
+  metersPerPixel,
+  niceScaleBar,
+  formatScaleDistance,
+} from '../src/services/armaps/scaleBar.js';
+
+// ─────────────────── Skala jarak (scale bar) ───────────────────
+// Menghitung panjang di layar ↔ jarak dunia nyata pada Web Mercator.
+// m/px = keliling_bumi × cos(lintang) / (512 × 2^zoom).
+
+test('metersPerPixel: nilai wajar di ekuator & lintang tinggi', () => {
+  // Di ekuator, zoom 0: dunia = 512 px → ~78.271 m/px
+  const eq = metersPerPixel(0, 0);
+  assert.ok(Math.abs(eq - 40075016.686 / 512) < 1, `eq=${eq}`);
+  // Setiap +1 zoom → separuh
+  assert.ok(Math.abs(metersPerPixel(0, 1) - eq / 2) < 1e-6);
+  // Lintang tinggi → lebih kecil (cos < 1)
+  assert.ok(metersPerPixel(60, 10) < metersPerPixel(0, 10));
+  // Input tidak valid → null
+  assert.equal(metersPerPixel(NaN, 10), null);
+  assert.equal(metersPerPixel(0, NaN), null);
+});
+
+test('niceScaleBar: panjang bilah ≤ maxPixels & label benar', () => {
+  // 100 m/px, max 96 px → maks 9600 m → pilih 5000 m (5 km)
+  const s = niceScaleBar(100, { maxPixels: 96 });
+  assert.equal(s.meters, 5000);
+  assert.ok(s.pixels <= 96);
+  assert.equal(s.label, '5 km');
+});
+
+test('niceScaleBar: satuan meter untuk jarak kecil', () => {
+  const s = niceScaleBar(0.5, { maxPixels: 96 }); // maks 48 m → 20 m
+  assert.equal(s.meters, 20);
+  assert.equal(s.label, '20 m');
+  assert.ok(s.pixels <= 96);
+});
+
+test('niceScaleBar: menolak input tak masuk akal', () => {
+  assert.equal(niceScaleBar(0), null);
+  assert.equal(niceScaleBar(-1), null);
+  assert.equal(niceScaleBar(NaN), null);
+  assert.equal(niceScaleBar(10, { maxPixels: 0 }), null);
+});
+
+test('formatScaleDistance: m, km, dan koma desimal gaya Indonesia', () => {
+  assert.equal(formatScaleDistance(500), '500 m');
+  assert.equal(formatScaleDistance(1000), '1 km');
+  assert.equal(formatScaleDistance(1500), '1,5 km');
+  assert.equal(formatScaleDistance(20000), '20 km');
+  assert.equal(formatScaleDistance(0), '');
+});
+
 // ─────────────────── Kompas / arah HP (heading) ───────────────────
 // Menghitung arah hadap HP dari sensor orientasi (deviceorientation*).
 // heading 0=U, 90=T, 180=S, 270=B. Ini mengunci konversi sudut agar huruf
