@@ -7,6 +7,21 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.8.0] - 2026-10-05
+
+### Fitur baru: skala jarak (scale bar) di peta
+
+Kini ada **bilah skala jarak** kecil di kiri bawah peta (di atas badge OFFLINE) — persis seperti di Google Maps. Bilah ini menunjukkan **seberapa jauh jarak di layar HP dibandingkan jarak aslinya di dunia nyata**, mis. "200 m" atau "5 km".
+
+- Angka dan panjang bilah **menyesuaikan otomatis** saat kamu zoom masuk/keluar.
+- Nilai dipilih dalam angka bulat yang enak dibaca (1/2/5 × 10ⁿ): 10 m, 20 m, 50 m, 100 m, 200 m, 500 m, 1 km, 2 km, 5 km, …
+- Perhitungan memakai proyeksi Web Mercator dengan koreksi lintang, jadi tetap akurat di Indonesia (lintang rendah).
+- Berguna untuk **menaksir jarak** dari titik "lokasi saya" ke suatu tempat, dan untuk merasakan skala saat menjelajah peta offline.
+
+Tetap 100% offline dan mengikuti lisensi © OpenStreetMap (ODbL).
+
+---
+
 ## [1.7.0] - 2026-10-05
 
 ### Fitur baru: zoom lebih dalam + kompas arah HP (U/T/S/B)
