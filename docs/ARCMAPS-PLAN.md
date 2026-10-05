@@ -237,3 +237,25 @@ dipakai di aplikasi, dan sudah terbukti jalan di prototipe
   fonts/Noto Sans Regular/*.pbf  # glyph label (offline)
   node_modules/       # maplibre-gl 6.12, pmtiles 4.5, fflate
 ```
+
+---
+
+## 8. Status Tahap 1 — ✅ SELESAI & DIRILIS (v1.6.0)
+
+Modul ArMaps Tahap 1 sudah **diuji runtime nyata** dan **dirilis**:
+
+- **Kode**: katalog (9 wilayah, tanpa default), unduh/perbarui/hapus
+  (atomic swap), render Blob→FileSource, GPS "lokasi saya", pengaturan
+  lokasi simpan, backup settings (indeks TIDAK ikut).
+- **Uji runtime (bukan asumsi)**: kode asli `mapEngine.js` + `mapStyle.js`
+  dirender di dev **dan** artifact produksi ter-bundle → `phase=idle`,
+  `layers=9`, `styleLoaded=true`, **0 permintaan jaringan non-lokal**,
+  peta Jabodetabek tampil penuh (Jakarta/Bekasi/Bogor/Depok/Bandung/Cianjur).
+- **Bug ditemukan & diperbaiki saat uji**: worker MapLibre 404 di bawah
+  bundler (lihat JEBAKAN #2) — tanpa fix ini peta kosong walau semua tes hijau.
+- **Aset rilis `maps-20261004`**: 9 file `.pmtiles` (±117 MB) terunggah,
+  terverifikasi HTTP 206 (Range), header PMTiles valid, **sha256 cocok**.
+- **Rilis v1.6.0**: APK 50 MB di GitHub Release (Aruthtale + Zenixu),
+  versionCode 38, worker + font ter-bundel di dalam APK (diverifikasi).
+
+**Sisa (Tahap 2+)**: indeks pencarian POI per wilayah, navigasi rute.
