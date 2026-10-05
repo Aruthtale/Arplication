@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Play, Pause, RotateCcw, Coffee, Timer,
   CheckCircle2, Volume2, VolumeX, Flame, BarChart3, Settings2,
 } from 'lucide-react';
-import {
-  POMODORO_PRESETS,
-  formatClock, durationFor, advancePhase,
+import { POMODORO_PRESETS,
+  formatClock, durationFor, advancePhase, needsPhaseSwitchConfirm,
   loadArdoroSettings, saveArdoroSettings,
   loadArdoroStats, recordFocusSession, summarizeStats,
   saveTimerState, loadTimerState, clearTimerState,
 } from '../../../utils/pomodoro.js';
 import { sendPomodoroPhaseNotification, checkNotificationPermission, requestNotificationPermission } from '../../../utils/notification.js';
 import { startForegroundTimer, stopForegroundTimer, addTimerCompleteListener } from '../../../services/timerService.js';
-import { startAmbientSound, stopAmbientSound, setAmbientVolume, getNoiseTypes, isAmbientPlaying } from '../../../utils/ambientSound.js';
+import { startAmbientSound, stopAmbientSound, getNoiseTypes, isAmbientPlaying } from '../../../utils/ambientSound.js';
 import { registerBackHandler } from '../../../services/backHandler.js';
 import { saveNote } from '../../../services/notesDb.js';
 import FocusLockPanel from './FocusLockPanel.jsx';
+import PhaseSwitchConfirmModal from './PhaseSwitchConfirmModal.jsx';
 
 const PHASE_META = {
   focus: { label: 'FOKUS', chip: 'DEEP FOCUS MODE', color: '#FFE600' },
@@ -57,6 +57,7 @@ export default function ArdoroModule({ setActiveTab }) {
   const [running, setRunning] = useState(false);
   const [remaining, setRemaining] = useState(() => durationFor('focus', loadArdoroSettings()));
   const [showSettings, setShowSettings] = useState(false);
+  const [pendingPhase, setPendingPhase] = useState(null); // fase tujuan yang menunggu konfirmasi
   const [notifStatus, setNotifStatus] = useState({ granted: false, canRequest: false, denied: false });
 
   const showSettingsRef = useRef(showSettings);
@@ -64,8 +65,17 @@ export default function ArdoroModule({ setActiveTab }) {
     showSettingsRef.current = showSettings;
   }, [showSettings]);
 
+  const pendingPhaseRef = useRef(pendingPhase);
+  useEffect(() => {
+    pendingPhaseRef.current = pendingPhase;
+  }, [pendingPhase]);
+
   useEffect(() => {
     const unregister = registerBackHandler(() => {
+      if (pendingPhaseRef.current) {
+        setPendingPhase(null);
+        return true;
+      }
       if (showSettingsRef.current) {
         setShowSettings(false);
         return true;
@@ -232,6 +242,22 @@ export default function ArdoroModule({ setActiveTab }) {
     setRemaining(durationFor(p, settings));
   };
 
+  // Tab fase: bila timer berjalan & pindah ke fase berbeda, minta konfirmasi dulu
+  // agar satu ketukan tak sengaja tidak menghentikan sesi fokus.
+  const handlePhaseTab = (p) => {
+    if (needsPhaseSwitchConfirm({ phase, running }, p)) {
+      setPendingPhase(p);
+      return;
+    }
+    switchPhase(p);
+  };
+
+  const confirmPhaseSwitch = () => {
+    const target = pendingPhase;
+    setPendingPhase(null);
+    if (target) switchPhase(target);
+  };
+
   const applyPreset = (key) => {
     const p = POMODORO_PRESETS[key];
     if (!p) return;
@@ -313,7 +339,7 @@ export default function ArdoroModule({ setActiveTab }) {
               key={p}
               role="tab"
               aria-selected={phase === p}
-              onClick={() => switchPhase(p)}
+              onClick={() => handlePhaseTab(p)}
               className={`nb-btn px-2 py-2 text-[11px] font-black uppercase tracking-wide flex items-center justify-center gap-1 ${
                 phase === p ? 'bg-[#121212] text-white' : 'bg-white text-[#121212]'
               }`}
@@ -608,6 +634,17 @@ export default function ArdoroModule({ setActiveTab }) {
           Setiap sesi fokus selesai otomatis dicatat ke ArNote dengan tag #ardoro #fokus — buka ArNote tab untuk melihat & menyunting refleksi.
         </p>
       </div>
+
+      {/* Konfirmasi pindah fase saat timer berjalan */}
+      <PhaseSwitchConfirmModal
+        isOpen={pendingPhase !== null}
+        onClose={() => setPendingPhase(null)}
+        onConfirm={confirmPhaseSwitch}
+        fromPhase={phase}
+        toPhase={pendingPhase || 'focus'}
+        fromLabel={PHASE_META[phase].label}
+        toLabel={pendingPhase ? PHASE_META[pendingPhase].label : ''}
+      />
     </div>
   );
 }

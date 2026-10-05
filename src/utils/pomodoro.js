@@ -60,6 +60,22 @@ export function advancePhase(state, rounds = 4) {
   return { phase: 'focus', focusDone: done };
 }
 
+/**
+ * Apakah perpindahan fase butuh konfirmasi?
+ *
+ * Bug yang dicegah: tab fase (Fokus / Istirahat) dulu memanggil switchPhase
+ * LANGSUNG, sehingga satu ketukan tak sengaja saat timer berjalan menghentikan
+ * sesi & mengulang dari awal (progress fokus hilang). Konfirmasi hanya perlu
+ * bila timer sedang berjalan DAN pindah ke fase yang berbeda.
+ *
+ * @param {{phase?: string, running?: boolean}} ctx
+ * @param {string} targetPhase fase tujuan
+ * @returns {boolean}
+ */
+export function needsPhaseSwitchConfirm({ phase, running } = {}, targetPhase) {
+  return Boolean(running) && targetPhase !== phase;
+}
+
 export function todayKey(date = new Date()) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');

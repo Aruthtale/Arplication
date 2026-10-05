@@ -1,27 +1,17 @@
-import React, { useState } from 'react';
-import { Shield, Cpu, ExternalLink, GitBranch, ArrowLeft, Check, Copy, Heart, Layers, Sparkles } from 'lucide-react';
+import React from 'react';
+import { Cpu, ArrowLeft, Layers, Sparkles } from 'lucide-react';
 import UpdateChecker from './UpdateChecker';
 import { APP_VERSION } from '../../services/updater.js';
 
 export default function AruthtaleInfo({ setActiveTab }) {
-  const [copied, setCopied] = useState(false);
-
   const envInfo = [
     { label: 'Versi Aplikasi', value: `v${APP_VERSION}` },
     { label: 'Pengembang', value: 'Aruthtale Studio' },
     { label: 'Dukungan Platform', value: 'Android & Web Browser' },
     { label: 'Lisensi Perangkat Lunak', value: 'Sumber Terbuka (Open Source)' },
-    { label: 'Modul Aktif', value: 'Arloader & ArNote' },
-    { label: 'Modul Mendatang', value: 'Ardoro (Focus Timer)' },
+    { label: 'Modul Aktif', value: '6 Modul (Arloader, ArNote, Ardoro, ArMusic, ArToolbox, ArGame)' },
+    { label: 'Status Rilis', value: 'Stabil • Rilis Publik' },
   ];
-
-  const repoUrl = 'https://github.com/Aruthtale/Arplication';
-
-  const handleCopyRepo = () => {
-    navigator.clipboard.writeText(repoUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   return (
     <div className="space-y-4 font-sans">

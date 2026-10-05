@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   formatClock, clampRounds, durationFor, advancePhase,
   recordFocusSession, summarizeStats, todayKey,
-  POMODORO_PRESETS, DEFAULT_ARDORO_SETTINGS,
+  POMODORO_PRESETS, DEFAULT_ARDORO_SETTINGS, needsPhaseSwitchConfirm,
 } from '../src/utils/pomodoro.js';
 
 test('formatClock mm:ss', () => {
@@ -61,4 +61,17 @@ test('summarizeStats hitung hari ini + total + 7 hari', () => {
 
 test('preset tersedia', () => {
   assert.ok(POMODORO_PRESETS.klasik && POMODORO_PRESETS.deep && POMODORO_PRESETS.kilat);
+});
+
+test('needsPhaseSwitchConfirm: hanya saat running & beda fase', () => {
+  // timer berjalan + pindah fase berbeda -> butuh konfirmasi
+  assert.equal(needsPhaseSwitchConfirm({ phase: 'focus', running: true }, 'short'), true);
+  assert.equal(needsPhaseSwitchConfirm({ phase: 'short', running: true }, 'focus'), true);
+  // timer berhenti -> tidak perlu konfirmasi (pindah bebas)
+  assert.equal(needsPhaseSwitchConfirm({ phase: 'focus', running: false }, 'short'), false);
+  // klik fase yang sama -> tidak perlu konfirmasi
+  assert.equal(needsPhaseSwitchConfirm({ phase: 'focus', running: true }, 'focus'), false);
+  // guard argumen kosong
+  assert.equal(needsPhaseSwitchConfirm({}, 'short'), false);
+  assert.equal(needsPhaseSwitchConfirm(undefined, 'short'), false);
 });

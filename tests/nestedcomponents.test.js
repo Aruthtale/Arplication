@@ -74,3 +74,38 @@ test('file baru v1.3.0 tidak punya import yang tidak terpakai', async () => {
     'logHistory harus dipanggil minimal sekali',
   );
 });
+
+test('Ardoro: tab fase memakai handlePhaseTab (konfirmasi), bukan switchPhase langsung', () => {
+  // Bug: satu ketukan tak sengaja saat timer berjalan menghentikan sesi fokus.
+  const file = join(SRC, 'components/modules/ardoro/ArdoroModule.jsx');
+  const src = readFileSync(file, 'utf8');
+  assert.ok(
+    /onClick=\{\(\)\s*=>\s*handlePhaseTab\(p\)\}/.test(src),
+    'Tab fase harus memanggil handlePhaseTab(p) agar ada konfirmasi saat running',
+  );
+  assert.ok(
+    !/onClick=\{\(\)\s*=>\s*switchPhase\(p\)\}/.test(src),
+    'Tab fase tidak boleh memanggil switchPhase(p) langsung (melewati konfirmasi)',
+  );
+  assert.ok(
+    /needsPhaseSwitchConfirm\(\{\s*phase,\s*running\s*\}/.test(src),
+    'handlePhaseTab harus memakai guard needsPhaseSwitchConfirm',
+  );
+});
+
+test('AruthtaleInfo: info modul tidak basi (bukan "Arloader & ArNote")', () => {
+  const file = join(SRC, 'components/modules/AruthtaleInfo.jsx');
+  const src = readFileSync(file, 'utf8');
+  assert.ok(
+    !/Modul Mendatang/.test(src),
+    'Tidak boleh ada lagi label "Modul Mendatang" (semua modul sudah aktif)',
+  );
+  assert.ok(
+    !/'Arloader & ArNote'/.test(src),
+    'Info modul aktif harus mencakup semua 6 modul',
+  );
+  assert.ok(
+    /6 Modul/.test(src),
+    'Info harus menyebut 6 modul aktif',
+  );
+});

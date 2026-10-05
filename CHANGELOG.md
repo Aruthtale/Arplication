@@ -7,6 +7,35 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.3.2] - 2026-10-06
+
+### 🐛 Fixed
+- **Ardoro — pindah tab fase tidak sengaja menghentikan sesi fokus**: tab fase
+  (Fokus / Istirahat / Istirahat Panjang) dulu memanggil `switchPhase` **langsung**,
+  sehingga satu ketukan tak sengaja saat timer berjalan menghentikan sesi & mengulang
+  dari awal (progres fokus hilang). Kini muncul **modal konfirmasi** ("Pindah Fase?")
+  saat timer berjalan dan pindah ke fase berbeda; ada tombol Batal (tetap fokus) & Ya,
+  Pindah. Saat timer berhenti, pindah fase tetap langsung tanpa modal.
+- **Aruthtale Info — "Informasi Teknis & Rilis" basi**: masih menampilkan
+  "Modul Aktif: Arloader & ArNote" dan "Modul Mendatang: Ardoro (Focus Timer)".
+  Kini: "Modul Aktif: 6 Modul (Arloader, ArNote, Ardoro, ArMusic, ArToolbox, ArGame)"
+  dan "Status Rilis: Stabil • Rilis Publik".
+
+### 🧹 Cleanup
+- Hapus import/state mati: `useCallback` & `setAmbientVolume` (ArdoroModule),
+  `Shield/ExternalLink/GitBranch/Check/Copy/Heart` + state `copied` + `handleCopyRepo`
+  (AruthtaleInfo).
+
+### 🧪 Tests
+- Tambah `needsPhaseSwitchConfirm` (guard murni) + tes; guard regresi wiring
+  (tab Ardoro memakai `handlePhaseTab`, info modul tidak basi). Total **151** lulus.
+
+### 📦 Build
+- **versionCode**: 33 → **34**
+- **versionName**: "1.3.1" → **"1.3.2"**
+
+---
+
 ## [1.3.1] - 2026-10-06
 
 ### 🐛 Fixed
