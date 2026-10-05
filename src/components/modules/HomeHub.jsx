@@ -64,6 +64,20 @@ export default function HomeHub({ setActiveTab }) {
       isReady: true,
     },
     {
+      id: 'armaps',
+      title: 'ArMaps',
+      tagline: 'Peta Offline',
+      description: 'Unduh peta wilayah pilihanmu, lalu pakai tanpa kuota. Ada titik lokasi saya.',
+      iconUrl: '/armaps.png',
+      status: 'Aktif',
+      statusColor: 'bg-[#C4FAF8]',
+      cardBg: 'bg-[#FFFFFF]',
+      accentColor: '#C4FAF8',
+      badgeBg: 'bg-[#C4FAF8]',
+      actionLabel: 'Buka',
+      isReady: true,
+    },
+    {
       id: 'artoolbox',
       title: 'ArToolbox',
       tagline: 'Perkakas Praktis',
@@ -158,7 +172,7 @@ export default function HomeHub({ setActiveTab }) {
             <span>DAFTAR MODUL APLIKASI</span>
           </h2>
           <span className="text-[9.5px] font-mono-code font-black bg-white px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#121212]">
-            6 MODUL
+            7 MODUL
           </span>
         </div>
 

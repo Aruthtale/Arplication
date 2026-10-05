@@ -73,15 +73,28 @@ Data OSM diperbarui **harian** (Protomaps/Geofabrik), jadi "terbaru" = tanggal u
 ### Tahap 1 — MVP "peta offline yang berguna" (TARGET PROTOTIPE INI)
 - [x] Ekstrak 1 wilayah (Jabodetabek) → `jabodetabek.pmtiles` (terbukti)
 - [x] Render offline dengan MapLibre GL + `FileSource` dari Blob (terbukti)
-- [ ] **Pilih wilayah**: katalog siap-pilih **+ opsi gambar kotak sendiri**
-- [ ] **Unduh** wilayah (dari GitHub Releases) → simpan ke storage pilihan user
-- [ ] **Hapus** wilayah
-- [ ] **Perbarui** wilayah — **atomic swap** (unduh `.tmp` → verifikasi →
-      hapus lama → ganti nama). JANGAN hapus dulu (kalau unduh gagal, peta
-      lama tetap utuh). Lihat §7.
-- [ ] Lokasi saya (GPS) + tombol "ke lokasi"
-- [ ] Tampilkan tanggal data ("Data OSM: 4 Okt 2026")
-- [ ] Penanda/pin simpan sendiri (localStorage/IndexedDB)
+- [x] Ekstrak **8 wilayah** (jabodetabek, bandung, surabaya, yogyakarta,
+      semarang, medan, makassar, bali) → total ≈ 105 MB (maxzoom 14,
+      data OSM 2026-10-04). **Belum di-hosting.**
+- [~] **Pilih wilayah**: katalog siap-pilih (8 wilayah) — UI jadi, tes hijau.
+      Opsi "gambar kotak sendiri" menyusul (Tahap 1.5).
+- [~] **Unduh** wilayah (dari GitHub Releases) → simpan ke storage pilihan user
+      — kode jadi (atomic swap, Blob, verifikasi header). **Belum diuji
+      end-to-end** karena aset belum di-upload ke Release.
+- [~] **Hapus** wilayah — kode jadi + konfirmasi. Belum diuji di perangkat.
+- [~] **Perbarui** wilayah — **atomic swap** (unduh `.tmp` → verifikasi →
+      ganti). Kode jadi. Belum diuji di perangkat. Lihat §7.
+- [~] Lokasi saya (GPS) + tombol "ke lokasi" — kode jadi
+      (`@capacitor/geolocation`). Belum diuji di perangkat nyata.
+- [x] Tampilkan tanggal data ("Data OSM: 4 Okt 2026")
+- [ ] Penanda/pin simpan sendiri (localStorage/IndexedDB) — Tahap 1.5
+
+> **Status jujur (2026-10-06):** semua kode Tahap 1 sudah ditulis di branch
+> `feat/armaps`; **186 tes lulus** & **build produksi hijau**, tapi alur
+> runtime (unduh → render → GPS) **belum diuji** — baik di browser maupun di
+> HP Android asli — karena (a) file `.pmtiles` belum di-hosting ke GitHub
+> Release, dan (b) solusi Blob/FileSource baru terbukti di prototipe desktop.
+> Jangan anggap "selesai" sebelum uji runtime nyata.
 
 ### Tahap 2 — Pencarian tempat offline
 - Index nama kota/POI per wilayah (SQLite). Country-wide bisa ratusan MB.

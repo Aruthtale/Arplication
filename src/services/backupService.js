@@ -32,6 +32,9 @@ export const BACKUP_LOCAL_KEYS = [
   'ardoro_timer_state_v1',
   // ArToolbox
   'artoolbox_history_v1',
+  // ArMaps (hanya preferensi — indeks wilayah TIDAK ikut karena file
+  // .pmtiles-nya besar & disimpan di storage terpisah, bukan di backup)
+  'armaps_settings_v1',
   // ArGame
   'argame_high_scores',
   'argame_settings',
