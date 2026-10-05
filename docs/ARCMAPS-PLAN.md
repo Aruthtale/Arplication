@@ -72,10 +72,15 @@ Data OSM diperbarui **harian** (Protomaps/Geofabrik), jadi "terbaru" = tanggal u
 
 ### Tahap 1 — MVP "peta offline yang berguna" (TARGET PROTOTIPE INI)
 - [x] Ekstrak 1 wilayah (Jabodetabek) → `jabodetabek.pmtiles` (terbukti)
-- [x] Render offline dengan MapLibre GL + protokol `pmtiles://` (terbukti)
+- [x] Render offline dengan MapLibre GL + `FileSource` dari Blob (terbukti)
+- [ ] **Pilih wilayah**: katalog siap-pilih **+ opsi gambar kotak sendiri**
+- [ ] **Unduh** wilayah (dari GitHub Releases) → simpan ke storage pilihan user
+- [ ] **Hapus** wilayah
+- [ ] **Perbarui** wilayah — **atomic swap** (unduh `.tmp` → verifikasi →
+      hapus lama → ganti nama). JANGAN hapus dulu (kalau unduh gagal, peta
+      lama tetap utuh). Lihat §7.
 - [ ] Lokasi saya (GPS) + tombol "ke lokasi"
-- [ ] UI: pilih & unduh wilayah, daftar wilayah tersimpan, hapus
-- [ ] Tampilkan tanggal data ("Data OSM: 4 Okt 2026") + tombol "Perbarui"
+- [ ] Tampilkan tanggal data ("Data OSM: 4 Okt 2026")
 - [ ] Penanda/pin simpan sendiri (localStorage/IndexedDB)
 
 ### Tahap 2 — Pencarian tempat offline
@@ -83,6 +88,32 @@ Data OSM diperbarui **harian** (Protomaps/Geofabrik), jadi "terbaru" = tanggal u
 
 ### Tahap 3 — Navigasi rute
 - GraphHopper/Valhalla offline. Graph per wilayah ratusan MB. Proyek besar.
+
+---
+
+## 7. Keputusan desain (dipilih pengguna)
+
+| Aspek | Keputusan |
+|---|---|
+| Cara pilih wilayah | **Katalog siap-pilih + opsi gambar kotak sendiri** |
+| Lokasi simpan file | **Pengguna pilih saat mengunduh** (internal/external) |
+| Detail default | **Zoom 14** (Jabodetabek ≈ 37 MB) |
+| Hosting file wilayah | **GitHub Releases** (gratis) |
+
+### Aturan "ringan & hemat memori" (WAJIB dipatuhi)
+
+1. **Atomic update (jangan tabrak/hapus dulu)**:
+   `unduh ke <nama>.tmp` → cek utuh (header PMTiles valid + ukuran) →
+   baru `hapus lama` → `rename .tmp → final`. Gagal di tengah = peta lama
+   aman; berhasil = tidak menumpuk. Kekurangan: butuh ruang **2× sesaat**.
+2. **File peta disimpan di storage**, **bukan** di dalam bundle APK
+   → ukuran aplikasi tetap kecil.
+3. **Hanya 1 peta dimuat ke memori** pada satu waktu (jangan buka banyak
+   PMTiles sekaligus). PMTiles sudah hemat: dibaca per-tile dari Blob.
+4. **`index.json` kecil** berisi daftar wilayah: nama, tanggal data, ukuran,
+   path. Dipakai untuk daftar/unduh/hapus tanpa memuat file peta.
+5. **Deteksi ruang kosong sebelum unduh**; tolak bila tidak cukup
+   (butuh ≥ 2× ukuran file untuk swap).
 
 ---
 
@@ -112,23 +143,47 @@ Prototipe di `/tmp/arcmaps-proto/` **terbukti render peta Jabodetabek
 
 ### Jebakan yang ditemukan (penting untuk implementasi Android nanti)
 
-1. **Byte serving wajib**: `python3 -m http.server` **tidak** mendukung
-   HTTP Range → PMTiles gagal ("storage backend supports HTTP Byte
-   Serving"). Server harus mendukung **HTTP 206 Partial Content**.
-   → Di Android, baca file via `Capacitor Filesystem` / plugin WebView
-   yang mendukung Range, jangan server statis naif.
-2. **Import ESM**: `maplibre-gl.mjs` **tidak punya default export**
+1. **⚠️ KRITIS — JANGAN andalkan HTTP Range di WebView Android.**
+   `@capacitor/android` 7.6.9 punya **bug Range request** yang persis
+   mematahkan PMTiles (issue publik: #8371 "HTTP Range Responses not
+   within spec"; terkait #8357/#8369/#8418). Di
+   `WebViewLocalServer.handleLocalRequest()` cabang `Range`:
+   - **tidak** memanggil `skip()` → stream dikirim **dari byte 0**, padahal
+     header `Content-Range` menyebut offset lain → **data meleset**;
+   - **tidak** memotong stream di ujung range → `Content-Length` bohong.
+   PMTiles **membaca header untuk tahu berapa byte diterima**, jadi ini
+   bikin peta rusak/kosong.
+   **SOLUSI YANG TERBUKTI (diuji)**: **jangan pakai Range** — muat file
+   `.pmtiles` sebagai **Blob** (via `Capacitor Filesystem.readFile` atau
+   `fetch` file lokal), bungkus jadi `File`, lalu pakai **`FileSource`**
+   dari `pmtiles` (bukan `FetchSource`). Di prototipe: peta Jakarta
+   ter-render **penuh** dari Blob, **0 request jaringan**, kualitas identik.
+   Ini menghindari seluruh jalur bug Capacitor.
+2. **Byte serving di server dev**: `python3 -m http.server` **tidak**
+   mendukung HTTP Range → PMTiles gagal ("storage backend supports HTTP
+   Byte Serving"). Untuk uji di desktop, pakai server yang balas **206
+   Partial Content** (lihat `range_server.py`). **Catatan**: di Android
+   justru kita **tidak** mau lewat jalur Range ini (lihat poin 1).
+3. **Import ESM**: `maplibre-gl.mjs` **tidak punya default export**
    → pakai `import * as maplibregl`. `pmtiles` ESM butuh bare specifier
    `fflate` → pasang **import map**.
-3. **Glyph/font label**: template `glyphs` default menunjuk URL online
+4. **Glyph/font label**: template `glyphs` default menunjuk URL online
    (`protomaps.github.io`). Harus **dilokal-kan** (`./fonts/{fontstack}/{range}.pbf`)
    + `text-font: ['Noto Sans Regular']` agar benar-benar nol jaringan.
    Fontstack yang tersedia: **Noto Sans Regular** (bukan "Open Sans").
 
+### 🔑 Keputusan arsitektur final (karena temuan #1)
+
+**Baca PMTiles lewat `Capacitor Filesystem` → Blob → `FileSource`.**
+Bukan lewat URL `pmtiles://` + HTTP server/WebView Range. Ini yang akan
+dipakai di aplikasi, dan sudah terbukti jalan di prototipe
+(`blobtest.html`).
+
 ### File prototipe
 ```
 /tmp/arcmaps-proto/
-  index.html          # peta offline (MapLibre + pmtiles + import map)
+  index.html          # prototipe awal (lewat HTTP Range — hanya utk dev)
+  blobtest.html       # ✅ CARA YANG DIPAKAI: Blob + FileSource (tanpa Range)
   range_server.py     # server statis dgn HTTP Range (byte serving)
   jabodetabek.pmtiles # 37 MB, data OSM 2026-10-04
   fonts/Noto Sans Regular/*.pbf  # glyph label (offline)
