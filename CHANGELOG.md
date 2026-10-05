@@ -7,6 +7,31 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.3.1] - 2026-10-06
+
+### 🐛 Fixed
+- **Quick Calculator — fokus input hilang tiap ketikan**: komponen `Field`/`Result`
+  didefinisikan **di dalam** komponen `QuickCalcView`, sehingga setiap render membuat
+  tipe komponen baru dan React me-remount `<input>` → fokus lepas setelah 1 karakter.
+  Keduanya kini di-*hoist* ke scope modul (`react/static-components`).
+- **Quick Calculator — tab riwayat "Kalkulator" selalu kosong**: helper `logHistory`
+  dideklarasikan tapi **tidak pernah dipanggil**. Kini setiap salin-hasil mencatat ke
+  riwayat ArToolbox (`toolType: 'calc'`).
+- **Quick Calculator — umpan balik salin**: state `copied` kini ditampilkan ("Tersalin
+  ke clipboard"); sebelumnya di-set tanpa pernah dirender.
+- **PDF Maker**: hapus 3 import ikon (`Upload`, `Layers`, `Sparkles`) yang tidak terpakai.
+
+### 🧪 Tests
+- Tambah `tests/nestedcomponents.test.js` (guard regresi): gagal bila ada komponen
+  didefinisikan di dalam komponen, dan memastikan `Field`/`Result` tidak kembali nested.
+- Total tes: **148** lulus (dari 146).
+
+### 📦 Build
+- **versionCode**: 32 → **33**
+- **versionName**: "1.3.0" → **"1.3.1"**
+
+---
+
 ## [1.3.0] - 2026-10-06
 
 ### 🎉 New

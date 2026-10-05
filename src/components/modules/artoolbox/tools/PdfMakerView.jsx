@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ArrowLeft, Upload, FileText, Download, Trash2, ArrowUp, ArrowDown, 
-  RotateCw, Plus, Check, Layers, Sparkles, FileCheck, Type, Image as ImageIcon
+  ArrowLeft, FileText, Download, Trash2, ArrowUp, ArrowDown, 
+  RotateCw, Plus, Check, FileCheck, Type, Image as ImageIcon
 } from 'lucide-react';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
 import { saveToolboxBlobFile } from '../../../../utils/download';

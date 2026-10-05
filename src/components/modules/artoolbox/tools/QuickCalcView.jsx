@@ -1,16 +1,54 @@
 import React, { useState, useMemo } from 'react';
 import {
-  ArrowLeft, Calculator, Percent, Ruler, Calendar, Users, Copy, Check, Save, RefreshCw,
+  ArrowLeft, Calculator, Percent, Ruler, Calendar, Users, Check, Save,
 } from 'lucide-react';
 import {
   discount, markup, vat, splitBill, percentOf, percentChange,
   aspectRatio, ageFromDate, daysBetween, convertUnit, UNIT_CATEGORIES,
-  formatRupiah, round2,
+  formatRupiah,
 } from '../../../../utils/calcTools';
 import { addToolboxHistory } from '../../../../services/toolboxDb';
 import { saveNote } from '../../../../services/notesDb';
 
 const num = (v) => Number(v) || 0;
+
+// Field & Result di-hoist ke scope modul. Kalau didefinisikan DI DALAM komponen,
+// setiap render membuat tipe komponen baru → React meng-unmount & me-remount
+// <input>, sehingga fokus hilang di tiap ketikan (bug react/static-components).
+const CalcCopyContext = React.createContext(() => {});
+
+function Field({ label, value, onChange, type = 'number', suffix }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-[10px] font-black uppercase text-gray-600">{label}</span>
+      <div className="flex items-center gap-1">
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full p-2.5 rounded-xl border-2 border-[#121212] bg-[#F8F5EE] font-mono text-sm font-bold outline-none"
+        />
+        {suffix && <span className="text-xs font-black text-gray-600">{suffix}</span>}
+      </div>
+    </label>
+  );
+}
+
+function Result({ label, value, highlight }) {
+  const onCopy = React.useContext(CalcCopyContext);
+  return (
+    <button
+      type="button"
+      onClick={() => onCopy(label, value)}
+      className={`text-left w-full p-3 rounded-xl border-2 border-[#121212] cursor-pointer active:translate-x-0.5 active:translate-y-0.5 transition-all ${
+        highlight ? 'bg-[#FFE600]' : 'bg-white'
+      }`}
+    >
+      <div className="text-[9px] font-mono font-bold text-gray-600 uppercase">{label}</div>
+      <div className="text-base font-black text-[#121212] break-all">{value}</div>
+    </button>
+  );
+}
 
 export default function QuickCalcView({ onBack, onRefreshHistory }) {
   const [activeTab, setActiveTab] = useState('harga'); // harga | persen | unit | tanggal | tagihan
@@ -63,11 +101,12 @@ export default function QuickCalcView({ onBack, onRefreshHistory }) {
     [unitVal, unitFrom, unitTo, unitCat],
   );
 
-  const copy = async (val) => {
+  const copy = async (label, val) => {
     try {
       await navigator.clipboard.writeText(String(val ?? ''));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+      logHistory(`Salin: ${label}`, String(val ?? ''));
     } catch { /* abaikan */ }
   };
 
@@ -120,34 +159,8 @@ export default function QuickCalcView({ onBack, onRefreshHistory }) {
     { id: 'tagihan', label: 'Bagi Tagihan', icon: Users },
   ];
 
-  const Field = ({ label, value, onChange, type = 'number', suffix }) => (
-    <label className="block space-y-1">
-      <span className="text-[10px] font-black uppercase text-gray-600">{label}</span>
-      <div className="flex items-center gap-1">
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full p-2.5 rounded-xl border-2 border-[#121212] bg-[#F8F5EE] font-mono text-sm font-bold outline-none"
-        />
-        {suffix && <span className="text-xs font-black text-gray-600">{suffix}</span>}
-      </div>
-    </label>
-  );
-
-  const Result = ({ label, value, highlight }) => (
-    <div
-      onClick={() => copy(value)}
-      className={`p-3 rounded-xl border-2 border-[#121212] cursor-pointer active:translate-x-0.5 active:translate-y-0.5 transition-all ${
-        highlight ? 'bg-[#FFE600]' : 'bg-white'
-      }`}
-    >
-      <div className="text-[9px] font-mono font-bold text-gray-600 uppercase">{label}</div>
-      <div className="text-base font-black text-[#121212] break-all">{value}</div>
-    </div>
-  );
-
   return (
+    <CalcCopyContext.Provider value={copy}>
     <div className="space-y-4 font-sans">
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-[#FFE600] rounded-2xl border-2 border-[#121212] shadow-[4px_4px_0px_#121212]">
@@ -383,6 +396,11 @@ export default function QuickCalcView({ onBack, onRefreshHistory }) {
         {noteSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
         {noteSaved ? 'Tersimpan ke ArNote!' : 'Simpan Ringkasan ke ArNote'}
       </button>
+
+      {copied && (
+        <div className="text-center text-[11px] font-black text-green-700">Tersalin ke clipboard</div>
+      )}
     </div>
+    </CalcCopyContext.Provider>
   );
 }
