@@ -90,16 +90,35 @@ test('katalog: Cianjur ada dengan ukuran nyata & bbox valid', () => {
 test('worker MapLibre: path stabil & file benar-benar ada di public/', async () => {
   const { MAPLIBRE_WORKER_PATH } = await import('../src/services/armaps/mapEngine.js');
   assert.equal(MAPLIBRE_WORKER_PATH, 'armaps/maplibre/maplibre-gl-worker.mjs');
-  // Guard "bundler blind spot": worker + shared chunk HARUS ada di public/,
+  // Guard "bundler blind spot": worker HARUS ada di public/,
   // kalau tidak peta tidak akan render (worker 404).
   const { existsSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const base = fileURLToPath(new URL('../public/', import.meta.url));
   assert.ok(existsSync(base + MAPLIBRE_WORKER_PATH), 'worker MapLibre hilang di public/');
-  assert.ok(
-    existsSync(base + 'armaps/maplibre/maplibre-gl-shared.mjs'),
-    'shared chunk MapLibre hilang di public/ (worker mengimpornya)',
-  );
+});
+
+// ─────────────── Kontrak worker self-contained (bug "peta putih" HP) ──────────
+// Bug nyata: worker resmi MapLibre adalah ES module yang meng-import
+// "./maplibre-gl-shared.mjs". Di WebView Android, request yang diinisiasi worker
+// tidak dilayani `shouldInterceptRequest` → import sibling 404 → worker gagal →
+// peta blank TANPA error di konsol page. WebView lama juga jatuh ke classic
+// worker atas file `.mjs` berisi `import` → "Cannot use import statement outside
+// a module". FIX: worker wajib self-contained (tanpa import/export top-level).
+// Tes ini mengunci kontrak itu: kalau ada yang menaruh worker ESM lagi, tes GAGAL.
+test('worker MapLibre: SELF-CONTAINED (tanpa import/export/import.meta)', async () => {
+  const { readFileSync, existsSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const base = fileURLToPath(new URL('../public/', import.meta.url));
+  const workerPath = base + 'armaps/maplibre/maplibre-gl-worker.mjs';
+  assert.ok(existsSync(workerPath), 'worker MapLibre hilang di public/');
+
+  const src = readFileSync(workerPath, 'utf8');
+  assert.ok(!/(^|\n)\s*import[\s{("'*]/.test(src), 'worker memuat import top-level (ESM) — akan gagal di WebView Android');
+  assert.ok(!/(^|\n)\s*export[\s{]/.test(src), 'worker memuat export top-level — bukan worker valid');
+  assert.ok(!/import\.meta/.test(src), 'worker memuat import.meta — tidak didukung di classic worker');
+  assert.ok(!/from\s*["'`]\.\/maplibre-gl-shared/.test(src), 'worker masih meng-import sibling shared.mjs — akan 404 di WebView');
+  assert.ok(/self\.worker\s*=/.test(src) || /new\s+\w+\(self\)/.test(src), 'worker tidak punya bootstrap (self.worker)');
 });
 
 test('semua plugin Capacitor terdaftar di gradle Android (guard cap copy vs sync)', async () => {

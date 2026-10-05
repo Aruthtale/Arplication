@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "downloader": "node scripts/downloader-server.js",
-    "build": "vite build && cap sync android",
+    "build": "node scripts/build-worker.mjs && vite build && cap sync android",
+    "build:worker": "node scripts/build-worker.mjs",
     "build:web": "vite build",
     "lint": "oxlint",
     "test": "node --test tests/*.test.js",
