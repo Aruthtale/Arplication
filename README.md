@@ -58,13 +58,31 @@ For local development, Arloader uses the `yt-dlp` and `ffmpeg` programs installe
 ## 📱 Android Build with Capacitor
 
 ```bash
-# Sync web build to Android native project
+# Sync web build to Android native project (vite build + cap copy, otomatis)
 npm run build
-npx cap sync android
 
-# Open Android Studio to build APK
-npx cap open android
+# Build APK release
+cd android && ./gradlew :app:assembleRelease
 ```
+
+> **Penting:** `npm run build` sudah menjalankan `cap copy android`, jadi APK selalu berisi web terbaru. Jangan hanya `vite build` — tanpa `cap copy`, APK akan memakai aset web lama.
+
+---
+
+## 🚀 Rilis Otomatis
+
+Satu perintah untuk bump versi, build, commit, tag, push ke **semua remote**, dan membuat GitHub Release + upload APK di **setiap repo**:
+
+```bash
+scripts/release.sh patch     # 1.2.0 -> 1.2.1
+scripts/release.sh minor     # 1.2.0 -> 1.3.0
+scripts/release.sh major     # 1.2.0 -> 2.0.0
+scripts/release.sh 1.5.0     # versi eksplisit
+```
+
+Yang otomatis diperbarui: `package.json`, `package-lock.json`, `src/services/updater.js` (`APP_VERSION`), `android/app/build.gradle` (`versionCode` +1, `versionName`), dan `CHANGELOG.md`.
+
+Opsi berguna: `--dry-run` (lihat rencana), `--notes <file.md>` (catatan rilis kustom), `--title "<teks>"`, `--no-push`, `--skip-build`, `--force-tag`, `-y`. Lihat `scripts/release.sh --help`.
 
 ---
 
