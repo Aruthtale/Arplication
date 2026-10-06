@@ -7,6 +7,35 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.9.0] - 2026-10-06
+
+### ArMaps — arah hadap di titik lokasi (dot biru)
+
+Titik "lokasi saya" kini menunjukkan **arah kamu menghadap**, persis seperti Google Maps:
+
+- **Kerucut arah biru** memancar dari dot lokasi ke arah hadap HP.
+- Sensor arah menyala **otomatis** begitu "lokasi saya" diaktifkan — tak perlu menekan tombol kompas dulu.
+- Arah tetap benar baik saat peta **U↑** (utara di atas) maupun **IKUT** (peta ikut berputar).
+
+### ArMaps — kompas jauh lebih stabil
+
+Kompas tidak lagi "loncat-loncat" saat HP banyak bergerak:
+
+- **Filter halus** (rata-rata sirkular) meredam getaran sensor magnetometer.
+- **Lompatan 360°↔0°** ditangani dengan sudut terpendek (350°→10° terbaca +20°, bukan −340°).
+- Nilai arah **relatif** tidak lagi menimpa nilai **absolut**, penyebab utama jarum kompas liar.
+
+### Ardoro — mode Jangan Ganggu (hening) otomatis
+
+Saat timer **FOKUS** dimulai, HP otomatis masuk mode **Jangan Ganggu (hening)** — tidak bunyi, tidak bergetar. Begitu istirahat atau sesi selesai, pengaturan notifikasi **dipulihkan persis** seperti semula.
+
+- Panel baru di modul Ardoro: aktifkan izin, atur **Otomatis saat Fokus** atau **Hening Sekarang**.
+- ⚠️ Android mewajibkan izin **"Akses Jangan Ganggu"** yang harus diaktifkan manual — gunakan tombol **Buka Pengaturan Izin** di panel (pilih **Arplication → Izinkan**).
+
+Semua tetap 100% offline. Peta memakai data © OpenStreetMap (ODbL).
+
+---
+
 ## [1.8.0] - 2026-10-05
 
 ### Fitur baru: skala jarak (scale bar) di peta
