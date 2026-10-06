@@ -7,6 +7,30 @@ dan proyek ini mematuhi [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [1.9.1] - 2026-10-06
+
+# v1.9.1
+
+## Perbaikan
+- **Ardoro — Mode Jangan Ganggu (DND) kini benar-benar pulih saat timer berhenti.**
+  Sebelumnya DND yang dinyalakan otomatis saat fase Fokus bisa "nyangkut" tetap hening
+  setelah timer dijeda/dihentikan/selesai, karena pemulihan hanya ada di jalur yang
+  tidak pernah dipanggil (`Context.stopService()` tidak menjalankan `onStartCommand()`).
+  Pemulihan sekarang ditempatkan di `onDestroy()` yang selalu dipanggil, sehingga DND
+  kembali ke kondisi asli pengguna di semua jalur: jeda, reset, selesai, dan transisi
+  Fokus → Istirahat.
+- **Status DND tidak lagi bisa terbalik.** Pelaporan status kini memakai nilai yang
+  benar-benar di-set, bukan membaca ulang filter sistem yang pada sebagian perangkat
+  (MIUI) diperbarui dengan jeda.
+
+## Catatan teknis
+- Filter notifikasi asli pengguna tetap diingat dan dipulihkan persis (bukan asal
+  menyalakan semua notifikasi).
+- Diverifikasi di perangkat nyata terhadap status sistem Android asli
+  (`dumpsys` interruption filter): Fokus = hening, Istirahat/Berhenti = normal.
+
+---
+
 ## [1.9.0] - 2026-10-06
 
 ### ArMaps — arah hadap di titik lokasi (dot biru)
