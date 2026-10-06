@@ -40,6 +40,8 @@ import { interpretChunk } from '../src/services/armaps/regionStore.js';
 
 import {
   normalizeHeading,
+  shortestAngleDelta,
+  smoothHeading,
   headingToCardinal8,
   headingToCardinal4,
   roseRotation,
@@ -162,6 +164,36 @@ test('isAbsoluteEvent mendeteksi arah absolut vs relatif', () => {
   assert.equal(isAbsoluteEvent({ webkitCompassHeading: 12 }), true);
   assert.equal(isAbsoluteEvent({ type: 'deviceorientation', absolute: false }), false);
   assert.equal(isAbsoluteEvent(null), false);
+});
+
+// ─── Anti-jitter kompas (bug: "kompas sering bug saat banyak gerak") ───
+// Penyebab: (a) nilai relatif menimpa absolut → lompatan liar, (b) heading
+// mentah dipakai langsung tanpa filter, (c) lompatan 360↔0 dibaca sebagai
+// putaran balik. Tes ini mengunci ketiganya.
+
+test('shortestAngleDelta: lompatan 360↔0 dibaca sudut terpendek, bukan putaran balik', () => {
+  assert.equal(shortestAngleDelta(350, 10), 20);   // bukan -340
+  assert.equal(shortestAngleDelta(10, 350), -20);  // bukan +340
+  assert.equal(shortestAngleDelta(0, 180), 180);
+  assert.equal(shortestAngleDelta(90, 90), 0);
+});
+
+test('smoothHeading: meredam lonjakan liar (mis. noise magnetometer)', () => {
+  // Dari 0, satu event liar 180 → tidak langsung 180, tapi bergeser sebagian.
+  const s1 = smoothHeading(0, 180, 0.2);
+  assert.ok(s1 > 0 && s1 < 180, `harus teredam, dapat ${s1}`);
+  // Rata-rata 20x event 90 dari 0 → mendekati 90.
+  let h = 0;
+  for (let i = 0; i < 20; i++) h = smoothHeading(h, 90, 0.25);
+  assert.ok(Math.abs(shortestAngleDelta(h, 90)) < 2, `harus mendekati 90, dapat ${h}`);
+  // Lewat batas 360 tetap mulus (350 → 10 lewat utara).
+  const s2 = smoothHeading(350, 10, 0.5);
+  assert.ok(s2 === 0 || s2 > 350 || s2 < 10, `harus di sekitar utara, dapat ${s2}`);
+});
+
+test('smoothHeading: null sebelumnya = pakai nilai baru langsung', () => {
+  assert.equal(smoothHeading(null, 123, 0.2), 123);
+  assert.equal(smoothHeading(45, null, 0.2), 45);
 });
 
 // ─────────────────── Kontrak readFileInChunks (bug runtime HP) ────────────────

@@ -56,6 +56,7 @@ export default function MapViewerView({
   // north = peta selalu utara di atas; heading = peta ikut berputar (arah HP selalu ke atas).
   const [compassMode, setCompassMode] = useState('north');
   const headingStopRef = useRef(null);
+  const headingRef = useRef(null);
 
   // ── Skala jarak ──
   // { meters, pixels, label } dihitung dari pusat peta tiap zoom/geser.
@@ -138,7 +139,21 @@ export default function MapViewerView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionId]);
 
-  /** Perbarui/tampilkan titik lokasi pengguna. */
+  /**
+   * Terapkan heading ke kerucut arah pada titik lokasi (bila ada).
+   * Marker pakai rotationAlignment 'map', jadi rotasi marker = heading sebenarnya.
+   * Kerucut disembunyikan bila heading belum diketahui (mis. sensor belum ada).
+   */
+  const applyMarkerHeading = useCallback(() => {
+    const el = markerRef.current?.getElement?.();
+    if (!el) return;
+    const cone = el.querySelector('[data-armaps-cone]');
+    const h = headingRef.current;
+    if (cone) cone.style.opacity = h == null ? '0' : '1';
+    if (h != null) markerRef.current.setRotation(h);
+  }, []);
+
+  /** Perbarui/tampilkan titik lokasi pengguna (dot + kerucut arah hadap). */
   const updateMarker = useCallback(async (pos) => {
     userLocRef.current = pos;
     const map = mapRef.current;
@@ -147,11 +162,32 @@ export default function MapViewerView({
     if (markerRef.current) {
       markerRef.current.setLngLat([pos.longitude, pos.latitude]);
     } else {
+      // Dot biru + kerucut arah (menghadap atas secara default; diputar oleh heading).
       const el = document.createElement('div');
-      el.style.cssText = 'width:18px;height:18px;border-radius:9999px;background:#2b7fff;border:3px solid #fff;box-shadow:0 0 0 2px #121212,0 2px 6px rgba(0,0,0,.4)';
-      markerRef.current = new lib.Marker({ element: el }).setLngLat([pos.longitude, pos.latitude]).addTo(map);
+      el.style.cssText = 'width:96px;height:96px;position:relative;pointer-events:none';
+      el.innerHTML = `
+        <div data-armaps-cone style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s">
+          <svg viewBox="0 0 96 96" width="96" height="96" aria-hidden="true">
+            <defs>
+              <linearGradient id="armapsCone" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#2b7fff" stop-opacity="0.55"/>
+                <stop offset="100%" stop-color="#2b7fff" stop-opacity="0.06"/>
+              </linearGradient>
+            </defs>
+            <path d="M48 48 L26 8 A 42 42 0 0 1 70 8 Z" fill="url(#armapsCone)"/>
+          </svg>
+        </div>
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:9999px;background:#2b7fff;border:3px solid #fff;box-shadow:0 0 0 2px #121212,0 2px 6px rgba(0,0,0,.4)"></div>
+      `;
+      // rotationAlignment 'map': rotasi mengikuti koordinat peta → arah tetap
+      // benar walau peta ikut berputar (mode IKUT).
+      markerRef.current = new lib.Marker({ element: el, rotationAlignment: 'map' })
+        .setLngLat([pos.longitude, pos.latitude])
+        .addTo(map);
     }
-  }, []);
+    // Terapkan heading saat ini ke kerucut arah.
+    applyMarkerHeading();
+  }, [applyMarkerHeading]);
 
   /** Nyalakan "lokasi saya". */
   const enableLocation = useCallback(async () => {
@@ -190,30 +226,50 @@ export default function MapViewerView({
   // Bersihkan GPS saat unmount
   useEffect(() => () => stopWatch(), [stopWatch]);
 
-  /** Mulai/hentikan pemantauan arah HP. */
-  const toggleCompass = useCallback(() => {
-    if (headingStopRef.current) {
-      try { headingStopRef.current(); } catch { /* abaikan */ }
-      headingStopRef.current = null;
-      setHeadingState('off');
-      setHeading(null);
-      return;
-    }
+  /** Mulai pemantauan arah HP (idempoten — aman dipanggil berkali-kali). */
+  const startCompass = useCallback(() => {
+    if (headingStopRef.current) return; // sudah aktif
     let got = false;
     const stop = startHeadingWatch((h) => {
       got = true;
+      headingRef.current = h;
       setHeading(h);
       setHeadingState('on');
+      applyMarkerHeading(); // putar kerucut arah pada titik lokasi
     }, {
       onError: () => setHeadingState('unsupported'),
     });
     headingStopRef.current = stop;
-    // Bila tak ada event dalam 1.2 dtk → sensor tak tersedia di perangkat ini.
-    setTimeout(() => { if (!got && headingStopRef.current === stop) setHeadingState('unsupported'); }, 1200);
-  }, []);
+    // Bila tak ada event dalam 1.5 dtk → sensor tak tersedia di perangkat ini.
+    setTimeout(() => { if (!got && headingStopRef.current === stop) setHeadingState('unsupported'); }, 1500);
+  }, [applyMarkerHeading]);
+
+  /** Hentikan pemantauan arah HP. */
+  const stopCompass = useCallback(() => {
+    if (headingStopRef.current) {
+      try { headingStopRef.current(); } catch { /* abaikan */ }
+      headingStopRef.current = null;
+    }
+    headingRef.current = null;
+    setHeadingState('off');
+    setHeading(null);
+    applyMarkerHeading(); // sembunyikan kerucut (heading null)
+  }, [applyMarkerHeading]);
+
+  /** Tombol kompas: nyala/mati. */
+  const toggleCompass = useCallback(() => {
+    if (headingStopRef.current) stopCompass();
+    else startCompass();
+  }, [startCompass, stopCompass]);
 
   // Bersihkan sensor arah saat unmount
   useEffect(() => () => { if (headingStopRef.current) { try { headingStopRef.current(); } catch { /* abaikan */ } } }, []);
+
+  // Saat "lokasi saya" aktif, otomatis nyalakan sensor arah supaya kerucut
+  // arah hadap langsung tampil di titik biru (tanpa perlu tekan tombol kompas).
+  useEffect(() => {
+    if (locState === 'on') startCompass();
+  }, [locState, startCompass]);
 
   // Terapkan mode kompas ke peta (utara tetap di atas vs ikut berputar).
   useEffect(() => {

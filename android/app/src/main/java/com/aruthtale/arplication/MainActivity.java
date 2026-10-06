@@ -19,6 +19,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ApkInstallerPlugin.class);
         registerPlugin(ArNoteWidgetPlugin.class);
         registerPlugin(TimerServicePlugin.class);
+        registerPlugin(DndPlugin.class);
         registerPlugin(ArMusicPlugin.class);
         registerPlugin(AppBlockerPlugin.class);
         super.onCreate(savedInstanceState);

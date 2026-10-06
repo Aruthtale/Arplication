@@ -15,6 +15,7 @@ import { startAmbientSound, stopAmbientSound, getNoiseTypes, isAmbientPlaying } 
 import { registerBackHandler } from '../../../services/backHandler.js';
 import { saveNote } from '../../../services/notesDb.js';
 import FocusLockPanel from './FocusLockPanel.jsx';
+import DndPanel from './DndPanel.jsx';
 import PhaseSwitchConfirmModal from './PhaseSwitchConfirmModal.jsx';
 
 const PHASE_META = {
@@ -574,6 +575,9 @@ export default function ArdoroModule({ setActiveTab }) {
           </div>
         )}
       </div>
+
+      {/* Jangan Ganggu — hening otomatis selama sesi fokus */}
+      <DndPanel phase={phase} running={running && phase === 'focus'} />
 
       {/* Focus Lock — Blokir aplikasi selama sesi fokus */}
       <FocusLockPanel

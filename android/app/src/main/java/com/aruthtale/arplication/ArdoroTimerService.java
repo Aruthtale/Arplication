@@ -49,6 +49,8 @@ public class ArdoroTimerService extends Service {
         if ("STOP_TIMER".equals(action)) {
             // Blokir Ardoro juga dimatikan saat timer dihentikan.
             AppBlockerStore.setEnabled(this, false);
+            // Pulihkan mode Jangan Ganggu ke kondisi asli user.
+            DndStore.restore(this);
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
@@ -59,6 +61,7 @@ public class ArdoroTimerService extends Service {
         
         if (endTimeMillis == 0) {
             AppBlockerStore.setEnabled(this, false);
+            DndStore.restore(this);
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
@@ -66,6 +69,8 @@ public class ArdoroTimerService extends Service {
 
         // Aktifkan App Blocker hanya selama fase FOKUS (bila mode otomatis ON).
         AppBlockerStore.applyForPhase(this, phase);
+        // Nyalakan mode Jangan Ganggu (hening) selama fase FOKUS (bila auto ON).
+        DndStore.applyForPhase(this, phase);
         
         startForeground(NOTIFICATION_ID, buildNotification("Timer berjalan..."));
         startTicking();
@@ -86,6 +91,8 @@ public class ArdoroTimerService extends Service {
                     // Timer selesai - tampilkan notifikasi kepala/suara & kirim broadcast
                     showCompletionNotification();
                     sendTimerCompleteIntent();
+                    // Pulihkan DND ke kondisi asli user saat fase selesai.
+                    DndStore.restore(ArdoroTimerService.this);
                     stopForeground(true);
                     stopSelf();
                     return;

@@ -10,12 +10,51 @@
  * (mis. desktop/headless), watch cukup tidak memanggil callback — UI tetap jalan.
  *
  * Heading 0° = Utara, 90° = Timur, 180° = Selatan, 270° = Barat.
+ *
+ * Anti-bug saat banyak gerak (penting):
+ *   1. Hanya SATU sumber dipakai. Bila event absolut sudah pernah datang,
+ *      event relatif (`deviceorientation` tanpa absolute) DIABAIKAN — kalau
+ *      tidak, nilai relatif menimpa absolut dan kompas "loncat-loncat".
+ *   2. Heading dihaluskan dengan rata-rata bergerak SIRKULAR (bukan linear),
+ *      supaya lompatan 360°↔0° tidak membuat jarum berputar balik.
+ *   3. Throttle berbasis selisih sudut terpendek, bukan selisih absolut.
  */
 
 /** Normalkan sudut apa pun ke rentang [0, 360). */
 export function normalizeHeading(deg) {
   if (typeof deg !== 'number' || Number.isNaN(deg)) return null;
   return ((deg % 360) + 360) % 360;
+}
+
+/**
+ * Selisih sudut TERPENDEK dari `from` ke `to`, dalam rentang (-180, 180].
+ * Ini yang membuat 350°→10° terbaca +20° (bukan -340°).
+ */
+export function shortestAngleDelta(from, to) {
+  if (typeof from !== 'number' || typeof to !== 'number') return null;
+  if (Number.isNaN(from) || Number.isNaN(to)) return null;
+  let d = (to - from) % 360;
+  if (d > 180) d -= 360;
+  if (d <= -180) d += 360;
+  return d;
+}
+
+/**
+ * Rata-rata bergerak sirkular: geser `prev` menuju `next` sejauh `alpha`.
+ * `alpha` kecil = lebih halus tapi sedikit lambat (bagus untuk kompas berisik).
+ * @param {number|null} prev  heading sebelumnya (null = pakai next langsung)
+ * @param {number} next       heading baru
+ * @param {number} [alpha=0.2]
+ * @returns {number} heading terhaluskan di [0,360)
+ */
+export function smoothHeading(prev, next, alpha = 0.2) {
+  const n = normalizeHeading(next);
+  if (n == null) return prev;
+  const p = normalizeHeading(prev);
+  if (p == null) return n;
+  const a = Math.max(0, Math.min(1, alpha));
+  const d = shortestAngleDelta(p, n);
+  return normalizeHeading(p + a * d);
 }
 
 /** Label 8 arah (Indonesia): U, TL, T, TG, S, BD, B, BL. */
@@ -57,6 +96,19 @@ export function isAbsoluteEvent(e) {
 }
 
 /**
+ * Keputusan menerima sampel arah — mencegah nilai RELATIF menimpa ABSOLUT.
+ * Bila absolut pernah datang baru-baru ini, sampel relatif dibuang; kalau
+ * tidak, kompas "loncat-loncat" saat HP banyak bergerak (bug nyata).
+ * @param {{absolute:boolean, gotAbsolute:boolean, lastAbsoluteAt:number, now:number, windowMs?:number}} s
+ * @returns {boolean} true = pakai sampel ini
+ */
+export function acceptHeadingSample({ absolute, gotAbsolute, lastAbsoluteAt, now, windowMs = 1000 }) {
+  if (absolute) return true;
+  if (gotAbsolute && now - lastAbsoluteAt < windowMs) return false;
+  return true;
+}
+
+/**
  * Hitung heading (derajat, 0=U) dari sebuah event orientasi.
  * @returns {number|null}
  */
@@ -73,34 +125,57 @@ export function computeHeading(e) {
 }
 
 /**
- * Mulai memantau arah perangkat.
+ * Mulai memantau arah perangkat (dengan filter anti-lompatan).
  * @param {(heading:number, info:{absolute:boolean}) => void} onUpdate
  * @param {Object} [opts]
  * @param {number} [opts.minIntervalMs=60]  batas laju callback (anti-render-storm)
+ * @param {number} [opts.smoothing=0.25]    alpha filter sirkular (0..1)
+ * @param {number} [opts.minDeltaDeg=1.5]   abaikan perubahan < derajat ini
  * @param {(err:Error)=>void} [opts.onError]
  * @returns {() => void} stop()
  */
-export function startHeadingWatch(onUpdate, { minIntervalMs = 60, onError } = {}) {
+export function startHeadingWatch(onUpdate, {
+  minIntervalMs = 60,
+  smoothing = 0.25,
+  minDeltaDeg = 1.5,
+  onError,
+} = {}) {
   if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
     return () => {};
   }
 
   let lastAt = 0;
-  let lastVal = null;
+  let smoothed = null;      // heading terhaluskan
+  let gotAbsolute = false;  // sudah pernah dapat event absolut?
+  let lastAbsoluteAt = 0;   // kapan absolut terakhir datang (ms)
 
   const handler = (e) => {
-    const h = computeHeading(e);
-    if (h == null) return;
+    const absolute = isAbsoluteEvent(e);
+    const raw = computeHeading(e);
+    if (raw == null) return;
+
     const now = Date.now();
-    // Throttle: kirim bila berubah cukup jelas atau sudah lewat interval.
-    if (now - lastAt < minIntervalMs && lastVal != null && Math.abs(h - lastVal) < 2) return;
+    if (absolute) {
+      gotAbsolute = true;
+      lastAbsoluteAt = now;
+    } else if (!acceptHeadingSample({ absolute, gotAbsolute, lastAbsoluteAt, now })) {
+      // Absolut lebih dipercaya; buang relatif yang datang beruntun.
+      // Ini mencegah nilai relatif menimpa absolut → kompas "bug".
+      return;
+    }
+
+    // Haluskan (rata-rata bergerak sirkular) supaya tak gemetar/lompat.
+    const next = smoothHeading(smoothed, raw, smoothing);
+    const delta = smoothed == null ? 999 : Math.abs(shortestAngleDelta(smoothed, next));
+
+    // Throttle: kirim bila sudah lewat interval ATAU berubah cukup jelas.
+    if (now - lastAt < minIntervalMs && delta < minDeltaDeg) return;
     lastAt = now;
-    lastVal = h;
-    onUpdate(h, { absolute: isAbsoluteEvent(e) });
+    smoothed = next;
+    onUpdate(next, { absolute });
   };
 
   const attach = () => {
-    // absolute dulu (utara sejati), lalu fallback relatif.
     window.addEventListener('deviceorientationabsolute', handler, true);
     window.addEventListener('deviceorientation', handler, true);
   };
