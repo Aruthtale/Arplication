@@ -167,6 +167,13 @@ public class ArdoroTimerService extends Service {
         if (handler != null && tickRunnable != null) {
             handler.removeCallbacks(tickRunnable);
         }
+        // PENTING: Context.stopService() TIDAK memanggil onStartCommand(), jadi
+        // cabang "STOP_TIMER" di atas tidak dijalankan saat JS memanggil
+        // stopForegroundTimer(). onDestroy() SELALU dipanggil oleh stopService()
+        // maupun stopSelf(), sehingga di sinilah tempat andal untuk memulihkan
+        // mode Jangan Ganggu & mematikan App Blocker. (Restore bersifat idempoten.)
+        AppBlockerStore.setEnabled(this, false);
+        DndStore.restore(this);
         super.onDestroy();
     }
     

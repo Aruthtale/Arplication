@@ -96,9 +96,15 @@ public class DndPlugin extends Plugin {
             return;
         }
         try {
-            if (enabled) DndStore.enable(getContext());
-            else DndStore.restore(getContext());
-            call.resolve(buildState());
+            // Gunakan status hasil yang diniatkan, BUKAN baca-ulang filter:
+            // sebagian OEM (MIUI) memperbarui getCurrentInterruptionFilter
+            // dengan lag sehingga laporan status bisa basi/terbalik.
+            boolean expectedActive;
+            if (enabled) expectedActive = DndStore.enable(getContext());
+            else expectedActive = DndStore.restore(getContext());
+            JSObject ret = buildState();
+            ret.put("active", expectedActive);
+            call.resolve(ret);
         } catch (Exception e) {
             call.reject("SET_DND_FAILED: " + e.getMessage());
         }

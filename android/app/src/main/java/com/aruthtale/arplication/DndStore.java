@@ -70,13 +70,18 @@ public final class DndStore {
         }
     }
 
-    /** Pulihkan DND ke kondisi asli user (bila kita yang mengubahnya). */
-    public static void restore(Context ctx) {
-        if (!isGranted(ctx)) return;
+    /**
+     * Pulihkan DND ke kondisi asli user (bila kita yang mengubahnya).
+     * @return status hening yang DIHARAPKAN setelah restore (true bila filter
+     *   asli user memang NONE). Jangan andalkan baca-ulang filter di sini:
+     *   sebagian OEM (MIUI) memperbarui getCurrentInterruptionFilter dengan lag.
+     */
+    public static boolean restore(Context ctx) {
+        if (!isGranted(ctx)) return false;
         NotificationManager nm = (NotificationManager)
                 ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null) return;
-        if (!prefs(ctx).getBoolean(KEY_CHANGED, false)) return; // bukan kita yang ubah
+        if (nm == null) return false;
+        if (!prefs(ctx).getBoolean(KEY_CHANGED, false)) return isActive(ctx); // bukan kita yang ubah
         int prev = prefs(ctx).getInt(KEY_PREV, NotificationManager.INTERRUPTION_FILTER_ALL);
         try {
             nm.setInterruptionFilter(prev);
@@ -84,14 +89,18 @@ public final class DndStore {
             Log.w(TAG, "restore gagal: " + e.getMessage());
         }
         prefs(ctx).edit().putBoolean(KEY_CHANGED, false).apply();
+        return prev == NotificationManager.INTERRUPTION_FILTER_NONE;
     }
 
-    /** Nyalakan DND (ingat filter asli lebih dulu). */
-    public static void enable(Context ctx) {
-        if (!isGranted(ctx)) return;
+    /**
+     * Nyalakan DND (ingat filter asli lebih dulu).
+     * @return status hening yang DIHARAPKAN (true bila berhasil diset NONE).
+     */
+    public static boolean enable(Context ctx) {
+        if (!isGranted(ctx)) return false;
         NotificationManager nm = (NotificationManager)
                 ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null) return;
+        if (nm == null) return false;
         try {
             if (!prefs(ctx).getBoolean(KEY_CHANGED, false)) {
                 prefs(ctx).edit()
@@ -100,8 +109,10 @@ public final class DndStore {
                         .apply();
             }
             nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
+            return true;
         } catch (Exception e) {
             Log.w(TAG, "enable gagal: " + e.getMessage());
+            return false;
         }
     }
 
